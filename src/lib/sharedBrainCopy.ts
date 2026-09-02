@@ -1,0 +1,122 @@
+import type { AppLanguage } from "../types";
+
+const zhTW = {
+  explore: "探索共享大腦",
+  exploring: "正在遇見遠方的神經元…",
+  privateOnly: "已回到只屬於你的第二大腦。",
+  discovered: (count: number) => `外圍出現 ${count} 顆陌生神經元；只有點開時才會讀取完整內容。`,
+  discoverFailed: "暫時無法抵達共享大腦；你的私人神經元不受影響。",
+  remoteType: "來自共享大腦",
+  sharedBy: "共享者",
+  author: "作者",
+  administrator: "管理員",
+  comments: "回聲",
+  commentPlaceholder: "留下一段有幫助、尊重對方的回聲…",
+  sendComment: "留下回聲",
+  loadMoreComments: "讀取較早的回聲",
+  noComments: "還沒有人留下回聲。也許你的觀點正好能幫上忙。",
+  notificationTitle: "你的神經元收到新回聲",
+  notificationOpen: "前往查看",
+  notificationMore: (count: number) => `另外還有 ${count} 則新回聲`,
+  notificationDismiss: "全部標為已看",
+  fork: "收進我的共享大腦",
+  forking: "正在帶回來…",
+  forked: "已建立一份屬於你的共享副本；它現在會出現在私人神經元中心。",
+  forkOrigin: "收自共享大腦",
+  shareNeuron: "共享這顆神經元",
+  shared: "已共享",
+  ownShared: "你共享的神經元",
+  sharing: "正在共享…",
+  shareDone: "這顆神經元已進入共享大腦。",
+  shareTitle: "讓這個念頭被需要它的人遇見",
+  shareDescription: "陌生人可能看見完整內容、留下回聲，或收進自己的共享大腦。共享後不能恢復私人；若不再適合公開，只能連同這顆神經元刪除。",
+  preview: "將公開的內容",
+  intentionTitle: "你希望它如何被遇見？",
+  intentionShare: "只是分享",
+  intentionShareNote: "不特別期待回應，讓它安靜地存在。",
+  intentionPerspective: "想聽不同觀點",
+  intentionPerspectiveNote: "歡迎別人補充你尚未看見的角度。",
+  intentionHelp: "希望有人幫我想想",
+  intentionHelpNote: "這可能是一個卡住的問題，需要善意的解法。",
+  irreversible: "我知道共享後不能改回私人",
+  confirmShare: "確認共享",
+  cancel: "取消",
+  close: "關閉",
+  identityEyebrow: "共享身分",
+  identityTitle: "建立你的共享身分",
+  identityDescription: "這個名字會同時出現在許願池、共享神經元與回聲。可以與別人同名；旁邊安靜的身分印記會區分彼此。",
+  identityLabel: "你想使用的名字",
+  identityPlaceholder: "例如：Amber",
+  identityRule: "2–20 個字；可使用中文、英文、日文、韓文與單一空格，不接受數字、符號、網址或語法。",
+  identityCreate: "建立身分",
+  identitySave: "儲存名稱",
+  identityRename: "修改共享名稱",
+  identityRequired: "請輸入一個名字。",
+  identityLength: "名稱需要 2–20 個字。",
+  identityCharacters: "只能使用中文、英文、日文、韓文與空格。",
+  identityReserved: "這個名稱保留給澄境系統，請換一個。",
+  identityReady: "共享身分已建立。",
+  identityChanged: "共享名稱已同步更新。",
+  report: "檢舉",
+  reportTitle: "告訴管理員發生什麼事",
+  reportDescription: "檢舉不會公開，也不會通知對方。請選擇最接近的原因。",
+  reportHarmful: "傷害、騷擾或仇恨",
+  reportPrivacy: "疑似洩露私人資訊",
+  reportSpam: "垃圾內容或廣告",
+  reportOther: "其他",
+  reportDetail: "補充說明（選填）",
+  reportSubmit: "送出檢舉",
+  reported: "已交給管理員檢視，謝謝你協助守住這個空間。",
+  deleteShared: "從澄境與共享大腦刪除",
+  deleteTitle: "永久刪除這顆共享神經元？",
+  deleteDescription: "它會從共享大腦與你的本機第二大腦一起消失。別人已收進大腦的獨立副本不會被追回。此動作無法復原。",
+  confirmDelete: "永久刪除",
+  adminTools: "共享管理",
+  adminReports: "待處理檢舉",
+  adminEmpty: "目前沒有待處理檢舉。",
+  dismiss: "判定無需處理",
+  removeTarget: "刪除內容",
+  loading: "讀取中…",
+  error: "暫時無法完成，請稍後再試。",
+  errors: {
+    "identity-required": "請先建立共享身分。", "identity-session-invalid": "共享身分驗證失效，請重新建立。", "invalid-display-name": "這個名稱不符合共享身分規則。",
+    "rate-limited": "操作有點密集，請稍後再試。", "neuron-not-found": "這顆共享神經元已不存在。", "not-owner": "只有作者能刪除自己的共享神經元。",
+    "already-reported": "你已經檢舉過這則內容。", "invalid-payload": "內容格式不正確。", offline: "目前沒有網路連線。", timeout: "連線等待過久，請稍後再試。",
+  } as Record<string, string>,
+};
+
+type Copy = typeof zhTW;
+
+const zhCN: Copy = {
+  ...zhTW,
+  explore: "探索共享大脑", exploring: "正在遇见远方的神经元…", privateOnly: "已回到只属于你的第二大脑。", discovered: (count) => `外围出现 ${count} 个陌生神经元；只有点开时才会读取完整内容。`, discoverFailed: "暂时无法抵达共享大脑；你的私人神经元不受影响。",
+  remoteType: "来自共享大脑", sharedBy: "共享者", author: "作者", comments: "回声", commentPlaceholder: "留下一段有帮助、尊重对方的回声…", sendComment: "留下回声", loadMoreComments: "读取较早的回声", noComments: "还没有人留下回声。也许你的观点正好能帮上忙。", notificationTitle: "你的神经元收到新回声", notificationOpen: "前往查看", notificationMore: (count) => `另外还有 ${count} 条新回声`, notificationDismiss: "全部标为已读",
+  fork: "收进我的共享大脑", forking: "正在带回来…", forked: "已建立一份属于你的共享副本；它现在会出现在私人神经元中心。", forkOrigin: "收自共享大脑", shareNeuron: "共享这个神经元", shared: "已共享", ownShared: "你共享的神经元", sharing: "正在共享…", shareDone: "这个神经元已进入共享大脑。",
+  shareTitle: "让这个念头被需要它的人遇见", shareDescription: "陌生人可能看见完整内容、留下回声，或收进自己的共享大脑。共享后不能恢复私人；若不再适合公开，只能连同这个神经元删除。", preview: "将公开的内容", intentionTitle: "你希望它如何被遇见？", intentionShare: "只是分享", intentionShareNote: "不特别期待回应，让它安静地存在。", intentionPerspective: "想听不同观点", intentionPerspectiveNote: "欢迎别人补充你尚未看见的角度。", intentionHelp: "希望有人帮我想想", intentionHelpNote: "这可能是一个卡住的问题，需要善意的解法。", irreversible: "我知道共享后不能改回私人", confirmShare: "确认共享", cancel: "取消", close: "关闭",
+  identityEyebrow: "共享身份", identityTitle: "建立你的共享身份", identityDescription: "这个名字会同时出现在许愿池、共享神经元与回声。可以与别人同名；旁边安静的身份印记会区分彼此。", identityLabel: "你想使用的名字", identityPlaceholder: "例如：Amber", identityRule: "2–20 个字；可使用中文、英文、日文、韩文与单一空格，不接受数字、符号、网址或语法。", identityCreate: "建立身份", identitySave: "保存名称", identityRename: "修改共享名称", identityRequired: "请输入一个名字。", identityLength: "名称需要 2–20 个字。", identityCharacters: "只能使用中文、英文、日文、韩文与空格。", identityReserved: "这个名称保留给澄境系统，请换一个。", identityReady: "共享身份已建立。", identityChanged: "共享名称已同步更新。",
+  report: "举报", reportTitle: "告诉管理员发生了什么", reportDescription: "举报不会公开，也不会通知对方。请选择最接近的原因。", reportHarmful: "伤害、骚扰或仇恨", reportPrivacy: "疑似泄露私人信息", reportSpam: "垃圾内容或广告", reportOther: "其他", reportDetail: "补充说明（选填）", reportSubmit: "提交举报", reported: "已交给管理员查看，谢谢你协助守护这个空间。", deleteShared: "从澄境与共享大脑删除", deleteTitle: "永久删除这个共享神经元？", deleteDescription: "它会从共享大脑与本机第二大脑一起消失。别人已收进大脑的独立副本不会被追回。此操作无法撤销。", confirmDelete: "永久删除", adminTools: "共享管理", adminReports: "待处理举报", adminEmpty: "目前没有待处理举报。", dismiss: "判定无需处理", removeTarget: "删除内容", loading: "读取中…", error: "暂时无法完成，请稍后再试。",
+};
+
+const en: Copy = {
+  ...zhTW,
+  explore: "Explore shared brain", exploring: "Meeting distant neurons…", privateOnly: "Back to your private Second Brain.", discovered: (count) => `${count} shared neurons appeared outside your private space. Full content loads only when opened.`, discoverFailed: "The shared brain is temporarily unreachable. Your private neurons are unaffected.",
+  remoteType: "From the shared brain", sharedBy: "Shared by", author: "Author", administrator: "Administrator", comments: "Echoes", commentPlaceholder: "Leave a helpful, respectful echo…", sendComment: "Leave an echo", loadMoreComments: "Load earlier echoes", noComments: "No echoes yet. Your perspective may be the one that helps.", notificationTitle: "A new echo reached your neuron", notificationOpen: "Open", notificationMore: (count) => `${count} more new echoes`, notificationDismiss: "Mark all as seen",
+  fork: "Bring into my shared brain", forking: "Bringing it back…", forked: "A shared copy is now yours and will appear in the center of your private graph.", forkOrigin: "From the shared brain", shareNeuron: "Share this neuron", shared: "Shared", ownShared: "Your shared neuron", sharing: "Sharing…", shareDone: "This neuron has entered the shared brain.",
+  shareTitle: "Let this thought find someone who needs it", shareDescription: "Strangers may read the full content, leave echoes, or bring a copy into their own shared brain. Sharing cannot be made private again; it can only remain shared or be deleted with the local neuron.", preview: "Content that will become public", intentionTitle: "How would you like it to be encountered?", intentionShare: "Simply share", intentionShareNote: "No response expected; let it quietly exist.", intentionPerspective: "I want other perspectives", intentionPerspectiveNote: "Invite angles you may not have seen yet.", intentionHelp: "I could use help thinking", intentionHelpNote: "This may be a stuck problem that could benefit from a kind answer.", irreversible: "I understand this cannot become private again", confirmShare: "Confirm sharing", cancel: "Cancel", close: "Close",
+  identityEyebrow: "Shared identity", identityTitle: "Create your shared identity", identityDescription: "This name is used in the Wish Pool, shared neurons, and echoes. Duplicate names are allowed; a quiet identity seal distinguishes people.", identityLabel: "Name you want to use", identityPlaceholder: "For example: Amber", identityRule: "2–20 characters. Chinese, English, Japanese, Korean, and single spaces only; no numbers, symbols, URLs, or markup.", identityCreate: "Create identity", identitySave: "Save name", identityRename: "Rename shared identity", identityRequired: "Enter a name.", identityLength: "Use 2–20 characters.", identityCharacters: "Use only Chinese, English, Japanese, Korean, and spaces.", identityReserved: "This name is reserved for ChengJing. Choose another.", identityReady: "Shared identity created.", identityChanged: "Your shared name was updated everywhere.",
+  report: "Report", reportTitle: "Tell the administrator what happened", reportDescription: "Reports are private and do not notify the other person.", reportHarmful: "Harm, harassment, or hate", reportPrivacy: "Possible private information", reportSpam: "Spam or advertising", reportOther: "Other", reportDetail: "Additional detail (optional)", reportSubmit: "Submit report", reported: "Sent to the administrator. Thank you for protecting this space.", deleteShared: "Delete from ChengJing and shared brain", deleteTitle: "Permanently delete this shared neuron?", deleteDescription: "It will disappear from the shared brain and your local Second Brain. Independent copies already brought home by others remain. This cannot be undone.", confirmDelete: "Delete permanently", adminTools: "Shared moderation", adminReports: "Pending reports", adminEmpty: "There are no pending reports.", dismiss: "No action needed", removeTarget: "Delete content", loading: "Loading…", error: "This could not be completed. Try again later.",
+};
+
+const ja: Copy = {
+  ...en,
+  explore: "共有脳を探索", exploring: "遠くのニューロンと出会っています…", privateOnly: "自分だけの第二の脳に戻りました。", discovered: (count) => `外側に${count}個の共有ニューロンが現れました。本文は開いた時だけ読み込みます。`, discoverFailed: "共有脳に一時的に接続できません。個人のニューロンには影響しません。", remoteType: "共有脳から", sharedBy: "共有者", author: "作者", administrator: "管理者", comments: "反響", commentPlaceholder: "役に立つ、相手を尊重した反響を残す…", sendComment: "反響を残す", loadMoreComments: "以前の反響を読む", noComments: "まだ反響はありません。あなたの視点が助けになるかもしれません。", notificationTitle: "あなたのニューロンに新しい反響", notificationOpen: "見に行く", notificationMore: (count) => `ほかに${count}件の新しい反響`, notificationDismiss: "すべて確認済みにする", fork: "自分の共有脳に取り込む", forking: "取り込んでいます…", forked: "自分の共有コピーを作成しました。個人ニューロンの中心に現れます。", forkOrigin: "共有脳から", shareNeuron: "このニューロンを共有", shared: "共有済み", ownShared: "自分が共有したニューロン", sharing: "共有中…", shareDone: "このニューロンを共有脳に追加しました。", shareTitle: "この考えを必要な人に届ける", shareDescription: "見知らぬ人が全文を読み、反響を残し、自分の共有脳にコピーできます。共有後は非公開に戻せず、共有を続けるかローカルのニューロンごと削除するだけです。", preview: "公開される内容", intentionTitle: "どのように出会ってほしいですか？", intentionShare: "ただ共有する", intentionShareNote: "返答を期待せず、静かに置いておく。", intentionPerspective: "違う視点を聞きたい", intentionPerspectiveNote: "まだ見えていない角度を歓迎する。", intentionHelp: "一緒に考えてほしい", intentionHelpNote: "行き詰まった問題に、やさしい解決策を求める。", irreversible: "共有後は非公開に戻せないことを理解しました", confirmShare: "共有を確定", cancel: "キャンセル", close: "閉じる", identityEyebrow: "共有アイデンティティ", identityTitle: "共有アイデンティティを作成", identityDescription: "この名前は願いの池、共有ニューロン、反響で共通です。同名も使用でき、静かな印が人を区別します。", identityLabel: "使用する名前", identityPlaceholder: "例：Amber", identityRule: "2〜20文字。中国語、英語、日本語、韓国語と単一スペースのみ。数字、記号、URL、構文は不可。", identityCreate: "作成", identitySave: "名前を保存", identityRename: "共有名を変更", identityRequired: "名前を入力してください。", identityLength: "2〜20文字で入力してください。", identityCharacters: "中国語、英語、日本語、韓国語とスペースのみ使用できます。", identityReserved: "この名前はChengJingシステム用です。別の名前を選んでください。", identityReady: "共有アイデンティティを作成しました。", identityChanged: "共有名をすべて更新しました。", report: "報告", reportTitle: "管理者に状況を知らせる", reportDescription: "報告は公開されず、相手にも通知されません。", reportHarmful: "危害、嫌がらせ、ヘイト", reportPrivacy: "個人情報の疑い", reportSpam: "スパムまたは広告", reportOther: "その他", reportDetail: "補足（任意）", reportSubmit: "報告を送信", reported: "管理者に送りました。この空間を守ってくれてありがとうございます。", deleteShared: "ChengJingと共有脳から削除", deleteTitle: "この共有ニューロンを完全に削除しますか？", deleteDescription: "共有脳とローカルの第二の脳から消えます。他の人が取り込んだ独立コピーは残ります。元に戻せません。", confirmDelete: "完全に削除", adminTools: "共有管理", adminReports: "未処理の報告", adminEmpty: "未処理の報告はありません。", dismiss: "対応不要", removeTarget: "内容を削除", loading: "読み込み中…", error: "一時的に完了できません。後でもう一度お試しください。",
+};
+
+const ko: Copy = {
+  ...en,
+  explore: "공유 브레인 탐색", exploring: "멀리 있는 뉴런을 만나고 있어요…", privateOnly: "나만의 세컨드 브레인으로 돌아왔습니다.", discovered: (count) => `바깥 공간에 공유 뉴런 ${count}개가 나타났습니다. 전체 내용은 열 때만 불러옵니다.`, discoverFailed: "공유 브레인에 잠시 연결할 수 없습니다. 개인 뉴런에는 영향이 없습니다.", remoteType: "공유 브레인에서", sharedBy: "공유한 사람", author: "작성자", administrator: "관리자", comments: "메아리", commentPlaceholder: "도움이 되고 상대를 존중하는 메아리를 남겨 주세요…", sendComment: "메아리 남기기", loadMoreComments: "이전 메아리 읽기", noComments: "아직 메아리가 없습니다. 당신의 관점이 도움이 될 수 있어요.", notificationTitle: "내 뉴런에 새 메아리가 도착했어요", notificationOpen: "보러 가기", notificationMore: (count) => `새 메아리 ${count}개 더 있음`, notificationDismiss: "모두 확인함", fork: "내 공유 브레인에 담기", forking: "가져오는 중…", forked: "내 공유 사본을 만들었습니다. 개인 뉴런 중심에 나타납니다.", forkOrigin: "공유 브레인에서", shareNeuron: "이 뉴런 공유", shared: "공유됨", ownShared: "내가 공유한 뉴런", sharing: "공유 중…", shareDone: "이 뉴런이 공유 브레인에 들어갔습니다.", shareTitle: "이 생각이 필요한 사람을 만나게 하기", shareDescription: "낯선 사람이 전체 내용을 읽고 메아리를 남기거나 자신의 공유 브레인에 사본을 담을 수 있습니다. 공유 후에는 비공개로 되돌릴 수 없으며, 계속 공유하거나 로컬 뉴런과 함께 삭제해야 합니다.", preview: "공개될 내용", intentionTitle: "어떻게 만나지길 바라나요?", intentionShare: "그냥 공유", intentionShareNote: "답을 기대하지 않고 조용히 남겨 둡니다.", intentionPerspective: "다른 관점을 듣고 싶어요", intentionPerspectiveNote: "내가 보지 못한 각도를 환영합니다.", intentionHelp: "함께 생각해 주세요", intentionHelpNote: "막힌 문제에 친절한 해법이 필요할 수 있습니다.", irreversible: "공유 후 비공개로 되돌릴 수 없음을 이해했습니다", confirmShare: "공유 확인", cancel: "취소", close: "닫기", identityEyebrow: "공유 정체성", identityTitle: "공유 정체성 만들기", identityDescription: "이 이름은 소원 연못, 공유 뉴런, 메아리에 함께 사용됩니다. 같은 이름도 가능하며 조용한 인장이 서로를 구분합니다.", identityLabel: "사용할 이름", identityPlaceholder: "예: Amber", identityRule: "2–20자. 중국어, 영어, 일본어, 한국어와 한 칸 공백만 가능하며 숫자, 기호, URL, 마크업은 사용할 수 없습니다.", identityCreate: "정체성 만들기", identitySave: "이름 저장", identityRename: "공유 이름 변경", identityRequired: "이름을 입력하세요.", identityLength: "2–20자로 입력하세요.", identityCharacters: "중국어, 영어, 일본어, 한국어와 공백만 사용할 수 있습니다.", identityReserved: "ChengJing 시스템용 이름입니다. 다른 이름을 선택하세요.", identityReady: "공유 정체성을 만들었습니다.", identityChanged: "공유 이름을 모두 업데이트했습니다.", report: "신고", reportTitle: "관리자에게 상황 알리기", reportDescription: "신고는 공개되지 않으며 상대에게도 알리지 않습니다.", reportHarmful: "피해, 괴롭힘 또는 혐오", reportPrivacy: "개인정보 노출 의심", reportSpam: "스팸 또는 광고", reportOther: "기타", reportDetail: "추가 설명(선택)", reportSubmit: "신고 보내기", reported: "관리자에게 전달했습니다. 이 공간을 지켜 주셔서 고맙습니다.", deleteShared: "ChengJing과 공유 브레인에서 삭제", deleteTitle: "이 공유 뉴런을 영구 삭제할까요?", deleteDescription: "공유 브레인과 로컬 세컨드 브레인에서 함께 사라집니다. 다른 사람이 이미 담아 간 독립 사본은 남습니다. 되돌릴 수 없습니다.", confirmDelete: "영구 삭제", adminTools: "공유 관리", adminReports: "처리 대기 신고", adminEmpty: "처리 대기 중인 신고가 없습니다.", dismiss: "조치 불필요", removeTarget: "내용 삭제", loading: "불러오는 중…", error: "잠시 완료할 수 없습니다. 나중에 다시 시도하세요.",
+};
+
+export function getSharedBrainCopy(language: AppLanguage): Copy {
+  return language === "zh-CN" ? zhCN : language === "en" ? en : language === "ja" ? ja : language === "ko" ? ko : zhTW;
+}

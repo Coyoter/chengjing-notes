@@ -1,0 +1,7 @@
+allowBuilds:
+  esbuild: true
+  workerd: true
+minimumReleaseAgeExclude:
+  - '@cloudflare/vitest-plugin@1.1.1'
+  - miniflare@5.20260826.0-alpha
+  - wrangler@4.127.0

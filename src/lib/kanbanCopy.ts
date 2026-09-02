@@ -1,0 +1,80 @@
+import type { AppLanguage } from "../types";
+import { isWindows } from "./platform";
+
+const copies = {
+  "zh-TW": {
+    eyebrow: "專案流動", title: "看板", description: "用列表整理工作的階段，卡片內容仍與卡片庫保持同一份。",
+    boardLibrary: "看板列表", newBoard: "新增看板", boardPlaceholder: "看板名稱", untitledBoard: "未命名看板", defaultLists: ["待處理", "進行中", "已完成"],
+    favorite: "收藏看板", unfavorite: "取消收藏", rename: "重新命名", remove: "刪除", copyList: "複製列表", paste: "貼上", boardActions: "看板操作", confirmDeleteBoard: (name: string) => `刪除看板「${name}」？卡片本身會保留在卡片庫。`,
+    addList: "新增列表", listPlaceholder: "列表名稱", listActions: "列表操作", confirmDeleteList: (name: string) => `刪除列表「${name}」？裡面的卡片會保留在卡片庫。`,
+    addCard: "新增卡片", cardPlaceholder: "輸入卡片標題…", enterToAdd: "Enter 新增 · ⌥ Enter 換行", cards: (count: number) => `${count} 張卡片`, emptyList: "把工作拖到這裡",
+    search: "搜尋這張看板", filter: "篩選", allTags: "所有標籤", allDates: "所有日期", overdue: "已過期", today: "今天到期", upcoming: "未來", noDate: "無日期",
+    sort: "排序", manual: "手動排序", byTitle: "依標題", byDue: "依截止日", noResults: "目前條件沒有符合的卡片。",
+    detail: "卡片詳情", closeDetail: "關閉詳情", openContent: "開啟完整內容", removeFromBoard: "從看板移除", moveToList: "移動到列表",
+    startDate: "開始日期", dueDate: "截止日期", labels: "標籤", attachments: "附件", addAttachment: "加入附件", attachmentAdded: "附件已加入", attachmentFailed: "附件加入失敗。",
+    checklist: "Checklist", checklistProgress: (done: number, total: number) => `${done}/${total} 已完成`, noChecklist: "尚未建立 Checklist；可在完整內容中加入。",
+    emptyTitle: "從一個正在進行的專案開始", emptyDescription: "建立看板後，澄境會先準備「待處理、進行中、已完成」三個列表。", createFirst: "建立第一張看板",
+    dragHint: "拖曳卡片改變階段；拖曳列表標題可重新排序。", saved: "已儲存在本機", addExisting: "加入現有卡片", existingSearch: "搜尋卡片庫", alreadyHere: "已在看板中", cancel: "取消", save: "儲存",
+  },
+  "zh-CN": {
+    eyebrow: "项目流转", title: "看板", description: "用列表整理工作阶段，卡片内容仍与卡片库保持同一份。",
+    boardLibrary: "看板列表", newBoard: "新增看板", boardPlaceholder: "看板名称", untitledBoard: "未命名看板", defaultLists: ["待处理", "进行中", "已完成"],
+    favorite: "收藏看板", unfavorite: "取消收藏", rename: "重命名", remove: "删除", copyList: "复制列表", paste: "粘贴", boardActions: "看板操作", confirmDeleteBoard: (name: string) => `删除看板“${name}”？卡片会保留在卡片库。`,
+    addList: "新增列表", listPlaceholder: "列表名称", listActions: "列表操作", confirmDeleteList: (name: string) => `删除列表“${name}”？卡片会保留在卡片库。`,
+    addCard: "新增卡片", cardPlaceholder: "输入卡片标题…", enterToAdd: "Enter 新增 · Alt+Enter 换行", cards: (count: number) => `${count} 张卡片`, emptyList: "将工作拖到这里",
+    search: "搜索此看板", filter: "筛选", allTags: "所有标签", allDates: "所有日期", overdue: "已过期", today: "今天到期", upcoming: "未来", noDate: "无日期",
+    sort: "排序", manual: "手动排序", byTitle: "按标题", byDue: "按截止日", noResults: "当前条件没有符合的卡片。",
+    detail: "卡片详情", closeDetail: "关闭详情", openContent: "打开完整内容", removeFromBoard: "从看板移除", moveToList: "移动到列表",
+    startDate: "开始日期", dueDate: "截止日期", labels: "标签", attachments: "附件", addAttachment: "加入附件", attachmentAdded: "附件已加入", attachmentFailed: "附件加入失败。",
+    checklist: "Checklist", checklistProgress: (done: number, total: number) => `${done}/${total} 已完成`, noChecklist: "尚未建立 Checklist；可在完整内容中添加。",
+    emptyTitle: "从一个正在进行的项目开始", emptyDescription: "建立看板后，澄境会先准备“待处理、进行中、已完成”三个列表。", createFirst: "建立第一张看板",
+    dragHint: "拖动卡片改变阶段；拖动列表标题可重新排序。", saved: "已保存在本地", addExisting: "加入现有卡片", existingSearch: "搜索卡片库", alreadyHere: "已在看板中", cancel: "取消", save: "保存",
+  },
+  en: {
+    eyebrow: "Project flow", title: "Kanban", description: "Organize work into stages while each card remains the same card in your library.",
+    boardLibrary: "Boards", newBoard: "New board", boardPlaceholder: "Board name", untitledBoard: "Untitled board", defaultLists: ["To do", "In progress", "Done"],
+    favorite: "Favorite board", unfavorite: "Remove favorite", rename: "Rename", remove: "Delete", copyList: "Copy list", paste: "Paste", boardActions: "Board actions", confirmDeleteBoard: (name: string) => `Delete “${name}”? Its cards stay in the Card Library.`,
+    addList: "Add list", listPlaceholder: "List name", listActions: "List actions", confirmDeleteList: (name: string) => `Delete “${name}”? Its cards stay in the Card Library.`,
+    addCard: "Add card", cardPlaceholder: "Card title…", enterToAdd: "Enter to add · Option+Enter for a new line", cards: (count: number) => `${count} ${count === 1 ? "card" : "cards"}`, emptyList: "Drop work here",
+    search: "Search this board", filter: "Filter", allTags: "All labels", allDates: "All dates", overdue: "Overdue", today: "Due today", upcoming: "Upcoming", noDate: "No date",
+    sort: "Sort", manual: "Manual order", byTitle: "By title", byDue: "By due date", noResults: "No cards match the current filters.",
+    detail: "Card details", closeDetail: "Close details", openContent: "Open full content", removeFromBoard: "Remove from board", moveToList: "Move to list",
+    startDate: "Start date", dueDate: "Due date", labels: "Labels", attachments: "Attachments", addAttachment: "Add attachment", attachmentAdded: "Attachment added", attachmentFailed: "Could not add the attachment.",
+    checklist: "Checklist", checklistProgress: (done: number, total: number) => `${done}/${total} complete`, noChecklist: "No checklist yet. Add one in the full card editor.",
+    emptyTitle: "Start with a project in motion", emptyDescription: "ChengJing prepares To do, In progress, and Done lists for a new board.", createFirst: "Create first board",
+    dragHint: "Drag cards between stages. Drag a list header to reorder lists.", saved: "Saved locally", addExisting: "Add existing card", existingSearch: "Search Card Library", alreadyHere: "Already on board", cancel: "Cancel", save: "Save",
+  },
+  ja: {
+    eyebrow: "プロジェクト進行", title: "カンバン", description: "作業を段階ごとに整理し、カードの内容はライブラリと同じ一枚を使います。",
+    boardLibrary: "カンバン一覧", newBoard: "新しいカンバン", boardPlaceholder: "カンバン名", untitledBoard: "無題のカンバン", defaultLists: ["未着手", "進行中", "完了"],
+    favorite: "お気に入りに追加", unfavorite: "お気に入りを解除", rename: "名前を変更", remove: "削除", copyList: "リストをコピー", paste: "ペースト", boardActions: "カンバン操作", confirmDeleteBoard: (name: string) => `「${name}」を削除しますか？カードはライブラリに残ります。`,
+    addList: "リストを追加", listPlaceholder: "リスト名", listActions: "リスト操作", confirmDeleteList: (name: string) => `「${name}」を削除しますか？カードはライブラリに残ります。`,
+    addCard: "カードを追加", cardPlaceholder: "カードのタイトル…", enterToAdd: "Enterで追加 · ⌥ Enterで改行", cards: (count: number) => `${count}枚`, emptyList: "ここへ作業をドロップ",
+    search: "このカンバンを検索", filter: "絞り込み", allTags: "すべてのラベル", allDates: "すべての日付", overdue: "期限切れ", today: "今日が期限", upcoming: "今後", noDate: "日付なし",
+    sort: "並び順", manual: "手動", byTitle: "タイトル順", byDue: "期限順", noResults: "条件に一致するカードはありません。",
+    detail: "カード詳細", closeDetail: "詳細を閉じる", openContent: "内容を開く", removeFromBoard: "カンバンから外す", moveToList: "リストへ移動",
+    startDate: "開始日", dueDate: "期限", labels: "ラベル", attachments: "添付", addAttachment: "添付を追加", attachmentAdded: "添付を追加しました", attachmentFailed: "添付を追加できませんでした。",
+    checklist: "チェックリスト", checklistProgress: (done: number, total: number) => `${done}/${total} 完了`, noChecklist: "チェックリストはまだありません。カード本文から追加できます。",
+    emptyTitle: "動いているプロジェクトから始める", emptyDescription: "新しいカンバンには「未着手・進行中・完了」を用意します。", createFirst: "最初のカンバンを作成",
+    dragHint: "カードをドラッグして段階を変更。見出しをドラッグしてリストを並べ替えます。", saved: "ローカルに保存済み", addExisting: "既存カードを追加", existingSearch: "カードを検索", alreadyHere: "追加済み", cancel: "キャンセル", save: "保存",
+  },
+  ko: {
+    eyebrow: "프로젝트 흐름", title: "칸반", description: "작업을 단계별로 정리하며 카드 내용은 보관함의 같은 카드를 사용합니다.",
+    boardLibrary: "칸반 목록", newBoard: "새 칸반", boardPlaceholder: "칸반 이름", untitledBoard: "제목 없는 칸반", defaultLists: ["할 일", "진행 중", "완료"],
+    favorite: "즐겨찾기", unfavorite: "즐겨찾기 해제", rename: "이름 변경", remove: "삭제", copyList: "목록 복사", paste: "붙여넣기", boardActions: "칸반 작업", confirmDeleteBoard: (name: string) => `‘${name}’을 삭제할까요? 카드는 보관함에 남습니다.`,
+    addList: "목록 추가", listPlaceholder: "목록 이름", listActions: "목록 작업", confirmDeleteList: (name: string) => `‘${name}’을 삭제할까요? 카드는 보관함에 남습니다.`,
+    addCard: "카드 추가", cardPlaceholder: "카드 제목…", enterToAdd: "Enter로 추가 · ⌥ Enter로 줄바꿈", cards: (count: number) => `카드 ${count}개`, emptyList: "여기에 작업 놓기",
+    search: "이 칸반 검색", filter: "필터", allTags: "모든 태그", allDates: "모든 날짜", overdue: "기한 지남", today: "오늘 마감", upcoming: "예정", noDate: "날짜 없음",
+    sort: "정렬", manual: "수동 정렬", byTitle: "제목순", byDue: "마감일순", noResults: "조건에 맞는 카드가 없습니다.",
+    detail: "카드 상세", closeDetail: "상세 닫기", openContent: "전체 내용 열기", removeFromBoard: "칸반에서 제거", moveToList: "목록으로 이동",
+    startDate: "시작일", dueDate: "마감일", labels: "태그", attachments: "첨부", addAttachment: "첨부 추가", attachmentAdded: "첨부를 추가했습니다", attachmentFailed: "첨부를 추가하지 못했습니다.",
+    checklist: "체크리스트", checklistProgress: (done: number, total: number) => `${done}/${total} 완료`, noChecklist: "체크리스트가 없습니다. 카드 전체 내용에서 추가할 수 있습니다.",
+    emptyTitle: "진행 중인 프로젝트로 시작하세요", emptyDescription: "새 칸반에는 할 일, 진행 중, 완료 목록이 준비됩니다.", createFirst: "첫 칸반 만들기",
+    dragHint: "카드를 끌어 단계를 바꾸고, 목록 제목을 끌어 순서를 바꿉니다.", saved: "로컬에 저장됨", addExisting: "기존 카드 추가", existingSearch: "카드 보관함 검색", alreadyHere: "이미 추가됨", cancel: "취소", save: "저장",
+  },
+} as const;
+
+export function getKanbanCopy(language: AppLanguage) {
+  const copy = copies[language] || copies.en;
+  return isWindows() ? { ...copy, enterToAdd: copy.enterToAdd.replace("⌥ Enter", "Alt+Enter").replace("Option+Enter", "Alt+Enter") } : copy;
+}

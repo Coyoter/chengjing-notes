@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "chengjing-update-index",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "GITHUB_OWNER": "Coyoter",
+    "GITHUB_REPOSITORY": "chengjing-notes",
+    "CACHE_SECONDS": "900",
+    "STALE_SECONDS": "86400",
+    "KV_STALE_SECONDS": "2592000"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "RELEASE_STATE",
+      "id": "f9cf7c1cbb7d4ad69114193d69d0d698"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.05
+    }
+  }
+}

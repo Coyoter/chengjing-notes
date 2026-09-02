@@ -1,0 +1,43 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "chengjing-wish-pool",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-29",
+  "compatibility_flags": ["nodejs_compat"],
+  "exports": {
+    "WishShard": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "WISH_SHARD",
+        "class_name": "WishShard"
+      }
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "COMMUNITY_DB",
+      "database_name": "chengjing-community",
+      "database_id": "8a69f47b-1a33-4513-9324-085674389dd8",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "secrets": {
+    "required": ["WISH_ADMIN_PASSWORD", "WISH_SIGNING_SECRET"]
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.05
+    }
+  }
+}

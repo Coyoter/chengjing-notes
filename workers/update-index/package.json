@@ -1,0 +1,19 @@
+{
+  "name": "chengjing-update-index-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cf-typegen": "wrangler types",
+    "check": "wrangler types --check && tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "node --experimental-strip-types --test src/index.node-test.ts",
+    "dev": "wrangler dev",
+    "dry-run": "wrangler deploy --dry-run",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@types/node": "26.3.0",
+    "typescript": "7.0.2",
+    "wrangler": "4.126.0"
+  }
+}
