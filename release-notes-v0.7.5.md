@@ -11,4 +11,4 @@
 - Windows 應用圖示與彩色系統匣圖示已加入打包；macOS 仍保留 ICNS、Template 選單列圖示、交通燈安全區與原生 AppKit 快速輸入。
 - 已完成 Windows 介面與封裝 QA、雙架構 PE／ASAR 驗證、90 個前端測試、26 個 Electron 測試、3 個更新服務測試，以及 macOS 正式封裝回歸。
 
-目前 Windows 安裝程式尚未使用商業程式碼簽章憑證，因此 SmartScreen 可能顯示未知發行者，啟用 Smart App Control 的電腦也可能直接封鎖安裝檔。Release 同時提供 SHA-256 檔供核對；請不要為了安裝而降低主要工作電腦的安全設定。
+目前 Windows 安裝程式尚未使用商業程式碼簽章憑證，因此 SmartScreen 可能顯示未知發行者，啟用 Smart App Control 的電腦也可能直接封鎖安裝檔。請不要為了安裝而降低主要工作電腦的安全設定。

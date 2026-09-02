@@ -12,13 +12,10 @@
 
 - [前往 GitHub Releases 下載最新版](https://github.com/Coyoter/chengjing-notes/releases/latest)
 - [Windows ARM64 安裝程式](https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.5/ChengJing-0.7.5-arm64-Installer.exe)
-  - SHA-256：`8f9210e8c56f63007d31cec944ea79c1af9eacab7fe4ddba963c83b96402bef1`
 - [Windows Intel／AMD x64 安裝程式](https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.5/ChengJing-0.7.5-x64-Installer.exe)
-  - SHA-256：`030830b0c185f45455fceb41744c44f8361c7a47c7a848e1267e73ee2c0b4cf2`
 - [Apple Silicon Mac DMG](https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.5/ChengJing-0.7.5-arm64.dmg)
-  - SHA-256：`ae1257b4c8e4d8d8f4f069f56744d957f6655500f96b708c63a7513ee29f9a2e`
 
-Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目前尚未使用商業 Windows 程式碼簽章憑證，因此 SmartScreen 可能顯示「未知的發行者」，啟用 Smart App Control 的電腦也可能直接封鎖安裝檔。請先用 Release 隨附的 SHA-256 核對檔案；不要為了安裝而降低主要工作電腦的安全設定。
+Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目前尚未使用商業 Windows 程式碼簽章憑證，因此 SmartScreen 可能顯示「未知的發行者」，啟用 Smart App Control 的電腦也可能直接封鎖安裝檔。請不要為了安裝而降低主要工作電腦的安全設定。
 
 開啟 DMG 後，把「澄境」拖進「應用程式」。目前是 ad-hoc 簽章版本，尚未使用 Apple Developer ID 公證；若 macOS 阻擋，請先嘗試開啟一次，再到「系統設定 → 隱私權與安全性」向下捲動，按「強制打開（Open Anyway）」，並在再次出現警告時確認「打開」。
 
