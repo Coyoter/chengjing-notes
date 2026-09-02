@@ -1,5 +1,13 @@
 # 更新紀錄
 
+## 0.7.6 — 2026-09-03
+
+- 回補 [Transformers.js 官方 PR #1681](https://github.com/huggingface/transformers.js/pull/1681)，修正 Gemma 4 在 WebGPU 生成時遺失 `num_logits_to_keep=1` 的上游效能問題。
+- 修正前會替提示詞的每個 token 計算完整 262,144 詞彙 logits；數百字摘要因此可能產生數百倍多餘運算，最後被 60 秒安全機制停止。
+- 修正後只計算生成下一個 token 真正需要的最後一組 logits；沒有縮短卡片內容、摘要輸出或一般對話能力來掩蓋問題。
+- 鎖定 Transformers.js 4.2.0 並在安裝、測試與建置時自動驗證回補；未來套件版本改變時會停止建置，避免把舊修正誤套到新版。
+- 新增真實 ONNX feed 回歸測試與正式 bundle 驗證，確保 Windows x64、Windows ARM64 與 Mac 封裝都包含相同修正。
+
 ## 0.7.5 — 2026-09-02
 
 - 正式新增 Windows ARM64 與 Intel／AMD x64 個別安裝程式；改用澄境自製的原生安裝流程，避免 Windows ARM 只建立捷徑卻遺失主程式。

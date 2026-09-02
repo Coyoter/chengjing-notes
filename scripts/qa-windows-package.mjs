@@ -40,6 +40,8 @@ for (const target of packages) {
   const files = listPackage(asarPath);
   const packagedMetadata = JSON.parse(extractFile(asarPath, "package.json").toString("utf8"));
   const mainSource = extractFile(asarPath, "electron/main.cjs").toString("utf8");
+  const transformersBundle = files.find((file) => /^\/dist\/assets\/transformers\.web-.*\.js$/.test(file));
+  const transformersSource = transformersBundle ? extractFile(asarPath, transformersBundle.slice(1)).toString("utf8") : "";
   const checks = {
     nativeArchitecture: machine === target.machine,
     nativeUninstallerArchitecture: uninstallerMachine === target.machine,
@@ -50,6 +52,7 @@ for (const target of packages) {
     windowsUpdateEnabled: mainSource.includes('process.platform === "win32" ? ".exe" : ".dmg"'),
     singleInstanceEnabled: mainSource.includes("requestSingleInstanceLock"),
     menuBarHiddenUntilAlt: mainSource.includes('autoHideMenuBar: process.platform === "win32"'),
+    gemmaNumLogitsPatchBundled: (transformersSource.match(/num_logits_to_keep/g) || []).length >= 8,
   };
   if (Object.values(checks).some((value) => value !== true)) throw new Error(`windows-package-${target.arch}:${JSON.stringify(checks)}`);
   architectureReports.push({ arch: target.arch, machine: `0x${machine.toString(16)}`, uninstallerMachine: `0x${uninstallerMachine.toString(16)}`, executableBytes: (await fs.stat(executable)).size, asarSha256: await sha256(asarPath), checks });
