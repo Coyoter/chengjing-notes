@@ -21,8 +21,12 @@ describe("AI 動作計畫", () => {
     expect(looksLikeAIAction("/組織白板：整理這份會議記錄")).toBe(true);
     expect(looksLikeAIAction("把這張卡片轉換成全新的白板")).toBe(true);
     expect(looksLikeAIAction("請將白板結論匯出到卡片")).toBe(true);
+    expect(looksLikeAIAction("請移動這張卡片並重新分組白板")).toBe(true);
     expect(looksLikeAIAction("create a task and move this card")).toBe(true);
     expect(looksLikeAIAction("這張卡片的核心觀點是什麼？")).toBe(false);
+    expect(looksLikeAIAction("你能幫我整理這個白板的重點嗎？")).toBe(false);
+    expect(looksLikeAIAction("/整理白板：建議更清楚的分組與連線方式。")).toBe(false);
+    expect(looksLikeAIAction("Organize the key points of this board")).toBe(false);
   });
 
   it("保留新白板參照，並把刪除白板視為需明確確認的動作", () => {

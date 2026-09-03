@@ -177,7 +177,14 @@ export function AIPanel() {
     try {
       const context = await buildAIActionContext(contextType, selectedCardId, selectedBoardId, spaceSearch);
       const plan = await planAIActions({ engine, model, prompt: clean, context, temperature: 0.1 });
-      if (plan.actions.length === 0) throw new Error(actionCopy.empty);
+      if (plan.actions.length === 0) {
+        const summary = plan.summary.trim();
+        if (!summary || summary === "AI change plan") throw new Error(actionCopy.empty);
+        await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "assistant", content: summary, model: engine === "openrouter" ? model : "Gemma 4 E2B", createdAt: Date.now() });
+        await db.chatThreads.update(id, { updatedAt: Date.now() });
+        setActionMode(false);
+        return;
+      }
       setPendingPlan(plan);
       await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "assistant", content: plan.summary, model: engine === "openrouter" ? model : "Gemma 4 E2B", createdAt: Date.now() });
       await db.chatThreads.update(id, { updatedAt: Date.now() });

@@ -166,7 +166,9 @@ export function materializeAIActionPlan(plan: AIActionPlan): AIActionPlan {
 export function planHasDestructiveActions(plan: AIActionPlan) { return plan.actions.some((action) => destructiveTypes.has(action.type) || (action.type === "update_card" && action.contentMode === "replace")); }
 
 export function looksLikeAIAction(value: string) {
-  return /(新增|建立|創建|创建|修改|更新|改成|刪除|删除|移除|轉換|转换|匯出|导出|存成|整理.{0,5}(?:白板|卡片|待辦|日志|日誌)|匯入|导入|加入白板|建立待辦|追加日誌|追加日志)/i.test(value) || /\b(create|add|update|edit|delete|remove|move|organize|apply|convert|export|save as)\b/i.test(value) || /^\/(?:組織|组织|organize)/i.test(value);
+  return /(新增|建立|創建|创建|修改|更新|改成|刪除|删除|移除|移動|移动|搬移|重排|重新分組|重新分组|轉換|转换|匯出|导出|存成|匯入|导入|加入白板|建立待辦|追加日誌|追加日志)/i.test(value)
+    || /\b(create|add|update|edit|delete|remove|move|rearrange|reorganize|apply|convert|export|save as)\b/i.test(value)
+    || /^\/(?:組織|组织|organize)/i.test(value);
 }
 
 export const ACTION_RESPONSE_FORMAT = {

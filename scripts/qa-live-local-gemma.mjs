@@ -51,6 +51,25 @@ const response = (await aiPanel.locator(".ai-message.is-assistant").last().inner
 const modelLine = (await aiPanel.locator(".ai-message.is-assistant").last().locator("header").innerText().catch(() => "")).trim();
 const elapsedMs = Date.now() - generationStartedAt;
 
+await page.getByRole("button", { name: "白板", exact: true }).click();
+await page.locator(".flow-card").first().waitFor();
+await page.getByRole("button", { name: "請 AI 整理這張白板", exact: true }).click();
+const boardPanel = page.locator(".ai-panel");
+await boardPanel.waitFor();
+const boardComposer = boardPanel.locator(".ai-composer textarea");
+await boardComposer.fill("你能幫我整理這個白板的重點嗎？");
+const boardActionButton = boardPanel.getByRole("button", { name: "AI 動作", exact: true });
+const boardQuestionStartsAsChat = !(await boardActionButton.getAttribute("class") || "").includes("is-active");
+const boardBefore = await boardPanel.locator(".ai-message.is-assistant").count();
+const boardGenerationStartedAt = Date.now();
+await boardComposer.press("Enter");
+await boardPanel.locator(".ai-message.is-loading").waitFor({ state: "visible" });
+await boardPanel.locator(".ai-message.is-loading").waitFor({ state: "detached", timeout: 300_000 });
+await page.waitForFunction((count) => document.querySelectorAll(".ai-message.is-assistant:not(.is-loading)").length > count || Boolean(document.querySelector(".ai-error")), boardBefore, { timeout: 20_000 });
+const boardError = await boardPanel.locator(".ai-error").textContent().catch(() => "");
+const boardResponse = (await boardPanel.locator(".ai-message.is-assistant").last().innerText().catch(() => "")).trim();
+const boardElapsedMs = Date.now() - boardGenerationStartedAt;
+
 await page.getByRole("button", { name: "設定", exact: true }).click();
 if (/OpenRouter/i.test(initialEngine)) await page.locator(".engine-choice-grid > button").filter({ hasText: "OpenRouter" }).click();
 await page.getByRole("button", { name: "今日", exact: true }).click();
@@ -63,10 +82,14 @@ const report = {
   promptCharacters: prompt.length,
   elapsedMs,
   backendError: error || "",
+  boardQuestionStartsAsChat,
+  boardResponse,
+  boardElapsedMs,
+  boardError: boardError || "",
   externalRuntimeRequests,
   pageErrors,
 };
 console.log(JSON.stringify(report, null, 2));
 await browser.close();
 
-if (!response || error || elapsedMs >= 60_000 || !/gemma/i.test(modelLine) || externalRuntimeRequests.length || pageErrors.some((item) => /no available backend|jsdelivr/i.test(item))) process.exitCode = 1;
+if (!response || error || elapsedMs >= 60_000 || !/gemma/i.test(modelLine) || !boardQuestionStartsAsChat || !boardResponse || boardError || boardElapsedMs >= 60_000 || externalRuntimeRequests.length || pageErrors.some((item) => /no available backend|jsdelivr/i.test(item))) process.exitCode = 1;

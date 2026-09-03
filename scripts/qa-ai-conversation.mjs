@@ -22,6 +22,7 @@ await context.addInitScript(() => {
       openRouterChat: async (request) => {
         calls.push(request);
         await new Promise((resolve) => setTimeout(resolve, 35));
+        if (request.responseFormat) return { text: '{"summary":"這個白板聚焦於研究流程、本機模型與文章產出。","actions":[]}', model: request.model, usage: null, finishReason: "stop" };
         return { text: `這是第 ${calls.length} 次回答。`, model: request.model, usage: null, finishReason: "stop" };
       },
     },
@@ -144,6 +145,26 @@ const backReturnsToLibrary = await page.locator(".library-grid").isVisible();
 
 const inboxNavigationRemoved = await page.getByRole("button", { name: /收件匣/ }).count() === 0;
 
+await page.getByRole("button", { name: "白板", exact: true }).click();
+await page.locator(".flow-card").first().waitFor();
+await page.getByRole("button", { name: "請 AI 整理這張白板", exact: true }).click();
+panel = page.locator(".ai-panel");
+await panel.waitFor();
+const boardComposer = panel.locator(".ai-composer textarea");
+await boardComposer.fill("你能幫我整理這個白板的重點嗎？");
+const actionButton = panel.getByRole("button", { name: "AI 動作", exact: true });
+const boardQuestionStartsAsChat = !(await actionButton.getAttribute("class") || "").includes("is-active");
+await boardComposer.press("Enter");
+await panel.locator(".ai-message.is-assistant").filter({ hasText: "這是第 3 次回答" }).waitFor();
+const boardQuestionAnsweredNormally = await panel.locator(".ai-error").count() === 0;
+
+await actionButton.click();
+await boardComposer.fill("請告訴我這個白板的核心重點");
+await boardComposer.press("Enter");
+await panel.locator(".ai-message.is-assistant").filter({ hasText: "這個白板聚焦於研究流程、本機模型與文章產出。" }).waitFor();
+const emptyActionSummaryShown = await panel.locator(".ai-error").count() === 0
+  && !(await actionButton.getAttribute("class") || "").includes("is-active");
+
 const report = {
   knowledgeNavigationRemoved,
   spaceSearchInitiallyOn,
@@ -170,9 +191,12 @@ const report = {
   cardRemainsAfterAIClose,
   backReturnsToLibrary,
   inboxNavigationRemoved,
+  boardQuestionStartsAsChat,
+  boardQuestionAnsweredNormally,
+  emptyActionSummaryShown,
   errors,
 };
 await fs.writeFile(path.join(output, "summary.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
 await browser.close();
-if (!knowledgeNavigationRemoved || !spaceSearchInitiallyOn || !spaceSearchOnExplained || !spaceSearchTurnsOff || !scopeChangesRequest || !imeCommitDoesNotSend || !firstSubmitClearsComposer || !firstConversationRestored || !secondSubmitClearsComposer || !continuedConversationRestored || !newConversationStartsEmpty || !emptyConversationRestored || storedConversationState.threads !== 2 || storedConversationState.messages !== 4 || !backButtonNoDrag || !cardFocusMetrics.fillsMain || !cardAIStartsBlank || !recommendedPromptButtonVisible || !recommendedPromptFillsOnDemand || !explicitCardReference || !cardAndAIVisibleTogether || !twoPaneGeometry || !cardRemainsAfterAIClose || !backReturnsToLibrary || !inboxNavigationRemoved || errors.length) process.exitCode = 1;
+if (!knowledgeNavigationRemoved || !spaceSearchInitiallyOn || !spaceSearchOnExplained || !spaceSearchTurnsOff || !scopeChangesRequest || !imeCommitDoesNotSend || !firstSubmitClearsComposer || !firstConversationRestored || !secondSubmitClearsComposer || !continuedConversationRestored || !newConversationStartsEmpty || !emptyConversationRestored || storedConversationState.threads !== 2 || storedConversationState.messages !== 4 || !backButtonNoDrag || !cardFocusMetrics.fillsMain || !cardAIStartsBlank || !recommendedPromptButtonVisible || !recommendedPromptFillsOnDemand || !explicitCardReference || !cardAndAIVisibleTogether || !twoPaneGeometry || !cardRemainsAfterAIClose || !backReturnsToLibrary || !inboxNavigationRemoved || !boardQuestionStartsAsChat || !boardQuestionAnsweredNormally || !emptyActionSummaryShown || errors.length) process.exitCode = 1;
