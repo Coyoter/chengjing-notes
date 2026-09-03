@@ -1,4 +1,4 @@
-# 澄境筆記 ChengJing Notes v0.7.7
+# 澄境筆記 ChengJing Notes v0.7.8
 
 <p align="center"><img src="build/icon-1024.png" width="128" alt="澄境筆記圖示"></p>
 
@@ -11,9 +11,9 @@
 目前正式安裝包支援 Apple Silicon Mac，以及 Windows ARM64／Intel、AMD x64：
 
 - [前往 GitHub Releases 下載最新版](https://github.com/Coyoter/chengjing-notes/releases/latest)
-- [Windows ARM64 安裝程式](https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.7/ChengJing-0.7.7-arm64-Installer.exe)
-- [Windows Intel／AMD x64 安裝程式](https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.7/ChengJing-0.7.7-x64-Installer.exe)
-- [Apple Silicon Mac DMG](https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.7/ChengJing-0.7.7-arm64.dmg)
+- [Windows ARM64 安裝程式](https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.8/ChengJing-0.7.8-arm64-Installer.exe)
+- [Windows Intel／AMD x64 安裝程式](https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.8/ChengJing-0.7.8-x64-Installer.exe)
+- [Apple Silicon Mac DMG](https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.8/ChengJing-0.7.8-arm64.dmg)
 
 Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目前尚未使用商業 Windows 程式碼簽章憑證，因此 SmartScreen 可能顯示「未知的發行者」，啟用 Smart App Control 的電腦也可能直接封鎖安裝檔。請不要為了安裝而降低主要工作電腦的安全設定。
 

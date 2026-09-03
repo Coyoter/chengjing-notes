@@ -73,7 +73,7 @@ export function TopBar() {
         <button type="button" disabled={!historyState.canUndo || historyState.restoring} onClick={() => runHistory("undo")} aria-label={t("history.undo")} data-tooltip={`${t("history.undo")} · ${primaryShortcut("Z")}`}><Undo2 size={16} /></button>
         <button type="button" disabled={!historyState.canRedo || historyState.restoring} onClick={() => runHistory("redo")} aria-label={t("history.redo")} data-tooltip={`${t("history.redo")} · ${primaryShortcut("X")}`}><Redo2 size={16} /></button>
       </div>
-      <button className="search-trigger" type="button" onClick={() => setCommandOpen(true)}>
+      <button className="search-trigger" type="button" aria-label={t("top.searchPlaceholder")} title={t("top.searchPlaceholder")} onClick={() => setCommandOpen(true)}>
         <Search size={16} />
         <span>{t("top.searchPlaceholder")}</span>
         <kbd>{windows ? "Ctrl K" : <><Command size={12} />K</>}</kbd>
