@@ -90,7 +90,45 @@ const privacyBoundaryVisible = (await panel.innerText()).includes("無法讀取�
   && (await panel.innerText()).includes("本機 AI 模型不會上傳");
 const emergencyInitiallyCollapsed = !await panel.locator(".emergency-restore").evaluate((element) => element.hasAttribute("open")).catch(() => false);
 
-await panel.getByRole("button", { name: "連結 Google 帳號", exact: true }).click();
+const connectLanguageCases = [
+  { picker: "繁體中文", label: "連結 Google 帳號" },
+  { picker: "简体中文", label: "连接 Google 帐号" },
+  { picker: "English", label: "Connect Google Account" },
+  { picker: "日本語", label: "Google アカウントを接続" },
+  { picker: "한국어", label: "Google 계정 연결" },
+];
+const localizedConnectButtons = [];
+for (const item of connectLanguageCases) {
+  await page.locator(".language-grid button").filter({ hasText: item.picker }).click();
+  const localizedButton = panel.getByRole("button", { name: item.label, exact: true });
+  await localizedButton.waitFor();
+  localizedConnectButtons.push({
+    language: item.picker,
+    label: item.label,
+    visible: await localizedButton.isVisible(),
+    fits: await localizedButton.evaluate((element) => element.scrollWidth <= element.clientWidth && element.getBoundingClientRect().width <= element.parentElement.getBoundingClientRect().width),
+  });
+}
+await page.locator(".language-grid button").filter({ hasText: "繁體中文" }).click();
+const googleConnectButton = panel.getByRole("button", { name: "連結 Google 帳號", exact: true });
+await googleConnectButton.locator("img").waitFor();
+const googleConnectButtonVisible = await googleConnectButton.evaluate((element) => {
+  const rect = element.getBoundingClientRect();
+  const icon = element.querySelector("img");
+  const style = getComputedStyle(element);
+  return rect.width >= 180
+    && Math.abs(rect.height - 40) <= 0.5
+    && style.backgroundColor === "rgb(242, 242, 242)"
+    && style.color === "rgb(31, 31, 31)"
+    && element.textContent?.trim() === "連結 Google 帳號"
+    && icon instanceof HTMLImageElement
+    && icon.complete
+    && icon.naturalWidth === 40
+    && icon.naturalHeight === 40
+    && !icon.currentSrc.startsWith("data:");
+});
+await page.screenshot({ path: path.join(output, "00-google-connect-button-dark.png"), fullPage: true });
+await googleConnectButton.click();
 await panel.getByText("Google 雲端備份已完成。", { exact: true }).waitFor();
 const cloudConnected = await panel.getByRole("checkbox", { name: "自動雲端備份", exact: true }).isChecked()
   && (await panel.innerText()).includes("qa@example.com")
@@ -163,6 +201,8 @@ const report = {
   twoMethodsVisible,
   privacyBoundaryVisible,
   emergencyInitiallyCollapsed,
+  localizedConnectButtons,
+  googleConnectButtonVisible,
   cloudConnected,
   recommendedFrequency,
   emergencySeparated,
@@ -177,4 +217,4 @@ await fs.writeFile(path.join(output, "summary.json"), JSON.stringify(report, nul
 console.log(JSON.stringify(report, null, 2));
 await browser.close();
 
-if (!twoMethodsVisible || !privacyBoundaryVisible || !emergencyInitiallyCollapsed || !cloudConnected || !recommendedFrequency || !emergencySeparated || !bothEnabled || !completePayloads || !bothScheduled || localized.some((item) => !item.heading || !item.cloud || !item.local) || responsive.rootOverflow > 2 || responsive.panelOverflow > 2 || !responsive.cardsFit || errors.length) process.exitCode = 1;
+if (!twoMethodsVisible || !privacyBoundaryVisible || !emergencyInitiallyCollapsed || localizedConnectButtons.some((item) => !item.visible || !item.fits) || !googleConnectButtonVisible || !cloudConnected || !recommendedFrequency || !emergencySeparated || !bothEnabled || !completePayloads || !bothScheduled || localized.some((item) => !item.heading || !item.cloud || !item.local) || responsive.rootOverflow > 2 || responsive.panelOverflow > 2 || !responsive.cardsFit || errors.length) process.exitCode = 1;

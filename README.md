@@ -1,4 +1,4 @@
-# 澄境筆記 ChengJing Notes v0.8.0
+# 澄境筆記 ChengJing Notes v0.8.1
 
 <p align="center">
   <a href="README.md"><strong>繁體中文</strong></a>
@@ -64,6 +64,12 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 - 90%／100%／110%／120% 全域介面文字比例
 - 五語介面：繁體中文、簡體中文、English、日本語、한국어；日期、AI 回答、原生選單與共享介面同步切換
 - 半自動更新：GitHub API、Cloudflare Worker、Release Feed、邊緣快取與 KV 多層備援，下載後驗證並開啟目前平台的 DMG 或 Windows 安裝程式
+
+## v0.8.1 Google 登入按鈕可見性修正
+
+- 修正 0.8.0 Google 雲端卡片中的登入按鈕沒有顯示、只留下透明點擊區的問題。
+- 登入按鈕改由澄境直接繪製，使用 Google 官方本機 SVG 彩色 G、清楚文字與中性膠囊外觀，不再依賴損壞的整張 PNG。
+- 新增圖片實際載入、尺寸、顏色、文字與連結前視覺截圖驗收；Google Brand Verification 的審查狀態不會控制此按鈕是否顯示。
 
 ## v0.8.0 Google 雲端與本地雙軌備份
 

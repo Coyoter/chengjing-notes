@@ -1,4 +1,10 @@
-# 澄境筆記 v0.8.0 驗收報告
+# 澄境筆記 v0.8.1 驗收報告
+
+## 0.8.1 Google 登入按鈕
+
+- 確認 0.8.0 的透明登入區來自損壞的內嵌 PNG；修正版移除整張 PNG，改用澄境繪製的 40px 中性膠囊與 Google 官方本機 SVG 彩色 G。
+- `qa:auto-backup` 在連結前驗證按鈕至少 180×40px、淺灰背景、深色文字、完整繁中操作文字、SVG 40×40 實際載入且不是 data URI，並保存實際畫面；所有檢查通過。
+- 按鈕文字是獨立 DOM 內容，因此圖示即使意外失效也不會再次留下完全透明的操作區。
 
 ## 0.8.0 Google 雲端備份
 
@@ -7,7 +13,7 @@
 - macOS refresh token 以應用程式本機 AES-256-GCM 靜默保存，實測加密約 8ms，未呼叫鑰匙圈、未出現系統密碼提示；Windows 的 OS safe storage／DPAPI 路徑另有注入測試。
 - 雲端保留策略、48 小時救援點、附件 SHA-256 去重串流、未變更跳過、多裝置衝突暫停、復原附件完整性與測試資料清理均有 Node 整合測試。
 - 設定頁「Google 雲端／本地」雙軌介面通過兩者同時啟用、預設 30 分鐘、緊急救援預設收合、二次確認、五語與 1040px 零溢出驗收。
-- 0.8.0 封裝版未登入 Google 時，本機雲端狀態檢查約 5.9ms、不發網路請求；1,200 張卡片壓測仍維持 200 顆第二大腦視野上限與索引搜尋。
+- 0.8.1 封裝版未登入 Google 時，本機雲端狀態檢查不發網路請求；1,200 張卡片壓測仍維持 200 顆第二大腦視野上限與索引搜尋。
 - Google Desktop Client Secret 不在 Git 追蹤檔案；發行時由開發機 macOS 鑰匙圈注入，Mac、Windows x64 與 Windows ARM64 ASAR 均確認包含正式 runtime 設定。
 
 ## 自動驗證
@@ -63,9 +69,9 @@
 
 ## 正式成品
 
-- Windows ARM64：`release/ChengJing-0.8.0-arm64-Installer.exe`
-- Windows Intel／AMD x64：`release/ChengJing-0.8.0-x64-Installer.exe`
-- Apple Silicon Mac：`release/ChengJing-0.8.0-arm64.dmg`
+- Windows ARM64：`release/ChengJing-0.8.1-arm64-Installer.exe`
+- Windows Intel／AMD x64：`release/ChengJing-0.8.1-x64-Installer.exe`
+- Apple Silicon Mac：`release/ChengJing-0.8.1-arm64.dmg`
 - 本機 `release` 只保留上述三個正式安裝檔。
 - `hdiutil verify`：通過。
 - 尚未使用 Apple Developer ID 簽章與公證，Windows 也尚未使用商業程式碼簽章。

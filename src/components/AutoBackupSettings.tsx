@@ -34,7 +34,9 @@ import { estimateNoteStorageBytes, restoreBackup, saveJsonBackup, saveMarkdownAr
 import { inspectLocalModel } from "../lib/localGemma";
 import { db } from "../db";
 import { useI18n } from "../hooks/useI18n";
-import { GOOGLE_SIGN_IN_BUTTON } from "../lib/googleBrandAsset";
+// Google 官方預先核准的 Android + Web 中性 SVG 圖示；按鈕本體由澄境繪製。
+// Source: https://developers.google.com/identity/branding-guidelines
+import googleGMark from "../assets/google-g-neutral-square.svg";
 
 type BusyAction = "connect" | "cloud" | "local" | "restore-current" | "restore-previous" | "replace" | "disconnect" | "";
 
@@ -309,8 +311,9 @@ export function AutoBackupSettingsPanel() {
           {!cloudStatus?.connected ? (
             <div className="cloud-connect-state">
               {!cloudStatus?.configured && <p>{text.servicePending}</p>}
-              <button type="button" className="google-connect-button" aria-label={text.connectGoogle} disabled={isBusy || !cloudStatus?.configured} onClick={() => void connectGoogle()}>
-                <img src={GOOGLE_SIGN_IN_BUTTON} alt="" width={180} height={40} />
+              <button type="button" className="google-connect-button" aria-label={text.connectGoogle} aria-busy={busy === "connect"} disabled={isBusy || !cloudStatus?.configured} onClick={() => void connectGoogle()}>
+                <img src={googleGMark} alt="" width={40} height={40} />
+                <span>{busy === "connect" ? text.connecting : text.connectGoogle}</span>
               </button>
             </div>
           ) : (

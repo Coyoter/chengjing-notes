@@ -1,4 +1,4 @@
-# ChengJing Notes v0.8.0
+# ChengJing Notes v0.8.1
 
 <p align="center">
   <a href="README.md">繁體中文</a>
@@ -65,6 +65,12 @@ The macOS build is currently ad-hoc signed and is not notarized with an Apple De
 - Semi-automatic updates through GitHub, Cloudflare Worker, release feeds, edge cache, and KV fallback layers
 
 ## Selected recent releases
+
+### v0.8.1: visible Google connection button
+
+- Fixes the invisible Google connection button in 0.8.0, where a damaged embedded PNG left only a transparent click target.
+- ChengJing now draws the neutral pill button itself and uses Google's official local SVG color G with visible localized text instead of a full-button PNG.
+- Visual QA now verifies the rendered size, colors, text, actual SVG load, and a pre-connection screenshot. Google Brand Verification status does not control whether this button appears.
 
 ### v0.8.0: Google cloud and local backup
 
