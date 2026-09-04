@@ -17,4 +17,5 @@ vite.config.d.ts
 public/ort/
 build/ChengJingHotkey
 build/ChengJingQuickCapture.app/
+electron/google-oauth-runtime.cjs
 tools/windows-installer/installer/payload.zip

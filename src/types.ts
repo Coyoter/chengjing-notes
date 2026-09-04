@@ -349,3 +349,51 @@ export interface AutoBackupWriteResult {
   reusedAssets?: number;
   settings: AutoBackupSettings;
 }
+
+export interface CloudBackupSettings {
+  enabled: boolean;
+  intervalMinutes: 15 | 30 | 60 | 180;
+  accountName: string;
+  accountEmail: string;
+  deviceId: string;
+  lastAttemptAt: number;
+  lastSuccessAt: number;
+  lastContentHash: string;
+  lastKnownManifestId: string;
+  lastError: string;
+  conflict: boolean;
+}
+
+export interface CloudBackupSnapshot {
+  id: string;
+  snapshotAt: number;
+  size: number;
+  day: string;
+}
+
+export interface CloudBackupStatus {
+  configured: boolean;
+  connected: boolean;
+  settings: CloudBackupSettings;
+  current: CloudBackupSnapshot | null;
+  previous: CloudBackupSnapshot | null;
+  needsDecision: boolean;
+}
+
+export interface CloudBackupWriteResult {
+  skipped: boolean;
+  uploadedAssets: number;
+  reusedAssets: number;
+  settings: CloudBackupSettings;
+  current: CloudBackupSnapshot | null;
+  previous: CloudBackupSnapshot | null;
+}
+
+export interface CloudBackupDownloadResult {
+  restoreId: string;
+  data: string;
+  backupFilePath: string;
+  contentHash: string;
+  baselineManifestId: string;
+  snapshot: CloudBackupSnapshot;
+}

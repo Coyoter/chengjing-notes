@@ -226,6 +226,7 @@ module.exports = {
   DEFAULT_SETTINGS,
   backupFilename,
   createAutoBackup,
+  cleanupIncrementalAssets,
   isOwnedBackupFilename,
   normalizeSettings,
   readSettings,

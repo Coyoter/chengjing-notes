@@ -1,15 +1,16 @@
 import { useEffect } from "react";
-import { announceAutoBackup, isAutoBackupDue, writeCompleteBackup } from "../lib/autoBackup";
+import { announceAutoBackup, isAutoBackupDue, isCloudBackupDue, prepareCompleteBackup } from "../lib/autoBackup";
 
 const STARTUP_DELAY_MS = 25_000;
 const IDLE_REQUIRED_MS = 30_000;
 const ACTIVE_RETRY_MS = 60_000;
-const PERIODIC_CHECK_MS = 30 * 60_000;
+const PERIODIC_CHECK_MS = 5 * 60_000;
 
 export function AutoBackupManager() {
   useEffect(() => {
     const bridge = window.chengjing?.backups;
-    if (!bridge) return;
+    const cloudBridge = window.chengjing?.cloudBackups;
+    if (!bridge && !cloudBridge) return;
     let disposed = false;
     let running = false;
     let queued = false;
@@ -31,9 +32,14 @@ export function AutoBackupManager() {
     const check = async () => {
       if (disposed || running || queued) return;
       try {
-        const settings = await bridge.getSettings();
-        announceAutoBackup(settings);
-        if (!isAutoBackupDue(settings)) return;
+        const [settings, cloudStatus] = await Promise.all([
+          bridge?.getSettings() || null,
+          cloudBridge?.getLocalStatus() || null,
+        ]);
+        if (settings) announceAutoBackup(settings);
+        const localDue = Boolean(settings && isAutoBackupDue(settings));
+        const cloudDue = Boolean(cloudStatus && isCloudBackupDue(cloudStatus.settings));
+        if (!localDue && !cloudDue) return;
         if (Date.now() - lastActivityAt < IDLE_REQUIRED_MS) {
           retryLater();
           return;
@@ -47,10 +53,19 @@ export function AutoBackupManager() {
             return;
           }
           running = true;
-          void writeCompleteBackup("scheduled")
-            .then((result) => announceAutoBackup(result.settings))
-            .catch(async () => announceAutoBackup(await bridge.getSettings()))
-            .finally(() => { running = false; });
+          void (async () => {
+            const payload = await prepareCompleteBackup();
+            if (localDue && bridge) {
+              await bridge.write({ ...payload, reason: "scheduled" })
+                .then((result) => announceAutoBackup(result.settings))
+                .catch(async () => announceAutoBackup(await bridge.getSettings()));
+            }
+            if (cloudDue && cloudBridge) {
+              await cloudBridge.write({ ...payload, reason: "scheduled" })
+                .then((result) => window.dispatchEvent(new CustomEvent("chengjing:cloud-backup-status", { detail: result })))
+                .catch(() => {});
+            }
+          })().finally(() => { running = false; });
         });
       } catch {
         // 設定讀取失敗時不打擾使用者；下一個低頻檢查週期會再嘗試。

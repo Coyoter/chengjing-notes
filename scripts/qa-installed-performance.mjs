@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
 import { chromium } from "playwright";
 
@@ -16,8 +17,12 @@ const executable = process.env.CHENGJING_PACKAGED_APP;
 if (!executable) throw new Error("CHENGJING_PACKAGED_APP is required");
 const output = path.resolve("qa-artifacts/installed-performance");
 await fs.mkdir(output, { recursive: true });
+const tempData = await fs.mkdtemp(path.join(os.tmpdir(), "chengjing-installed-performance-"));
 const port = await freePort();
-const child = spawn(executable, [`--remote-debugging-port=${port}`], { stdio: ["ignore", "pipe", "pipe"] });
+const child = spawn(executable, [`--remote-debugging-port=${port}`], {
+  stdio: ["ignore", "pipe", "pipe"],
+  env: { ...process.env, CHENGJING_SMOKE: "1", CHENGJING_SMOKE_USER_DATA: tempData },
+});
 let processOutput = "";
 child.stdout.on("data", (chunk) => { processOutput += chunk.toString(); });
 child.stderr.on("data", (chunk) => { processOutput += chunk.toString(); });
@@ -44,6 +49,12 @@ try {
   page.on("console", (message) => { if (message.type() === "error") errors.push(`console:${message.text()}`); });
   await page.locator(".app-shell").waitFor({ state: "attached" });
   await page.getByRole("button", { name: "設定", exact: true }).click();
+  const cloudLocalProbe = await page.evaluate(async () => {
+    const started = performance.now();
+    const status = await window.chengjing.cloudBackups.getLocalStatus();
+    return { elapsedMs: performance.now() - started, configured: status.configured, connected: status.connected };
+  });
+  await page.locator(".local-backup-tools > summary").click();
   const storage = page.locator(".storage-usage-summary");
   await storage.waitFor();
   await page.waitForTimeout(900);
@@ -59,13 +70,14 @@ try {
   const renderedNodes = Number(await brain.getAttribute("data-brain-rendered-nodes"));
   const brainViewportBounded = renderedNodes === Math.min(200, brainNodes);
   await page.screenshot({ path: path.join(output, "second-brain.png"), fullPage: true });
-  const report = { storageText, storageSeparated, storageNoOverflow, brainNodes, renderedNodes, brainViewportBounded, errors };
+  const report = { storageText, storageSeparated, storageNoOverflow, cloudLocalProbe, brainNodes, renderedNodes, brainViewportBounded, errors };
   await fs.writeFile(path.join(output, "summary.json"), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   await page.evaluate(() => window.chengjing.app.quit());
-  if (!storageSeparated || !storageNoOverflow || !brainViewportBounded || errors.length) process.exitCode = 1;
+  if (!storageSeparated || !storageNoOverflow || !cloudLocalProbe.configured || cloudLocalProbe.connected || cloudLocalProbe.elapsedMs > 250 || !brainViewportBounded || errors.length) process.exitCode = 1;
 } finally {
   await browser?.close().catch(() => {});
   if (child.exitCode === null) child.kill("SIGTERM");
   if (child.exitCode === null) await Promise.race([new Promise((resolve) => child.once("exit", resolve)), new Promise((resolve) => setTimeout(resolve, 3000))]);
+  await fs.rm(tempData, { recursive: true, force: true });
 }

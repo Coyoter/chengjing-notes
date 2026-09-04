@@ -5,7 +5,6 @@ import {
   Check,
   Brush,
   Cloud,
-  DatabaseBackup,
   Download,
   ExternalLink,
   Eye,
@@ -21,14 +20,12 @@ import {
   ShieldCheck,
   Sun,
   Trash2,
-  Upload,
   Zap,
 } from "lucide-react";
 import { useAppStore } from "../store";
 import type { AppLanguage, OpenRouterModel, OpenRouterRoutingMode, ThemeMode } from "../types";
 import { clearLocalModel, inspectLocalModel, LOCAL_MODEL, prepareLocalModel } from "../lib/localGemma";
 import { formatBytes, friendlyErrorMessage } from "../lib/utils";
-import { restoreBackup, saveJsonBackup, saveMarkdownArchive } from "../lib/backup";
 import { languageOptions } from "../i18n";
 import type { MessageKey } from "../i18n";
 import { useI18n } from "../hooks/useI18n";
@@ -149,17 +146,6 @@ export function SettingsView() {
     setNotice(t("settings.modelRemoved"));
   }
 
-  async function importBackup() {
-    if (!window.chengjing) return;
-    const result = await window.chengjing.files.open({ title: t("import.backupDialog"), filters: [{ name: t("import.backupFile"), extensions: ["json"] }] });
-    if (result.canceled || !result.files[0]) return;
-    try {
-      const text = new TextDecoder().decode(Uint8Array.from(atob(result.files[0].data), (char) => char.charCodeAt(0)));
-      await restoreBackup(text, result.files[0].path);
-      setNotice(t("settings.backupRestored"));
-    } catch (error) { setNotice(error instanceof Error ? error.message : t("settings.backupFailed")); }
-  }
-
   const themeChoices: Array<{ value: ThemeMode; label: MessageKey; icon: typeof Sun }> = [
     { value: "system", label: "settings.system", icon: Laptop },
     { value: "light", label: "settings.light", icon: Sun },
@@ -234,8 +220,6 @@ export function SettingsView() {
       </section>
 
       <section className="settings-section">
-        <header><span>{t("settings.dataBackup")}</span><h2>{t("settings.portable")}</h2><p>{t("settings.backupDescription")}</p></header>
-        <div className="backup-actions"><button type="button" onClick={saveJsonBackup}><DatabaseBackup size={19} /><span><b>{t("settings.jsonBackup")}</b><small>{t("settings.jsonHint")}</small></span><Download size={15} /></button><button type="button" onClick={saveMarkdownArchive}><HardDrive size={19} /><span><b>{t("settings.markdownBackup")}</b><small>{t("settings.markdownHint")}</small></span><Download size={15} /></button><button type="button" onClick={importBackup}><Upload size={19} /><span><b>{t("settings.restoreBackup")}</b><small>{t("settings.restoreHint")}</small></span><Upload size={15} /></button></div>
         <AutoBackupSettingsPanel />
       </section>
 

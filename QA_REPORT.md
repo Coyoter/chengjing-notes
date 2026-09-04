@@ -1,9 +1,19 @@
-# 澄境筆記 v0.3.17 驗收報告
+# 澄境筆記 v0.8.0 驗收報告
+
+## 0.8.0 Google 雲端備份
+
+- 真實 Google OAuth 已使用正式 Desktop Client、系統瀏覽器、PKCE、state、loopback 與唯一 `drive.appdata` 權限完成登入；Google Drive 實際建立目前快照後，成功下載並完整復原。
+- 真實復原前會先建立本機安全副本；測試結束後刪除 1 份雲端測試 manifest、撤銷測試 token，雲端與本機暫存均清空。
+- macOS refresh token 以應用程式本機 AES-256-GCM 靜默保存，實測加密約 8ms，未呼叫鑰匙圈、未出現系統密碼提示；Windows 的 OS safe storage／DPAPI 路徑另有注入測試。
+- 雲端保留策略、48 小時救援點、附件 SHA-256 去重串流、未變更跳過、多裝置衝突暫停、復原附件完整性與測試資料清理均有 Node 整合測試。
+- 設定頁「Google 雲端／本地」雙軌介面通過兩者同時啟用、預設 30 分鐘、緊急救援預設收合、二次確認、五語與 1040px 零溢出驗收。
+- 0.8.0 封裝版未登入 Google 時，本機雲端狀態檢查約 5.9ms、不發網路請求；1,200 張卡片壓測仍維持 200 顆第二大腦視野上限與索引搜尋。
+- Google Desktop Client Secret 不在 Git 追蹤檔案；發行時由開發機 macOS 鑰匙圈注入，Mac、Windows x64 與 Windows ARM64 ASAR 均確認包含正式 runtime 設定。
 
 ## 自動驗證
 
 - `npm run typecheck`：通過。
-- `npm test`：66 個前端單元測試與 16 個 Electron Node 測試全部通過。
+- `npm test`：91 個前端單元測試與 37 個 Electron Node 測試全部通過。
 - `npm run build`：Vite production build 通過。
 - `npm run qa`：6 張關鍵畫面，console／page error 為 0。
 - `npm run qa:functional`：新增、編輯、重新載入持久化、版本歷史、心智圖鍵盤、資料庫更新與指令搜尋通過。
@@ -53,13 +63,12 @@
 
 ## 正式成品
 
-- App：`release/mac-arm64/澄境.app`
-- DMG：`release/ChengJing-0.3.17-arm64.dmg`
-- DMG 大小：約 184 MB
-- SHA-256：`5e093394fdf53034dee95550c9acb173bf8bf4039bb6c70c952c0fd1218574f9`
+- Windows ARM64：`release/ChengJing-0.8.0-arm64-Installer.exe`
+- Windows Intel／AMD x64：`release/ChengJing-0.8.0-x64-Installer.exe`
+- Apple Silicon Mac：`release/ChengJing-0.8.0-arm64.dmg`
+- 本機 `release` 只保留上述三個安裝檔，沒有 SHA-256 sidecar、blockmap、解壓縮 App 或 builder 中間檔。
 - `hdiutil verify`：通過。
-- `codesign --verify --deep --strict`：通過。
-- 簽章型態：ad-hoc，尚未使用 Apple Developer ID 公證。
+- 尚未使用 Apple Developer ID 簽章與公證，Windows 也尚未使用商業程式碼簽章。
 - DMG 內含：澄境 App 與 Applications 捷徑。
 
 ## 重要行為邊界

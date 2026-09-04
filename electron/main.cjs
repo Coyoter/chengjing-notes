@@ -1,11 +1,13 @@
-const { app, BrowserWindow, clipboard, ClipboardItem, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, protocol, screen, shell, Tray } = require("electron");
+const { app, BrowserWindow, clipboard, ClipboardItem, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, protocol, safeStorage, screen, shell, Tray } = require("electron");
 const { createHash, randomUUID } = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { createReadStream } = require("node:fs");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
-const { createAutoBackup, normalizeSettings: normalizeAutoBackupSettings, readSettings: readAutoBackupSettings, writeSettings: writeAutoBackupSettings } = require("./auto-backup.cjs");
+const { cleanupIncrementalAssets, createAutoBackup, isOwnedBackupFilename, normalizeSettings: normalizeAutoBackupSettings, readSettings: readAutoBackupSettings, writeSettings: writeAutoBackupSettings } = require("./auto-backup.cjs");
+const { createGoogleDriveBackupService } = require("./google-drive-backup.cjs");
+const { clientId: googleOAuthClientId, clientSecret: googleOAuthClientSecret } = require("./google-oauth-config.cjs");
 const { clearSecret, readSecret, secretStatus, writeSecret } = require("./key-vault.cjs");
 const { buildApplicationMenuTemplate, shouldUseUpdateMenuIcon } = require("./menu-template.cjs");
 const { parseMacHotkey } = require("./mac-hotkey.cjs");
@@ -37,6 +39,8 @@ let latestUpdateCheckedAt = 0;
 let githubApiBlockedUntil = 0;
 let activeUpdateDownload = null;
 let autoBackupOperation = Promise.resolve();
+let cloudBackupOperation = Promise.resolve();
+let googleDriveBackupService = null;
 const isDev = process.argv.includes("--dev");
 const isSmoke = process.env.CHENGJING_SMOKE === "1";
 const explicitBackgroundLaunch = process.argv.includes("--background");
@@ -68,6 +72,23 @@ protocol.registerSchemesAsPrivileged([{ scheme: "chengjing-attachment", privileg
 
 function attachmentsDirectory() {
   return path.join(app.getPath("userData"), "attachments");
+}
+
+function cloudBackupService() {
+  if (!googleDriveBackupService) {
+    googleDriveBackupService = createGoogleDriveBackupService({
+      net,
+      safeStorage,
+      shell,
+      userDataDirectory: app.getPath("userData"),
+      attachmentsDirectory: attachmentsDirectory(),
+      clientId: googleOAuthClientId,
+      clientSecret: googleOAuthClientSecret,
+      platform: process.platform,
+      getLanguage: () => currentLanguage,
+    });
+  }
+  return googleDriveBackupService;
 }
 
 function safeAttachmentName(value) {
@@ -200,6 +221,74 @@ function serializeAutoBackup(operation) {
   const pending = autoBackupOperation.then(operation, operation);
   autoBackupOperation = pending.catch(() => {});
   return pending;
+}
+
+function serializeCloudBackup(operation) {
+  const pending = cloudBackupOperation.then(operation, operation);
+  cloudBackupOperation = pending.catch(() => {});
+  return pending;
+}
+
+const CLOUD_BACKUP_MESSAGES = {
+  "zh-TW": {
+    notConfigured: "Google 雲端備份尚未完成服務設定。",
+    authRequired: "請先連結 Google 帳號。",
+    authExpired: "Google 授權已失效，請重新連結帳號。",
+    authDenied: "你取消了 Google 授權，雲端備份沒有啟用。",
+    authTimeout: "Google 登入等候逾時，請再試一次。",
+    secureStorage: "這台電腦目前無法安全保存 Google 授權，雲端備份沒有啟用。",
+    decision: "雲端已有另一份資料。請先選擇復原雲端內容，或明確以這台裝置取代。",
+    conflict: "雲端備份已被另一台裝置更新。為避免互相覆蓋，澄境已暫停這台裝置的自動備份。",
+    previousUnavailable: "目前沒有可用的一天前備份。",
+    currentUnavailable: "目前沒有可用的雲端備份。",
+    restoreAsset: "雲端備份的附件不完整，為保護資料，澄境沒有執行復原。",
+    connection: "目前無法連上 Google Drive，請確認網路後再試。",
+    write: "Google 雲端備份未完成，澄境會在下次閒置時重試。",
+    restore: "無法下載這份雲端備份，請稍後再試。",
+  },
+  "zh-CN": { notConfigured: "Google 云端备份尚未完成服务设置。", authRequired: "请先连接 Google 帐号。", authExpired: "Google 授权已失效，请重新连接帐号。", authDenied: "你取消了 Google 授权，云端备份未启用。", authTimeout: "Google 登录等待超时，请重试。", secureStorage: "这台电脑目前无法安全保存 Google 授权，云端备份未启用。", decision: "云端已有另一份数据。请先选择恢复云端内容，或明确使用这台设备替换。", conflict: "云端备份已被另一台设备更新。为避免互相覆盖，澄境已暂停这台设备的自动备份。", previousUnavailable: "目前没有可用的一天前备份。", currentUnavailable: "目前没有可用的云端备份。", restoreAsset: "云端备份的附件不完整，为保护数据，澄境未执行恢复。", connection: "目前无法连接 Google Drive，请确认网络后重试。", write: "Google 云端备份未完成，澄境会在下次空闲时重试。", restore: "无法下载这份云端备份，请稍后重试。" },
+  en: { notConfigured: "Google cloud backup has not been configured for this build.", authRequired: "Connect a Google Account first.", authExpired: "Google authorization has expired. Reconnect your account.", authDenied: "Google authorization was cancelled, so cloud backup was not enabled.", authTimeout: "Google sign-in timed out. Try again.", secureStorage: "This computer cannot securely store Google authorization right now, so cloud backup was not enabled.", decision: "Another backup already exists in the cloud. Restore it first or explicitly replace it with this device.", conflict: "Another device updated the cloud backup. ChengJing paused automatic backup here to prevent overwriting it.", previousUnavailable: "No previous-day backup is available.", currentUnavailable: "No cloud backup is available.", restoreAsset: "The cloud backup is missing an attachment. ChengJing did not restore it, to protect your data.", connection: "Could not connect to Google Drive. Check your connection and try again.", write: "Google cloud backup did not finish. ChengJing will retry the next time it is idle.", restore: "Could not download this cloud backup. Try again later." },
+};
+
+function cloudBackupMessage(key) {
+  return (CLOUD_BACKUP_MESSAGES[currentLanguage] || CLOUD_BACKUP_MESSAGES.en)[key] || CLOUD_BACKUP_MESSAGES.en[key] || key;
+}
+
+function friendlyCloudBackupError(error, operation = "connection") {
+  const code = String(error?.message || "");
+  if (code === "cloud-service-not-configured") return cloudBackupMessage("notConfigured");
+  if (code === "cloud-auth-required") return cloudBackupMessage("authRequired");
+  if (code === "cloud-auth-expired" || code === "cloud-token-unreadable") return cloudBackupMessage("authExpired");
+  if (code === "cloud-auth-denied") return cloudBackupMessage("authDenied");
+  if (code === "cloud-auth-timeout") return cloudBackupMessage("authTimeout");
+  if (code === "cloud-secure-storage-unavailable") return cloudBackupMessage("secureStorage");
+  if (code === "cloud-backup-decision-required") return cloudBackupMessage("decision");
+  if (code === "cloud-backup-conflict") return cloudBackupMessage("conflict");
+  if (code === "cloud-previous-unavailable") return cloudBackupMessage("previousUnavailable");
+  if (code === "cloud-current-unavailable") return cloudBackupMessage("currentUnavailable");
+  if (/cloud-(?:restore-asset|backup-asset)/.test(code)) return cloudBackupMessage("restoreAsset");
+  return cloudBackupMessage(operation);
+}
+
+async function createRestoreSafetyBackup(request = {}) {
+  const directory = path.join(app.getPath("userData"), "Restore Safety");
+  await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+  const result = await createAutoBackup({
+    directory,
+    data: String(request.data || ""),
+    retentionCount: 3,
+    assetsDirectory: attachmentsDirectory(),
+    assets: Array.isArray(request.assets) ? request.assets : [],
+  });
+  const entries = [];
+  for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+    if (!entry.isFile() || !isOwnedBackupFilename(entry.name)) continue;
+    entries.push({ name: entry.name, modifiedAt: (await fs.stat(path.join(directory, entry.name))).mtimeMs });
+  }
+  entries.sort((left, right) => right.modifiedAt - left.modifiedAt);
+  await Promise.all(entries.slice(1).map((entry) => fs.rm(path.join(directory, entry.name), { force: true })));
+  await cleanupIncrementalAssets(directory);
+  return result;
 }
 
 function friendlyAutoBackupError(error) {
@@ -1039,6 +1128,66 @@ ipcMain.handle("backup:write", async (_event, request = {}) => serializeAutoBack
     throw new Error(friendly);
   }
 }));
+
+ipcMain.handle("backup:write-safety", async (_event, request = {}) => serializeAutoBackup(async () => {
+  try {
+    const result = await createRestoreSafetyBackup(request);
+    return { filePath: result.filePath, filename: result.filename, bytes: result.bytes };
+  } catch (error) {
+    throw new Error(friendlyAutoBackupError(error));
+  }
+}));
+
+ipcMain.handle("cloud-backup:get-local-status", async () => {
+  try { return await cloudBackupService().getLocalStatus(); }
+  catch (error) { throw new Error(friendlyCloudBackupError(error)); }
+});
+
+ipcMain.handle("cloud-backup:get-status", async () => serializeCloudBackup(async () => {
+  try { return await cloudBackupService().getStatus(); }
+  catch (error) { throw new Error(friendlyCloudBackupError(error)); }
+}));
+
+ipcMain.handle("cloud-backup:connect", async () => serializeCloudBackup(async () => {
+  try { return await cloudBackupService().connect(); }
+  catch (error) { throw new Error(friendlyCloudBackupError(error)); }
+}));
+
+ipcMain.handle("cloud-backup:disconnect", async () => serializeCloudBackup(async () => {
+  try { return await cloudBackupService().disconnect(); }
+  catch (error) { throw new Error(friendlyCloudBackupError(error)); }
+}));
+
+ipcMain.handle("cloud-backup:update-settings", async (_event, patch = {}) => serializeCloudBackup(async () => {
+  try { return await cloudBackupService().updateSettings(patch); }
+  catch (error) { throw new Error(friendlyCloudBackupError(error)); }
+}));
+
+ipcMain.handle("cloud-backup:write", async (_event, request = {}) => serializeCloudBackup(async () => {
+  try { return await cloudBackupService().write(request); }
+  catch (error) { throw new Error(friendlyCloudBackupError(error, "write")); }
+}));
+
+ipcMain.handle("cloud-backup:download", async (_event, slot) => serializeCloudBackup(async () => {
+  try { return await cloudBackupService().downloadBackup(slot); }
+  catch (error) { throw new Error(friendlyCloudBackupError(error, "restore")); }
+}));
+
+ipcMain.handle("cloud-backup:complete-restore", async (_event, request = {}) => serializeCloudBackup(async () => {
+  try { return await cloudBackupService().completeRestore(request); }
+  catch (error) { throw new Error(friendlyCloudBackupError(error, "restore")); }
+}));
+
+ipcMain.handle("cloud-backup:cancel-restore", async () => serializeCloudBackup(() => cloudBackupService().cancelRestore()));
+
+ipcMain.handle("cloud-backup:adopt-current-for-overwrite", async () => serializeCloudBackup(async () => {
+  try { return await cloudBackupService().adoptCurrentForOverwrite(); }
+  catch (error) { throw new Error(friendlyCloudBackupError(error)); }
+}));
+
+if (isSmoke) {
+  ipcMain.handle("cloud-backup:qa-cleanup", async () => serializeCloudBackup(async () => cloudBackupService().removeThisDeviceTestData()));
+}
 
 ipcMain.handle("ai:key-status", async () => secretStatus(app.getPath("userData")));
 

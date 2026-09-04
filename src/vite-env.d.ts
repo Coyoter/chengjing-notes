@@ -24,6 +24,20 @@ interface Window {
       chooseFolder: () => Promise<{ canceled: boolean; settings: import("./types").AutoBackupSettings }>;
       updateSettings: (patch: Partial<Pick<import("./types").AutoBackupSettings, "enabled" | "intervalDays" | "retentionCount">>) => Promise<import("./types").AutoBackupSettings>;
       write: (request: { data: string; reason: "scheduled" | "manual"; assets?: Array<{ relativePath: string; sha256: string; size: number }> }) => Promise<import("./types").AutoBackupWriteResult>;
+      writeSafety: (request: { data: string; assets?: Array<{ relativePath: string; sha256: string; size: number }> }) => Promise<{ filePath: string; filename: string; bytes: number }>;
+    };
+    cloudBackups: {
+      getLocalStatus: () => Promise<import("./types").CloudBackupStatus>;
+      getStatus: () => Promise<import("./types").CloudBackupStatus>;
+      connect: () => Promise<import("./types").CloudBackupStatus>;
+      disconnect: () => Promise<import("./types").CloudBackupStatus>;
+      updateSettings: (patch: Partial<Pick<import("./types").CloudBackupSettings, "enabled" | "intervalMinutes">>) => Promise<import("./types").CloudBackupSettings>;
+      write: (request: { data: string; reason: "scheduled" | "manual"; force?: boolean; assets?: Array<{ relativePath: string; sha256: string; size: number }> }) => Promise<import("./types").CloudBackupWriteResult>;
+      download: (slot: "current" | "previous") => Promise<import("./types").CloudBackupDownloadResult>;
+      completeRestore: (request: { baselineManifestId: string; contentHash: string }) => Promise<import("./types").CloudBackupSettings>;
+      cancelRestore: () => Promise<{ cleaned: boolean }>;
+      adoptCurrentForOverwrite: () => Promise<import("./types").CloudBackupSettings>;
+      qaCleanup?: () => Promise<{ removedManifests: number; removedAssets: number; settings: import("./types").CloudBackupSettings }>;
     };
     ai: {
       keyStatus: () => Promise<{ configured: boolean; encrypted: boolean; storage: "app-local-aes-256-gcm"; error?: string }>;

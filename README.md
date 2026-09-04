@@ -1,4 +1,4 @@
-# 澄境筆記 ChengJing Notes v0.7.8
+# 澄境筆記 ChengJing Notes v0.8.0
 
 <p align="center">
   <a href="README.md"><strong>繁體中文</strong></a>
@@ -27,9 +27,9 @@
 目前正式安裝包支援 Apple Silicon Mac，以及 Windows ARM64／Intel、AMD x64：
 
 - [前往 GitHub Releases 下載最新版](https://github.com/Coyoter/chengjing-notes/releases/latest)
-- [Windows ARM64 安裝程式](https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.8/ChengJing-0.7.8-arm64-Installer.exe)
-- [Windows Intel／AMD x64 安裝程式](https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.8/ChengJing-0.7.8-x64-Installer.exe)
-- [Apple Silicon Mac DMG](https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.8/ChengJing-0.7.8-arm64.dmg)
+- [Windows ARM64：在最新版 Release 選擇 ARM64 Installer](https://github.com/Coyoter/chengjing-notes/releases/latest)
+- [Windows Intel／AMD x64：在最新版 Release 選擇 x64 Installer](https://github.com/Coyoter/chengjing-notes/releases/latest)
+- [Apple Silicon Mac：在最新版 Release 選擇 ARM64 DMG](https://github.com/Coyoter/chengjing-notes/releases/latest)
 
 Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目前尚未使用商業 Windows 程式碼簽章憑證，因此 SmartScreen 可能顯示「未知的發行者」，啟用 Smart App Control 的電腦也可能直接封鎖安裝檔。請不要為了安裝而降低主要工作電腦的安全設定。
 
@@ -48,7 +48,7 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 - 標籤資料庫：表格、看板、階段更新與自訂標籤
 - PDF、DOCX、Markdown、純文字、HTML、圖片、音訊與影片匯入
 - 網頁文章擷取與 YouTube 來源卡片
-- OpenRouter：作業系統加密金鑰、精選模型、同步最新模型、自訂模型名稱
+- OpenRouter：本機 AES-256-GCM 加密金鑰、精選模型、同步最新模型、自訂模型名稱
 - Gemma 4 E2B：WebGPU 隨選下載、本機生成、進度顯示與移除
 - AI 全域助理、卡片快捷動作與安全動作計畫；自然語言可真正新增、修改、刪除卡片、白板、待辦與隻言片語，並追加日誌
 - 隻言片語：兩三個字即可保存、釘選、修改、複製、轉成卡片、送進白板／看板或第二大腦
@@ -58,11 +58,23 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 - 3D 第二大腦：整合卡片、日誌、白板、待辦與隻言片語；私人神經元採每個視野最多 200 顆的分區載入，支援旋轉、滾輪縮放、WASD、手動連線與刪線
 - 共享大腦：私人神經元始終留在中心；可在外圍偶遇最多 20 顆陌生神經元、留下回聲或收成自己的共享副本
 - AI 第二大腦：綜合字面、語意、時間與脈絡尋找潛在關聯，保存可撤回連線並生成每日反思
+- Google 雲端與本地雙軌備份：兩者可同時執行；Google 只使用澄境自己的隱藏 App Data，並保留目前版本與前一天緊急救援點
 - 完整 JSON 備份／還原、Markdown＋附件 ZIP 匯出，以及附件內容雜湊去重的低負載增量自動備份
 - 跟隨系統、淺色、深色，以及低彩度日式「墨色」四種外觀
 - 90%／100%／110%／120% 全域介面文字比例
 - 五語介面：繁體中文、簡體中文、English、日本語、한국어；日期、AI 回答、原生選單與共享介面同步切換
 - 半自動更新：GitHub API、Cloudflare Worker、Release Feed、邊緣快取與 KV 多層備援，下載後驗證並開啟目前平台的 DMG 或 Windows 安裝程式
+
+## v0.8.0 Google 雲端與本地雙軌備份
+
+- 設定頁只保留「Google 雲端」與「本地」兩種清楚做法；兩者開關獨立，可以同時執行。
+- Google 雲端預設每 30 分鐘在澄境開啟且閒置時檢查；資料未改變就不重複上傳。
+- 雲端固定保留目前版本與前一天最後一份救援點；救援點超過 48 小時即清理，目前版本不會因久未開啟而消失。
+- 「緊急復原前一天」獨立放在預設收合的警告區，執行前再次確認並先建立本機安全副本；日常復原不會誤觸。
+- 新裝置若發現雲端已有資料，會先暫停上傳並要求選擇復原或取代；另一台裝置更新後也會停止互蓋。
+- 附件以 SHA-256 內容定址並只上傳一次；本機 Gemma 模型、OpenRouter 金鑰、Google 授權憑證都不進入備份。
+- OAuth 只要求 Google 官方列為非敏感的 `drive.appdata`，使用系統瀏覽器、PKCE、一次性 state 與本機回呼；無法讀取使用者其他 Drive 檔案。
+- macOS 授權憑證由澄境靜默使用 AES-256-GCM 保存，不呼叫鑰匙圈；Windows 使用不跳提示的 DPAPI。
 
 ## v0.7.5 正式支援 Windows ARM64 與 x64
 
@@ -628,9 +640,17 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 
 模型約 2.9–3.2 GB，第一次下載完成後可離線使用。生成時文字不會傳給 OpenRouter 或 Google。
 
+### Google 雲端備份
+
+1. 打開「設定 → 備份與復原」。
+2. 在「Google 雲端」選擇「使用 Google 帳戶登入」。
+3. 確認自動備份開啟；預設每 30 分鐘在澄境開啟且閒置時執行。
+
+澄境只要求 `drive.appdata`，只能管理自己的隱藏備份空間，不能讀取 Google Drive 其他檔案。雲端與本地備份可以同時開啟。「緊急復原前一天」只供重要資料誤刪且錯誤內容已同步時使用，日常不要操作。
+
 ## 本機資料
 
-卡片、白板、日誌、聊天與附件使用 IndexedDB 保存在 Electron 使用者資料目錄。重要資料仍建議定期使用「完整 JSON 備份」另存到外接硬碟或自己的雲端硬碟。
+卡片、白板、日誌、聊天與附件使用 IndexedDB 保存在 Electron 使用者資料目錄。建議同時開啟 Google 雲端與本地備份；也可以使用「完整 JSON 備份」另存到外接硬碟。
 
 ## 開發與驗證
 
@@ -650,6 +670,7 @@ npm run qa:i18n
 npm run qa:update
 npm run qa:tags
 npm run qa:auto-backup
+npm run qa:live-google-backup
 npm run qa:task-timeline
 npm run smoke:electron-main
 npm run smoke:electron
@@ -665,7 +686,7 @@ npm run dist:mac
 - Electron 44／Node 24.18.1 啟動通過
 - WebGPU 可用
 - OpenRouter 公開模型清單與官方金鑰／聊天端點可達
-- 作業系統加密儲存可用
+- macOS 靜默 AES-256-GCM 與 Windows DPAPI 授權憑證儲存路徑均已驗證
 - 16 組一般深色／墨色主要介面最小字級 12px；最低文字對比 4.83:1
 - 1100px 視窗搭配 120% 大字無水平溢出
 - 白板專項驗收：拖曳／點選連線、20px 四向連接點、失敗回饋、右鍵、心智圖、工具列 tooltip 與白板搜尋全部通過
@@ -684,7 +705,7 @@ npm run dist:mac
 
 ## 目前刻意保留的邊界
 
-- 這是自用單人版，沒有雲端帳號、即時多人協作與手機版。
+- 這是本機優先單人版；Google 帳號只用於私人備份，沒有澄境自建帳號、即時多人協作與手機版。
 - 第二大腦的每日反思是協助回看的文字線索，不是醫療或心理診斷，也不宣稱能直接讀懂人格或潛意識。
 - 影音卡片可以保存媒體、字幕與筆記；尚未內建另一套 Whisper 語音模型自動轉錄。
 - 現有 URL 匯入取代瀏覽器 Web Clipper；若需要，可以再製作獨立 Chrome 擴充功能。

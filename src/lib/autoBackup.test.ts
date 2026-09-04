@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { AutoBackupSettings } from "../types";
-import { AUTO_BACKUP_DAY_MS, isAutoBackupDue, nextAutoBackupAt } from "./autoBackup";
+import type { AutoBackupSettings, CloudBackupSettings } from "../types";
+import { AUTO_BACKUP_DAY_MS, CLOUD_BACKUP_MINUTE_MS, isAutoBackupDue, isCloudBackupDue, nextAutoBackupAt } from "./autoBackup";
 
 const base: AutoBackupSettings = {
   enabled: true,
@@ -24,5 +24,24 @@ describe("自動備份排程", () => {
     expect(isAutoBackupDue(base, base.lastSuccessAt + 3 * AUTO_BACKUP_DAY_MS - 1)).toBe(false);
     expect(isAutoBackupDue(base, base.lastSuccessAt + 3 * AUTO_BACKUP_DAY_MS)).toBe(true);
     expect(nextAutoBackupAt(base)).toBe(base.lastSuccessAt + 3 * AUTO_BACKUP_DAY_MS);
+  });
+
+  it("Google 雲端預設可每 30 分鐘執行，但衝突時一定暫停", () => {
+    const cloud: CloudBackupSettings = {
+      enabled: true,
+      intervalMinutes: 30,
+      accountName: "",
+      accountEmail: "",
+      deviceId: "device-12345678901234567890",
+      lastAttemptAt: 0,
+      lastSuccessAt: 1_000,
+      lastContentHash: "",
+      lastKnownManifestId: "manifest",
+      lastError: "",
+      conflict: false,
+    };
+    expect(isCloudBackupDue(cloud, cloud.lastSuccessAt + 30 * CLOUD_BACKUP_MINUTE_MS - 1)).toBe(false);
+    expect(isCloudBackupDue(cloud, cloud.lastSuccessAt + 30 * CLOUD_BACKUP_MINUTE_MS)).toBe(true);
+    expect(isCloudBackupDue({ ...cloud, conflict: true }, cloud.lastSuccessAt + 60 * CLOUD_BACKUP_MINUTE_MS)).toBe(false);
   });
 });

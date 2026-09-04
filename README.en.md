@@ -1,4 +1,4 @@
-# ChengJing Notes v0.7.8
+# ChengJing Notes v0.8.0
 
 <p align="center">
   <a href="README.md">繁體中文</a>
@@ -27,9 +27,9 @@ This is source-available software rather than OSI-approved “Open Source” sof
 Official installers are currently available for Apple Silicon Macs and Windows ARM64, Intel, and AMD x64 systems:
 
 - [Download the latest release from GitHub Releases](https://github.com/Coyoter/chengjing-notes/releases/latest)
-- [Windows ARM64 installer](https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.8/ChengJing-0.7.8-arm64-Installer.exe)
-- [Windows Intel/AMD x64 installer](https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.8/ChengJing-0.7.8-x64-Installer.exe)
-- [Apple Silicon Mac DMG](https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.8/ChengJing-0.7.8-arm64.dmg)
+- [Windows ARM64: choose the ARM64 Installer in the latest release](https://github.com/Coyoter/chengjing-notes/releases/latest)
+- [Windows Intel/AMD x64: choose the x64 Installer in the latest release](https://github.com/Coyoter/chengjing-notes/releases/latest)
+- [Apple Silicon Mac: choose the ARM64 DMG in the latest release](https://github.com/Coyoter/chengjing-notes/releases/latest)
 
 Use the ARM64 installer on a Windows ARM computer. Use the x64 installer on a regular Intel or AMD computer. The Windows installers are not currently signed with a commercial code-signing certificate, so SmartScreen may show “Unknown publisher,” and Smart App Control may block installation. Do not lower the security settings of your main computer just to install the app.
 
@@ -47,7 +47,7 @@ The macOS build is currently ad-hoc signed and is not notarized with an Apple De
 - Tag database with table, kanban, stage, and custom-tag views
 - Import for PDF, DOCX, Markdown, plain text, HTML, images, audio, and video
 - Web article capture and YouTube source cards
-- OpenRouter integration with encrypted local key storage, curated models, model synchronization, and custom model names
+- OpenRouter integration with local AES-256-GCM key storage, curated models, model synchronization, and custom model names
 - Gemma 4 E2B local WebGPU generation with on-demand download, progress display, and removal
 - Global AI assistant, card actions, and a safe action plan for creating, editing, and deleting content
 - Snippets that can be saved, pinned, edited, copied, converted into cards, or sent to a whiteboard, board, or Second Brain
@@ -57,6 +57,7 @@ The macOS build is currently ad-hoc signed and is not notarized with an Apple De
 - 3D Second Brain combining cards, journals, whiteboards, todos, and snippets
 - Shared Brain with private neurons kept separate from discovered shared neurons
 - AI Second Brain for text, semantic, time, and context-based relationship suggestions, with reversible links and daily reflection
+- Google cloud and local backup can run together; Google uses only ChengJing's hidden App Data and keeps a current snapshot plus a previous-day rescue point
 - Complete JSON backup/restore, Markdown plus attachment ZIP export, and incremental attachment backup with hash-based deduplication
 - Follow-system, light, dark, and low-saturation ink themes
 - Global interface scale at 90%, 100%, 110%, and 120%
@@ -64,6 +65,17 @@ The macOS build is currently ad-hoc signed and is not notarized with an Apple De
 - Semi-automatic updates through GitHub, Cloudflare Worker, release feeds, edge cache, and KV fallback layers
 
 ## Selected recent releases
+
+### v0.8.0: Google cloud and local backup
+
+- A simpler settings surface with two independent methods: Google Cloud and Local
+- A recommended 30-minute cloud interval that runs only while ChengJing is open and idle, and skips unchanged content
+- A current cloud snapshot plus one previous-day rescue point; rescue data expires after 48 hours while the current snapshot remains
+- Emergency previous-day restore is collapsed by default, clearly warned, confirmed again, and preceded by a local safety copy
+- Cross-device conflict protection pauses uploads instead of silently overwriting a newer cloud snapshot
+- Content-addressed attachments upload only once; local AI models, API keys, and OAuth tokens are excluded
+- System-browser OAuth with PKCE, state validation, loopback callback, and only the non-sensitive `drive.appdata` scope
+- Silent AES-256-GCM token storage on macOS without Keychain prompts, and silent DPAPI protection on Windows
 
 ### v0.7.5: native Windows ARM64 and x64 support
 
@@ -125,9 +137,17 @@ The key is not stored in ordinary settings, the notes database, or backups. It i
 
 The model is approximately 2.9–3.2 GB. After the first download, it can run offline. Generated text is not sent to OpenRouter or Google.
 
+### Google cloud backup
+
+1. Open Settings → Backup and restore.
+2. In Google Cloud, choose Sign in with Google.
+3. Keep automatic backup enabled. The default interval is 30 minutes while ChengJing is open and idle.
+
+ChengJing requests only `drive.appdata`, so it can manage only its own hidden backup space and cannot read any other Drive file. Cloud and local backup can run together. Emergency previous-day restore is only for an important deletion that has already synced; do not use it for everyday restore.
+
 ## Local data
 
-Cards, whiteboards, journals, chats, and attachments are stored in IndexedDB inside Electron’s user-data directory. Important data should still be backed up regularly with Complete JSON Backup to an external drive or your own cloud storage.
+Cards, whiteboards, journals, chats, and attachments are stored in IndexedDB inside Electron’s user-data directory. We recommend enabling both Google cloud and local backup; Complete JSON Backup can also be saved to an external drive.
 
 ## Development and verification
 
@@ -147,6 +167,7 @@ npm run qa:i18n
 npm run qa:update
 npm run qa:tags
 npm run qa:auto-backup
+npm run qa:live-google-backup
 npm run qa:task-timeline
 npm run smoke:electron-main
 npm run smoke:electron
@@ -157,7 +178,7 @@ The current validation suite covers TypeScript, frontend and Electron tests, per
 
 ## Current boundaries
 
-- This is a local-first single-user desktop app. It does not currently provide cloud accounts, real-time multiplayer collaboration, or a mobile app.
+- This is a local-first single-user desktop app. Google accounts are used only for private backup; ChengJing does not provide its own account system, real-time multiplayer collaboration, or a mobile app.
 - Daily reflection is a text aid for review, not medical or psychological diagnosis, and does not claim to read personality or the subconscious directly.
 - Media cards can store media, subtitles, and notes; a separate built-in Whisper model is not included.
 - URL import is currently used instead of a browser Web Clipper. A separate Chrome extension may be added later.
