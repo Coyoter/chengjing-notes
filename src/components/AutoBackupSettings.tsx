@@ -312,8 +312,8 @@ export function AutoBackupSettingsPanel() {
             <div className="cloud-connect-state">
               {!cloudStatus?.configured && <p>{text.servicePending}</p>}
               <button type="button" className="google-connect-button" aria-label={text.connectGoogle} aria-busy={busy === "connect"} disabled={isBusy || !cloudStatus?.configured} onClick={() => void connectGoogle()}>
-                <img src={googleGMark} alt="" width={40} height={40} />
-                <span>{busy === "connect" ? text.connecting : text.connectGoogle}</span>
+                <img className="google-connect-mark" src={googleGMark} alt="" width={40} height={40} />
+                <span className="google-connect-label">{busy === "connect" ? text.connecting : text.connectGoogle}</span>
               </button>
             </div>
           ) : (

@@ -110,24 +110,56 @@ for (const item of connectLanguageCases) {
   });
 }
 await page.locator(".language-grid button").filter({ hasText: "繁體中文" }).click();
+await page.locator(".font-scale-setting button").filter({ hasText: "大字" }).click();
 const googleConnectButton = panel.getByRole("button", { name: "連結 Google 帳號", exact: true });
 await googleConnectButton.locator("img").waitFor();
-const googleConnectButtonVisible = await googleConnectButton.evaluate((element) => {
+const googleConnectButtonGeometry = await googleConnectButton.evaluate((element) => {
   const rect = element.getBoundingClientRect();
   const icon = element.querySelector("img");
+  const mark = element.querySelector(".google-connect-mark");
+  const label = element.querySelector(".google-connect-label");
   const style = getComputedStyle(element);
-  return rect.width >= 180
-    && Math.abs(rect.height - 40) <= 0.5
-    && style.backgroundColor === "rgb(242, 242, 242)"
-    && style.color === "rgb(31, 31, 31)"
-    && element.textContent?.trim() === "連結 Google 帳號"
-    && icon instanceof HTMLImageElement
-    && icon.complete
-    && icon.naturalWidth === 40
-    && icon.naturalHeight === 40
-    && !icon.currentSrc.startsWith("data:");
+  const markRect = mark?.getBoundingClientRect();
+  const labelRect = label?.getBoundingClientRect();
+  const markVerticalOffset = markRect ? ((markRect.top + markRect.bottom) / 2) - ((rect.top + rect.bottom) / 2) : 999;
+  const labelVerticalOffset = labelRect ? ((labelRect.top + labelRect.bottom) / 2) - ((rect.top + rect.bottom) / 2) : 999;
+  const leftShellInset = markRect ? markRect.left - rect.left : 999;
+  const structuralGap = markRect && labelRect ? labelRect.left - markRect.right : 999;
+  const rightInset = labelRect ? rect.right - labelRect.right : 999;
+  const unusedWidth = markRect && labelRect ? rect.width - (leftShellInset + markRect.width + structuralGap + labelRect.width + rightInset) : 999;
+  return {
+    width: rect.width,
+    height: rect.height,
+    markVerticalOffset,
+    labelVerticalOffset,
+    leftShellInset,
+    structuralGap,
+    rightInset,
+    unusedWidth,
+    background: style.backgroundColor,
+    color: style.color,
+    label: element.textContent?.trim() || "",
+    iconLoaded: icon instanceof HTMLImageElement && icon.complete && icon.naturalWidth === 40 && icon.naturalHeight === 40,
+    localSvg: icon instanceof HTMLImageElement && !icon.currentSrc.startsWith("data:"),
+  };
 });
-await page.screenshot({ path: path.join(output, "00-google-connect-button-dark.png"), fullPage: true });
+const googleConnectButtonVisible = googleConnectButtonGeometry.width < 180
+    && Math.abs(googleConnectButtonGeometry.height - 40) <= 0.5
+    && Math.abs(googleConnectButtonGeometry.markVerticalOffset) <= 1
+    && Math.abs(googleConnectButtonGeometry.labelVerticalOffset) <= 1
+    && Math.abs(googleConnectButtonGeometry.leftShellInset - 2) <= 1
+    && Math.abs(googleConnectButtonGeometry.rightInset - 12) <= 1
+    && Math.abs(googleConnectButtonGeometry.structuralGap) <= 0.5
+    && Math.abs(googleConnectButtonGeometry.unusedWidth) <= 0.5
+    && googleConnectButtonGeometry.background === "rgb(242, 242, 242)"
+    && googleConnectButtonGeometry.color === "rgb(31, 31, 31)"
+    && googleConnectButtonGeometry.label === "連結 Google 帳號"
+    && googleConnectButtonGeometry.iconLoaded
+    && googleConnectButtonGeometry.localSvg;
+await googleConnectButton.scrollIntoViewIfNeeded();
+await page.screenshot({ path: path.join(output, "00-google-connect-button-120-percent-context.png"), fullPage: true });
+await googleConnectButton.screenshot({ path: path.join(output, "00-google-connect-button-120-percent.png") });
+await page.locator(".font-scale-setting button").filter({ hasText: "標準" }).click();
 await googleConnectButton.click();
 await panel.getByText("Google 雲端備份已完成。", { exact: true }).waitFor();
 const cloudConnected = await panel.getByRole("checkbox", { name: "自動雲端備份", exact: true }).isChecked()
@@ -202,6 +234,7 @@ const report = {
   privacyBoundaryVisible,
   emergencyInitiallyCollapsed,
   localizedConnectButtons,
+  googleConnectButtonGeometry,
   googleConnectButtonVisible,
   cloudConnected,
   recommendedFrequency,

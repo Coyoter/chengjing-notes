@@ -1,4 +1,10 @@
-# 澄境筆記 v0.8.1 驗收報告
+# 澄境筆記 v0.8.2 驗收報告
+
+## 0.8.2 Google 按鈕留白
+
+- 登入按鈕移除固定最小寬度，繁中 120% 介面下實測寬 166.046875px、高 40px。
+- 圖示殼左緣 2px，加上官方 SVG 內建 10px，形成 12px 可見左距；圖文視覺間距 10px，文字右距 12px，額外未使用寬度為 0px。
+- 圖示與文字垂直中心誤差皆為 0px；繁中、簡中、英文、日文、韓文按鈕皆可見、自然寬度且不溢出。
 
 ## 0.8.1 Google 登入按鈕
 
@@ -69,9 +75,9 @@
 
 ## 正式成品
 
-- Windows ARM64：`release/ChengJing-0.8.1-arm64-Installer.exe`
-- Windows Intel／AMD x64：`release/ChengJing-0.8.1-x64-Installer.exe`
-- Apple Silicon Mac：`release/ChengJing-0.8.1-arm64.dmg`
+- Windows ARM64：`release/ChengJing-0.8.2-arm64-Installer.exe`
+- Windows Intel／AMD x64：`release/ChengJing-0.8.2-x64-Installer.exe`
+- Apple Silicon Mac：`release/ChengJing-0.8.2-arm64.dmg`
 - 本機 `release` 只保留上述三個正式安裝檔。
 - `hdiutil verify`：通過。
 - 尚未使用 Apple Developer ID 簽章與公證，Windows 也尚未使用商業程式碼簽章。

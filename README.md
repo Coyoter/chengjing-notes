@@ -1,4 +1,4 @@
-# 澄境筆記 ChengJing Notes v0.8.1
+# 澄境筆記 ChengJing Notes v0.8.2
 
 <p align="center">
   <a href="README.md"><strong>繁體中文</strong></a>
@@ -64,6 +64,12 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 - 90%／100%／110%／120% 全域介面文字比例
 - 五語介面：繁體中文、簡體中文、English、日本語、한국어；日期、AI 回答、原生選單與共享介面同步切換
 - 半自動更新：GitHub API、Cloudflare Worker、Release Feed、邊緣快取與 KV 多層備援，下載後驗證並開啟目前平台的 DMG 或 Windows 安裝程式
+
+## v0.8.2 Google 登入按鈕精簡留白
+
+- 移除登入按鈕不必要的固定寬度，直接刪除文字右側多餘空白；按鈕現在依五種語言的內容自然決定寬度。
+- 保留 Google 規範的可見 G 前方 12px、圖文間 10px、文字後方 12px，沒有用強制置中把多餘空白移到兩側。
+- 120% 介面字級下實測繁中按鈕寬 166.05px、右距 12px、額外未使用寬度 0px。
 
 ## v0.8.1 Google 登入按鈕可見性修正
 

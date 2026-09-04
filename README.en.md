@@ -1,4 +1,4 @@
-# ChengJing Notes v0.8.1
+# ChengJing Notes v0.8.2
 
 <p align="center">
   <a href="README.md">繁體中文</a>
@@ -65,6 +65,12 @@ The macOS build is currently ad-hoc signed and is not notarized with an Apple De
 - Semi-automatic updates through GitHub, Cloudflare Worker, release feeds, edge cache, and KV fallback layers
 
 ## Selected recent releases
+
+### v0.8.2: compact Google button spacing
+
+- Removes the unnecessary fixed minimum width from the Google connection button, eliminating the extra blank space after the label instead of redistributing it.
+- The button now follows its localized content width while keeping 12px before the visible G, 10px between icon and label, and 12px after the label.
+- Pixel-level QA verifies the insets, vertical alignment, structural spacing, and zero unused width across all five interface languages.
 
 ### v0.8.1: visible Google connection button
 

@@ -51,17 +51,37 @@ try {
   await page.getByRole("button", { name: "設定", exact: true }).click();
   const googleConnectButton = page.getByRole("button", { name: "連結 Google 帳號", exact: true });
   await googleConnectButton.waitFor();
-  const googleConnectButtonVisible = await googleConnectButton.evaluate((element) => {
+  const googleConnectButtonGeometry = await googleConnectButton.evaluate((element) => {
     const rect = element.getBoundingClientRect();
     const icon = element.querySelector("img");
-    return rect.width >= 180
-      && Math.abs(rect.height - 40) <= 0.5
-      && element.textContent?.trim() === "連結 Google 帳號"
-      && icon instanceof HTMLImageElement
-      && icon.complete
-      && icon.naturalWidth === 40
-      && icon.naturalHeight === 40;
+    const mark = element.querySelector(".google-connect-mark")?.getBoundingClientRect();
+    const label = element.querySelector(".google-connect-label")?.getBoundingClientRect();
+    const leftShellInset = mark ? mark.left - rect.left : 999;
+    const structuralGap = mark && label ? label.left - mark.right : 999;
+    const rightInset = label ? rect.right - label.right : 999;
+    return {
+      width: rect.width,
+      height: rect.height,
+      markVerticalOffset: mark ? ((mark.top + mark.bottom) / 2) - ((rect.top + rect.bottom) / 2) : 999,
+      labelVerticalOffset: label ? ((label.top + label.bottom) / 2) - ((rect.top + rect.bottom) / 2) : 999,
+      leftShellInset,
+      structuralGap,
+      rightInset,
+      unusedWidth: mark && label ? rect.width - (leftShellInset + mark.width + structuralGap + label.width + rightInset) : 999,
+      label: element.textContent?.trim() || "",
+      iconLoaded: icon instanceof HTMLImageElement && icon.complete && icon.naturalWidth === 40 && icon.naturalHeight === 40,
+    };
   });
+  const googleConnectButtonVisible = googleConnectButtonGeometry.width < 180
+    && Math.abs(googleConnectButtonGeometry.height - 40) <= 0.5
+    && Math.abs(googleConnectButtonGeometry.markVerticalOffset) <= 1
+    && Math.abs(googleConnectButtonGeometry.labelVerticalOffset) <= 1
+    && Math.abs(googleConnectButtonGeometry.leftShellInset - 2) <= 1
+    && Math.abs(googleConnectButtonGeometry.rightInset - 12) <= 1
+    && Math.abs(googleConnectButtonGeometry.structuralGap) <= 0.5
+    && Math.abs(googleConnectButtonGeometry.unusedWidth) <= 0.5
+    && googleConnectButtonGeometry.label === "連結 Google 帳號"
+    && googleConnectButtonGeometry.iconLoaded;
   const cloudLocalProbe = await page.evaluate(async () => {
     const started = performance.now();
     const status = await window.chengjing.cloudBackups.getLocalStatus();
@@ -83,7 +103,7 @@ try {
   const renderedNodes = Number(await brain.getAttribute("data-brain-rendered-nodes"));
   const brainViewportBounded = renderedNodes === Math.min(200, brainNodes);
   await page.screenshot({ path: path.join(output, "second-brain.png"), fullPage: true });
-  const report = { storageText, storageSeparated, storageNoOverflow, googleConnectButtonVisible, cloudLocalProbe, brainNodes, renderedNodes, brainViewportBounded, errors };
+  const report = { storageText, storageSeparated, storageNoOverflow, googleConnectButtonGeometry, googleConnectButtonVisible, cloudLocalProbe, brainNodes, renderedNodes, brainViewportBounded, errors };
   await fs.writeFile(path.join(output, "summary.json"), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   await page.evaluate(() => window.chengjing.app.quit());
