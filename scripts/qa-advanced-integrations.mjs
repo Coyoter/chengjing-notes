@@ -26,7 +26,7 @@ const providerMock = createServer(async (request, response) => {
   response.setHeader("Content-Type", "application/json");
   if (request.url === "/v1/models") { response.end(JSON.stringify({ data: [{ id: "qwen3:8b", name: "Qwen 3 8B" }] })); return; }
   if (request.url === "/v1/chat/completions") { providerChatRequests += 1; const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: "本機 Provider 回覆正常" }, finish_reason: "stop" }], usage: { total_tokens: 8 } })); return; }
-  if (request.url === "/v1/responses") { providerChatRequests += 1; const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); providerResponsesBodies.push(body); response.end(JSON.stringify({ model: body.model, status: "completed", output_text: "本機 Provider 回覆正常", usage: { total_tokens: 8 } })); return; }
+  if (request.url === "/v1/responses") { providerChatRequests += 1; const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); providerResponsesBodies.push(body); if (Object.hasOwn(body, "temperature")) { response.statusCode = 400; response.end(JSON.stringify({ error: { param: "temperature", message: "Unsupported parameter: 'temperature' is not supported with this model." } })); return; } response.end(JSON.stringify({ model: body.model, status: "completed", output_text: "本機 Provider 回覆正常", usage: { total_tokens: 8 } })); return; }
   response.statusCode = 404; response.end(JSON.stringify({ error: { message: "not found" } }));
 });
 await new Promise((resolve, reject) => { providerMock.once("error", reject); providerMock.listen(providerPort, "127.0.0.1", resolve); });
@@ -48,7 +48,25 @@ try {
   const page = browser.contexts()[0].pages()[0]; page.setDefaultTimeout(12_000); await page.getByText("今天想釐清什麼？").waitFor();
   await page.getByRole("button", { name: "設定", exact: true }).click();
   const jumpNav = page.locator(".settings-jump-nav"); await jumpNav.waitFor(); const anchorCount = await jumpNav.getByRole("link").count();
+  const anchorGeometry = await jumpNav.evaluate((element) => {
+    const nav = element.getBoundingClientRect(); const last = element.querySelector("a:last-child")?.getBoundingClientRect(); const style = getComputedStyle(element); const page = document.querySelector(".settings-page")?.getBoundingClientRect();
+    const expectedRightInset = Number.parseFloat(style.paddingRight) + Number.parseFloat(style.borderRightWidth);
+    return { width: nav.width, pageWidth: page?.width || 0, unusedRight: last ? nav.right - last.right - expectedRightInset : 999 };
+  });
+  const anchorNaturalWidth = anchorGeometry.width < anchorGeometry.pageWidth - 80 && Math.abs(anchorGeometry.unusedRight) <= 1;
   await jumpNav.screenshot({ path: "/tmp/chengjing-settings-anchors.png" });
+  const originalTheme = await page.evaluate(() => document.documentElement.dataset.theme || "light");
+  await page.evaluate(() => { document.documentElement.dataset.theme = "dark"; }); await page.waitForTimeout(180); await jumpNav.screenshot({ path: "/tmp/chengjing-settings-anchors-dark.png" });
+  await page.evaluate((theme) => { document.documentElement.dataset.theme = theme; }, originalTheme); await page.waitForTimeout(180);
+  const originalViewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+  await page.setViewportSize({ width: 480, height: Math.max(720, originalViewport.height) });
+  const narrowTrack = jumpNav.locator(".settings-jump-track");
+  const anchorNarrowScrollable = await narrowTrack.evaluate((element) => {
+    const track = element.getBoundingClientRect(); element.scrollLeft = element.scrollWidth;
+    return new Promise((resolve) => requestAnimationFrame(() => { const last = element.querySelector("a:last-child")?.getBoundingClientRect(); const overflows = element.scrollWidth > element.clientWidth + 1; resolve(Boolean(last) && last.right <= track.right + 1 && (!overflows || element.scrollLeft > 0)); }));
+  });
+  await jumpNav.screenshot({ path: "/tmp/chengjing-settings-anchors-narrow.png" });
+  await page.setViewportSize(originalViewport);
   const initialSettingsScroll = await page.locator(".settings-page").evaluate((element) => element.scrollTop);
   await jumpNav.getByRole("link", { name: "打賞", exact: true }).click();
   await page.waitForFunction((before) => { const target = document.getElementById("support-author").getBoundingClientRect(); const viewport = document.querySelector(".settings-page").getBoundingClientRect(); return document.querySelector(".settings-page").scrollTop > before + 100 && target.top < viewport.bottom && target.bottom > viewport.top; }, initialSettingsScroll);
@@ -137,16 +155,16 @@ try {
   const audit = await page.evaluate(() => window.chengjing.mcp.getAudit());
   const result = {
     packagedApp: Boolean(packagedExecutable),
-    anchorCount, anchorScrollWorks, anchorDisclosureWorks, anchorFits: await jumpNav.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
-    engineChoiceCount: await engineChoices.count(), engineDisclosureWorks, engineSurfaceHierarchy, geminiPresetUpdated, providerSaved: providerFiles.includes("ai-provider-settings.json"), providerEncrypted: !providerPlaintextLeak, providerChatWorks: providerReply.text === "本機 Provider 回覆正常" && providerChatRequests === 2,
-    providerResponsesWorks: providerSettings.profiles[0]?.apiMode === "responses" && providerResponsesBodies.length === 2 && providerResponsesBodies.every((body) => body.max_output_tokens > 0 && body.max_tokens === undefined && body.store === undefined && Array.isArray(body.input)),
+    anchorCount, anchorScrollWorks, anchorDisclosureWorks, anchorNaturalWidth, anchorNarrowScrollable, anchorGeometry, anchorFits: await jumpNav.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
+    engineChoiceCount: await engineChoices.count(), engineDisclosureWorks, engineSurfaceHierarchy, geminiPresetUpdated, providerSaved: providerFiles.includes("ai-provider-settings.json"), providerEncrypted: !providerPlaintextLeak, providerChatWorks: providerReply.text === "本機 Provider 回覆正常" && providerChatRequests === 3,
+    providerResponsesWorks: providerSettings.profiles[0]?.apiMode === "responses" && providerResponsesBodies.length === 3 && providerResponsesBodies[0].temperature !== undefined && providerResponsesBodies.slice(1).every((body) => body.temperature === undefined) && providerResponsesBodies.every((body) => body.max_output_tokens > 0 && body.max_tokens === undefined && body.store === undefined && Array.isArray(body.input)),
     providerGeometry, mcpRunning: true, mcpGeometry, fiveLanguageFits, toolCount: tools.tools.length,
     coreTools: ["chengjing_search", "chengjing_create_note", "chengjing_create_whiteboard", "chengjing_create_kanban", "chengjing_connect_neurons"].every((name) => tools.tools.some((tool) => tool.name === name)),
     readOnlyBlocksWrites: deniedWrite.isError === true, rendererBridgeWrite: stored?.plainText?.includes("通過防衝突更新") === true, auditSuccesses: audit.filter((entry) => entry.outcome === "success").length,
-    screenshots: ["/tmp/chengjing-settings-anchors.png", "/tmp/chengjing-mcp-collapsed.png", "/tmp/chengjing-settings-openrouter.png", "/tmp/chengjing-settings-openrouter-models.png", "/tmp/chengjing-settings-gemma.png", "/tmp/chengjing-provider-settings.png", "/tmp/chengjing-mcp-settings.png"],
+    screenshots: ["/tmp/chengjing-settings-anchors.png", "/tmp/chengjing-settings-anchors-dark.png", "/tmp/chengjing-settings-anchors-narrow.png", "/tmp/chengjing-mcp-collapsed.png", "/tmp/chengjing-settings-openrouter.png", "/tmp/chengjing-settings-openrouter-models.png", "/tmp/chengjing-settings-gemma.png", "/tmp/chengjing-provider-settings.png", "/tmp/chengjing-mcp-settings.png"],
   };
   console.log(JSON.stringify(result, null, 2));
-  if (result.anchorCount !== 8 || !result.anchorScrollWorks || !result.anchorDisclosureWorks || !result.anchorFits || result.engineChoiceCount !== 3 || !result.engineDisclosureWorks || !result.engineSurfaceHierarchy || !result.geminiPresetUpdated || !result.providerSaved || !result.providerEncrypted || !result.providerChatWorks || !result.providerResponsesWorks || !result.providerGeometry.fits || !result.mcpGeometry.fits || !result.fiveLanguageFits || !result.coreTools || !result.readOnlyBlocksWrites || !result.rendererBridgeWrite || result.auditSuccesses < 2) process.exitCode = 1;
+  if (result.anchorCount !== 8 || !result.anchorScrollWorks || !result.anchorDisclosureWorks || !result.anchorNaturalWidth || !result.anchorNarrowScrollable || !result.anchorFits || result.engineChoiceCount !== 3 || !result.engineDisclosureWorks || !result.engineSurfaceHierarchy || !result.geminiPresetUpdated || !result.providerSaved || !result.providerEncrypted || !result.providerChatWorks || !result.providerResponsesWorks || !result.providerGeometry.fits || !result.mcpGeometry.fits || !result.fiveLanguageFits || !result.coreTools || !result.readOnlyBlocksWrites || !result.rendererBridgeWrite || result.auditSuccesses < 2) process.exitCode = 1;
 } catch (error) { console.error(error); console.error(output.slice(-2000)); process.exitCode = 1; }
 finally {
   await client?.close().catch(() => {}); if (browser) await browser.close().catch(() => {}); child.kill("SIGTERM"); await new Promise((resolve) => setTimeout(resolve, 300)); if (!child.killed) child.kill("SIGKILL"); await new Promise((resolve) => providerMock.close(resolve)); await fs.rm(tempData, { recursive: true, force: true });

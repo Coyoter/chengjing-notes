@@ -1,4 +1,4 @@
-# ChengJing Notes v0.9.1
+# ChengJing Notes v0.9.2
 
 <p align="center">
   <a href="README.md">繁體中文</a>
@@ -67,6 +67,12 @@ The macOS build is currently ad-hoc signed and is not notarized with an Apple De
 - Semi-automatic updates through GitHub, Cloudflare Worker, release feeds, edge cache, and KV fallback layers
 
 ## Selected recent releases
+
+### v0.9.2: Responses compatibility and a naturally sized Jump to bar
+
+- The Jump to container now ends immediately after its final Support button instead of stretching into a large empty area. Narrow windows retain horizontal access to all eight destinations.
+- When a Responses model explicitly rejects the optional `temperature` parameter, ChengJing automatically retries without it. Models that support temperature still honor the Creativity setting.
+- ChengJing remembers that compatibility result for the same provider and model during the current app session, avoiding repeated failed requests.
 
 ### v0.9.1: Responses API and an organized Settings page
 

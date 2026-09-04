@@ -73,3 +73,21 @@ test("Ollama Responses 模式維持非狀態式且不傳送 store", async () => 
   assert.equal(sent.body.conversation, undefined);
   assert.equal(result.text, "本機完成");
 });
+
+test("Responses 模型不支援 temperature 時自動重試並記住相容模式", async () => {
+  const sent = [];
+  const fetchImpl = async (_url, options = {}) => {
+    const body = JSON.parse(options.body); sent.push(body);
+    if (Object.hasOwn(body, "temperature")) return jsonResponse({ error: { type: "invalid_request_error", param: "temperature", message: "Unsupported parameter: 'temperature' is not supported with this model." } }, 400);
+    return jsonResponse({ model: "company/reasoning", status: "completed", output_text: "相容重試完成" });
+  };
+  const profile = { id: "company-responses-profile", type: "openai-compatible", apiMode: "responses", baseUrl: "https://company.example.com/v1", model: "company/reasoning", apiKey: "company-key" };
+  const first = await providerChat(fetchImpl, profile, { messages: [{ role: "user", content: "第一次" }], temperature: 0.8 });
+  const second = await providerChat(fetchImpl, profile, { messages: [{ role: "user", content: "第二次" }], temperature: 0.8 });
+  assert.equal(first.text, "相容重試完成");
+  assert.equal(second.text, "相容重試完成");
+  assert.equal(sent.length, 3);
+  assert.equal(sent[0].temperature, 0.8);
+  assert.equal(sent[1].temperature, undefined);
+  assert.equal(sent[2].temperature, undefined);
+});

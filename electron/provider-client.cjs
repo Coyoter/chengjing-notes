@@ -3,6 +3,7 @@ const { normalizeBaseUrl } = require("./provider-settings.cjs");
 const REQUEST_TIMEOUT_MS = 180_000;
 const DISCOVERY_TIMEOUT_MS = 20_000;
 const MAX_RESPONSE_BYTES = 12_000_000;
+const responsesWithoutTemperature = new Set();
 
 function endpoint(baseUrl, suffix) {
   return `${String(baseUrl).replace(/\/+$/, "")}/${String(suffix).replace(/^\/+/, "")}`;
@@ -62,6 +63,15 @@ function responseError(status, payload, secret = "") {
   return new Error(detail ? `provider-http-${status}:${detail}` : `provider-http-${status}`);
 }
 
+function rejectsTemperature(payload) {
+  const error = payload?.error && typeof payload.error === "object" ? payload.error : payload;
+  const parameter = String(error?.param || error?.parameter || "").toLowerCase();
+  const code = String(error?.code || error?.type || "").toLowerCase();
+  const message = String(error?.message || payload?.message || "").toLowerCase();
+  const unsupported = /unsupported|not[_ -]?supported/.test(`${code} ${message}`);
+  return unsupported && (parameter === "temperature" || /['"`]?temperature['"`]?/.test(message));
+}
+
 async function readJsonResponse(response) {
   const declared = Number(response.headers?.get?.("content-length") || 0);
   if (declared > MAX_RESPONSE_BYTES) throw new Error("provider-response-too-large");
@@ -119,11 +129,12 @@ async function providerChat(fetchImpl, rawProfile, request = {}) {
     const useResponses = profile.apiMode === "responses";
     const prepared = responsesInput(messages);
     const textFormat = responsesTextFormat(request.responseFormat);
+    const temperatureCapability = `${profile.id || profile.baseUrl}\u0000${model}`;
     const body = useResponses ? {
       model,
       input: prepared.input,
       ...(prepared.instructions ? { instructions: prepared.instructions } : {}),
-      temperature,
+      ...(responsesWithoutTemperature.has(temperatureCapability) ? {} : { temperature }),
       max_output_tokens: maxTokens,
       stream: false,
       ...(profile.type === "ollama" ? {} : { store: false }),
@@ -136,14 +147,22 @@ async function providerChat(fetchImpl, rawProfile, request = {}) {
       stream: false,
       ...(request.responseFormat && typeof request.responseFormat === "object" ? { response_format: request.responseFormat } : {}),
     };
-    const response = await fetchImpl(endpoint(profile.baseUrl, useResponses ? "responses" : "chat/completions"), {
-      method: "POST",
-      headers: providerHeaders(profile, { "Content-Type": "application/json", "X-Title": "ChengJing" }),
-      body: JSON.stringify(body),
-      redirect: "error",
-      signal,
-    });
-    const payload = await readJsonResponse(response);
+    const send = async (requestBody) => {
+      const response = await fetchImpl(endpoint(profile.baseUrl, useResponses ? "responses" : "chat/completions"), {
+        method: "POST",
+        headers: providerHeaders(profile, { "Content-Type": "application/json", "X-Title": "ChengJing" }),
+        body: JSON.stringify(requestBody),
+        redirect: "error",
+        signal,
+      });
+      return { response, payload: await readJsonResponse(response) };
+    };
+    let { response, payload } = await send(body);
+    if (useResponses && Object.hasOwn(body, "temperature") && (!response.ok || payload?.error) && rejectsTemperature(payload)) {
+      responsesWithoutTemperature.add(temperatureCapability);
+      const { temperature: _temperature, ...compatibleBody } = body;
+      ({ response, payload } = await send(compatibleBody));
+    }
     if (!response.ok) throw responseError(response.status, payload, profile.apiKey);
     if (payload?.error) throw responseError(response.status || 500, payload, profile.apiKey);
     const choice = payload?.choices?.[0];
@@ -167,6 +186,7 @@ module.exports = {
   listProviderModels,
   providerChat,
   providerHeaders,
+  rejectsTemperature,
   responsesInput,
   responsesTextFormat,
   testProvider,

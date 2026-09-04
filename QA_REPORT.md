@@ -1,4 +1,11 @@
-# 澄境筆記 v0.9.1 驗收報告
+# 澄境筆記 v0.9.2 驗收報告
+
+## 0.9.2 Responses 相容性與快速前往收尾
+
+- 980px 設定頁中的「快速前往」外框實測寬 533.5px，最後一個按鈕到右側 padding 之外的未使用空間為 0px；淺色與深色均完成實際截圖目視。
+- 480px 窄視窗下，容器不超出設定頁，軌道可橫向移到最後一個錨點；八個目的地、首尾定位與 details 自動展開均維持正常。
+- Node 契約測試以公司 Gateway 同型錯誤拒絕 `temperature`：第一次請求帶參數並收到 400，第二次自動省略後成功；同 Provider／模型的下一輪直接省略，一共三次請求取得兩次正常回覆。
+- 正式 Electron AI 面板同樣經過拒絕、重試與後續免重試流程；Responses 的 `store: false`、完整 input、輸出 token 上限、加密金鑰與錯誤去敏仍維持。
 
 ## 0.9.1 Responses API 與設定資訊架構
 
@@ -99,9 +106,9 @@
 
 ## 正式成品
 
-- Windows ARM64：`release/ChengJing-0.9.1-arm64-Installer.exe`
-- Windows Intel／AMD x64：`release/ChengJing-0.9.1-x64-Installer.exe`
-- Apple Silicon Mac：`release/ChengJing-0.9.1-arm64.dmg`
+- Windows ARM64：`release/ChengJing-0.9.2-arm64-Installer.exe`
+- Windows Intel／AMD x64：`release/ChengJing-0.9.2-x64-Installer.exe`
+- Apple Silicon Mac：`release/ChengJing-0.9.2-arm64.dmg`
 - 本機 `release` 只保留上述三個正式安裝檔。
 - `hdiutil verify`：通過。
 - 尚未使用 Apple Developer ID 簽章與公證，Windows 也尚未使用商業程式碼簽章。

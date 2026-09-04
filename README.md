@@ -1,4 +1,4 @@
-# 澄境筆記 ChengJing Notes v0.9.1
+# 澄境筆記 ChengJing Notes v0.9.2
 
 <p align="center">
   <a href="README.md"><strong>繁體中文</strong></a>
@@ -66,6 +66,12 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 - 90%／100%／110%／120% 全域介面文字比例
 - 五語介面：繁體中文、簡體中文、English、日本語、한국어；日期、AI 回答、原生選單與共享介面同步切換
 - 半自動更新：GitHub API、Cloudflare Worker、Release Feed、邊緣快取與 KV 多層備援，下載後驗證並開啟目前平台的 DMG 或 Windows 安裝程式
+
+## v0.9.2 Responses 相容性與快速前往收尾
+
+- 「快速前往」外框會在最後一個「打賞」按鈕後自然結束，不再延伸出大塊無作用的右側空白；窄視窗仍可橫向滑動查看全部八個入口。
+- Responses API 遇到不支援 `temperature` 的模型時會自動移除該選填參數並重試；支援溫度的模型仍沿用「回答創意度」。
+- 同一個 Provider／模型在本次開啟期間會記住相容方式，後續對話不再重複送出已知不支援的參數。
 
 ## v0.9.1 Responses API 與重新整理的設定頁
 
