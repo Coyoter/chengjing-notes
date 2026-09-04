@@ -1,4 +1,4 @@
-# 澄境筆記 ChengJing Notes v0.9.0
+# 澄境筆記 ChengJing Notes v0.9.1
 
 <p align="center">
   <a href="README.md"><strong>繁體中文</strong></a>
@@ -49,7 +49,7 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 - PDF、DOCX、Markdown、純文字、HTML、圖片、音訊與影片匯入
 - 網頁文章擷取與 YouTube 來源卡片
 - OpenRouter：本機 AES-256-GCM 加密金鑰、精選模型、同步最新模型、自訂模型名稱
-- 自訂 AI Provider：可連接多組 OpenAI 相容 Gateway 或本機 Ollama，支援模型清單、測試與加密金鑰
+- 自訂 AI Provider：可連接多組 OpenAI 相容 Gateway 或本機 Ollama，逐組選擇 Chat Completions／Responses API，並支援模型清單、測試與加密金鑰
 - Gemma 4 E2B：WebGPU 隨選下載、本機生成、進度顯示與移除
 - AI 全域助理、卡片快捷動作與安全動作計畫；自然語言可真正新增、修改、刪除卡片、白板、待辦與隻言片語，並追加日誌
 - 隻言片語：兩三個字即可保存、釘選、修改、複製、轉成卡片、送進白板／看板或第二大腦
@@ -66,6 +66,16 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 - 90%／100%／110%／120% 全域介面文字比例
 - 五語介面：繁體中文、簡體中文、English、日本語、한국어；日期、AI 回答、原生選單與共享介面同步切換
 - 半自動更新：GitHub API、Cloudflare Worker、Release Feed、邊緣快取與 KV 多層備援，下載後驗證並開啟目前平台的 DMG 或 Windows 安裝程式
+
+## v0.9.1 Responses API 與重新整理的設定頁
+
+- 自訂 Provider 每組連線可獨立選擇 Chat Completions 或 Responses API；既有連線維持原模式，不會因更新而改變。
+- Responses 模式使用 `/responses`、`input`、`instructions` 與 `max_output_tokens`；遠端 Gateway 固定送出 `store: false`，Ollama 使用官方支援的非狀態式模式。
+- 頂端新增「快速前往」，可直接滑到語言、AI、外部整合、更新、快速記錄、外觀、備份與打賞；窄視窗改為橫向滑動，不擠壓或換行。
+- AI 設定依目前引擎自動整理：只顯示選中引擎需要的金鑰或本機模型；OpenRouter 模型與自訂 Provider 在不相關時收合，但仍可手動展開。
+- 回答創意度與本機知識搜尋獨立標示為「所有 AI 共用」，不再藏在 OpenRouter 模型區；所有原有控制、資料與設定值完整保留。
+- OpenRouter 三個精選模型中的 Gemini 已更新為 `google/gemini-3.8-flash`，另外兩個選項與排列不變。
+- 選中引擎的金鑰／本機模型使用完整實心控制面；未啟用的 MCP 收成摘要列，點「外部整合」錨點會自動展開再定位。
 
 ## v0.9.0 本機 MCP 與自訂 AI Provider
 
@@ -665,11 +675,11 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 ### 自訂 AI Provider／Ollama
 
 1. 打開「設定」，選擇「自訂 AI Provider」。
-2. 展開進階設定；使用 Ollama 時保留預設位址 `http://127.0.0.1:11434/v1`，填入已下載的模型 ID，例如 `qwen3:8b`。
+2. 展開進階設定，選擇相容範圍最廣的 Chat Completions，或新式 Responses API；使用 Ollama 時保留預設位址 `http://127.0.0.1:11434/v1`，填入已下載的模型 ID，例如 `qwen3:8b`。
 3. 自訂 Gateway 則選擇「OpenAI 相容 Gateway」，填入 HTTPS API 位址、模型 ID，以及該服務需要的 API Key。
 4. 儲存後可取得模型清單或測試連線，再把這組連線設為使用中。
 
-澄境使用 OpenAI 相容的 `/models` 與 `/chat/completions`。遠端服務只接受 HTTPS；本機 HTTP 只接受 `localhost`、`127.0.0.1` 或 `::1`。金鑰加密留在這台電腦，備份不包含金鑰。
+澄境使用 OpenAI 相容的 `/models`，並依連線設定呼叫 `/chat/completions` 或 `/responses`。遠端 Responses 請求固定使用 `store: false`；Ollama 不使用伺服器端對話 ID，而是由澄境帶入必要歷史。遠端服務只接受 HTTPS；本機 HTTP 只接受 `localhost`、`127.0.0.1` 或 `::1`。金鑰加密留在這台電腦，備份不包含金鑰。
 
 ### Codex／Claude Code MCP
 

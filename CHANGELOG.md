@@ -1,5 +1,16 @@
 # 更新紀錄
 
+## 0.9.1 — 2026-09-05
+
+- 自訂 AI Provider 新增每組連線獨立的 Chat Completions／Responses API 模式；既有連線無須遷移，預設維持 Chat Completions。
+- Responses 模式改送 `/responses`、`input`、`instructions` 與 `max_output_tokens`，同時支援頂層 `output_text` 與巢狀 output content 回覆；結構化輸出不相容時仍沿用既有安全降級。
+- 遠端 Responses Gateway 固定使用 `store: false`；Ollama 依官方非狀態式方式送出完整必要歷史，不使用 `previous_response_id` 或 conversation。
+- 設定頁頂端新增八個五語快速錨點，可平滑前往語言、AI、外部整合、更新、快速記錄、外觀、備份與打賞；鍵盤與減少動態偏好均保留。
+- AI 設定改依目前引擎整理：OpenRouter 自動展開自己的模型區，Gemma 4 或自訂 Provider 會將它收合；自訂 Provider 只在選用時自動展開，未選設定仍可手動查看。
+- OpenRouter 金鑰、Gemma 本機模型與自訂 Provider 只顯示目前引擎真正需要的控制；回答創意度與本機知識搜尋移到「所有 AI 共用」，功能、資料與原設定值完全保留。
+- OpenRouter 三個精選模型中的 Gemini 已更新為 `google/gemini-3.8-flash`，其餘模型與排列維持不變。
+- 目前引擎控制改用有實心層次的統一控制面，容量、Runtime、狀態、主要動作與隱私說明共用清楚骨架；未啟用的 MCP 則收成摘要列，錨點會先展開再定位。
+
 ## 0.9.0 — 2026-09-04
 
 - 新增本機 MCP 伺服器，Codex、Claude Code 與其他相容工具可搜尋及讀取澄境，並依使用者選擇新增或修改筆記、待辦、白板、看板與神經元關係。

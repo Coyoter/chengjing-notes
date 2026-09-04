@@ -71,7 +71,7 @@ interface Window {
         routingMode?: import("./types").OpenRouterRoutingMode;
       }) => Promise<{ text: string; model: string; usage: Record<string, number> | null; finishReason: string | null }>;
       providerSettings: () => Promise<import("./types").AIProviderSettings>;
-      upsertProvider: (input: { id?: string; name: string; type: import("./types").AIProviderType; baseUrl: string; model: string; apiKey?: string; select?: boolean }) => Promise<import("./types").AIProviderSettings>;
+      upsertProvider: (input: { id?: string; name: string; type: import("./types").AIProviderType; apiMode: import("./types").AIProviderApiMode; baseUrl: string; model: string; apiKey?: string; select?: boolean }) => Promise<import("./types").AIProviderSettings>;
       selectProvider: (id: string) => Promise<import("./types").AIProviderSettings>;
       removeProvider: (id: string) => Promise<import("./types").AIProviderSettings>;
       testProvider: (id: string) => Promise<{ ok: boolean; models: import("./types").AIProviderModel[]; modelAvailable: boolean }>;

@@ -110,7 +110,7 @@ await page.waitForFunction(() => (document.querySelector(".brain-report-reading"
 const previewScrollMetrics = await previewReading.evaluate((element) => ({ scrollTop: element.scrollTop, overflow: getComputedStyle(element).overflowY, scrollbarWidth: getComputedStyle(element).scrollbarWidth, webkitDisplay: getComputedStyle(element, "::-webkit-scrollbar").display }));
 const previewScrollWithoutScrollbar = previewScrollMetrics.scrollTop > 0 && previewScrollMetrics.overflow === "auto" && previewScrollMetrics.scrollbarWidth === "none" && previewScrollMetrics.webkitDisplay === "none";
 await previewReading.evaluate((element) => { element.scrollTop = 0; });
-const metadataRemoved = defaultReportMetrics.footerCount === 0 && !(await reportPanel.innerText()).includes("google/gemini-3.7-flash") && !(await reportPanel.innerText()).includes("L LT");
+const metadataRemoved = defaultReportMetrics.footerCount === 0 && !(await reportPanel.innerText()).includes("google/gemini-3.8-flash") && !(await reportPanel.innerText()).includes("L LT");
 await reportPanel.getByRole("button", { name: "展開閱讀", exact: true }).click();
 const expandedReport = page.locator('.brain-report[role="dialog"]');
 await expandedReport.waitFor();

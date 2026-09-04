@@ -1,4 +1,15 @@
-# 澄境筆記 v0.9.0 驗收報告
+# 澄境筆記 v0.9.1 驗收報告
+
+## 0.9.1 Responses API 與設定資訊架構
+
+- Provider 設定新增 `apiMode` 白名單；既有缺少欄位的連線安全回到 `chat-completions`，新設定可保存 `responses` 且 API Key 仍不進公開設定。
+- Responses 請求與回覆已有 Node 契約測試：遠端 Gateway 使用 `/responses`、`instructions`、訊息 `input`、`max_output_tokens`、`text.format` 與 `store: false`；Ollama 不送 store、conversation 或 `previous_response_id`。
+- 正式 Electron 整合以本機 mock Responses Gateway 完成兩次回覆：一次直接經 preload，一次由澄境 AI 面板送出；模型清單、加密金鑰與 Responses 模式持久化均回讀一致。
+- 設定頁有八個錨點，打賞與語言的跨頁首尾平滑定位、鍵盤連結、內部橫向溢出控制均通過；五種語言與 120% 字級沒有頁面水平溢出。
+- 三種引擎來回切換已驗證：OpenRouter 預設展開模型；Gemma 4 只顯示本機模型並收合 OpenRouter／自訂 Provider；自訂 Provider 自動展開且其他引擎控制不殘留。
+- 未選的 OpenRouter 模型仍可手動展開，三個精選模型、同步、自訂模型與路由控制完整可用；其中 Gemini 已確認只顯示並選用 `google/gemini-3.8-flash`，創意度與本機搜尋搬到共用區後原值不變。
+- 未啟用 MCP 預設收合；「外部整合」錨點會先展開受控 details 再定位。選中引擎控制面在主題後段規則下仍保持 `surface-2` 外層與 `surface-1` 操作面，不再退回無背景散列。
+- 同一台 Mac、同一時段各跑七輪的封裝版中位數：0.9.1 App shell 722ms、首次操作 738ms、RSS 758 MiB；已安裝的 0.9.0 對照為 707ms、729ms、756 MiB，差異 15ms／9ms／2 MiB，idle timer delay 兩版均為 0ms。
 
 ## 0.9.0 本機 MCP 與自訂 AI Provider
 
@@ -88,9 +99,9 @@
 
 ## 正式成品
 
-- Windows ARM64：`release/ChengJing-0.9.0-arm64-Installer.exe`
-- Windows Intel／AMD x64：`release/ChengJing-0.9.0-x64-Installer.exe`
-- Apple Silicon Mac：`release/ChengJing-0.9.0-arm64.dmg`
+- Windows ARM64：`release/ChengJing-0.9.1-arm64-Installer.exe`
+- Windows Intel／AMD x64：`release/ChengJing-0.9.1-x64-Installer.exe`
+- Apple Silicon Mac：`release/ChengJing-0.9.1-arm64.dmg`
 - 本機 `release` 只保留上述三個正式安裝檔。
 - `hdiutil verify`：通過。
 - 尚未使用 Apple Developer ID 簽章與公證，Windows 也尚未使用商業程式碼簽章。

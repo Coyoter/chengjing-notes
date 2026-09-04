@@ -27,6 +27,35 @@ function extractTextContent(content) {
   }).join("");
 }
 
+function extractResponsesText(payload) {
+  if (typeof payload?.output_text === "string" && payload.output_text.trim()) return payload.output_text;
+  if (!Array.isArray(payload?.output)) return "";
+  return payload.output.flatMap((item) => Array.isArray(item?.content) ? item.content : []).map((part) => {
+    if (typeof part === "string") return part;
+    if (typeof part?.text === "string") return part.text;
+    return "";
+  }).join("");
+}
+
+function responsesTextFormat(responseFormat) {
+  if (!responseFormat || typeof responseFormat !== "object") return undefined;
+  if (responseFormat.type === "json_object") return { type: "json_object" };
+  if (responseFormat.type !== "json_schema" || !responseFormat.json_schema || typeof responseFormat.json_schema !== "object") return undefined;
+  const schema = responseFormat.json_schema;
+  return {
+    type: "json_schema",
+    name: String(schema.name || "chengjing_response").slice(0, 64),
+    schema: schema.schema || {},
+    strict: Boolean(schema.strict),
+  };
+}
+
+function responsesInput(messages) {
+  const instructions = messages.filter((item) => item.role === "system").map((item) => item.content).join("\n\n").trim();
+  const input = messages.filter((item) => item.role !== "system").map((item) => ({ role: item.role === "assistant" ? "assistant" : "user", content: item.content }));
+  return { instructions, input: input.length ? input : "" };
+}
+
 function responseError(status, payload, secret = "") {
   let detail = String(payload?.error?.message || payload?.message || "").replace(/\s+/g, " ").trim().slice(0, 280);
   if (secret && secret.length >= 4) detail = detail.replaceAll(secret, "[redacted]");
@@ -85,15 +114,29 @@ async function providerChat(fetchImpl, rawProfile, request = {}) {
     content: String(item?.content || "").slice(0, 200_000),
   })) : [];
   return withTimeout(REQUEST_TIMEOUT_MS, async (signal) => {
-    const body = {
+    const temperature = Number.isFinite(request.temperature) ? Math.min(2, Math.max(0, Number(request.temperature))) : 0.55;
+    const maxTokens = Math.min(Math.max(Number(request.maxTokens || 3_072), 64), 32_768);
+    const useResponses = profile.apiMode === "responses";
+    const prepared = responsesInput(messages);
+    const textFormat = responsesTextFormat(request.responseFormat);
+    const body = useResponses ? {
+      model,
+      input: prepared.input,
+      ...(prepared.instructions ? { instructions: prepared.instructions } : {}),
+      temperature,
+      max_output_tokens: maxTokens,
+      stream: false,
+      ...(profile.type === "ollama" ? {} : { store: false }),
+      ...(textFormat ? { text: { format: textFormat } } : {}),
+    } : {
       model,
       messages,
-      temperature: Number.isFinite(request.temperature) ? Math.min(2, Math.max(0, Number(request.temperature))) : 0.55,
-      max_tokens: Math.min(Math.max(Number(request.maxTokens || 3_072), 64), 32_768),
+      temperature,
+      max_tokens: maxTokens,
       stream: false,
+      ...(request.responseFormat && typeof request.responseFormat === "object" ? { response_format: request.responseFormat } : {}),
     };
-    if (request.responseFormat && typeof request.responseFormat === "object") body.response_format = request.responseFormat;
-    const response = await fetchImpl(endpoint(profile.baseUrl, "chat/completions"), {
+    const response = await fetchImpl(endpoint(profile.baseUrl, useResponses ? "responses" : "chat/completions"), {
       method: "POST",
       headers: providerHeaders(profile, { "Content-Type": "application/json", "X-Title": "ChengJing" }),
       body: JSON.stringify(body),
@@ -102,14 +145,15 @@ async function providerChat(fetchImpl, rawProfile, request = {}) {
     });
     const payload = await readJsonResponse(response);
     if (!response.ok) throw responseError(response.status, payload, profile.apiKey);
+    if (payload?.error) throw responseError(response.status || 500, payload, profile.apiKey);
     const choice = payload?.choices?.[0];
-    const text = extractTextContent(choice?.message?.content).trim();
+    const text = (useResponses ? extractResponsesText(payload) || extractTextContent(choice?.message?.content) : extractTextContent(choice?.message?.content)).trim();
     if (!text) throw new Error("provider-empty-response");
     return {
       text,
       model: String(payload?.model || model),
       usage: payload?.usage && typeof payload.usage === "object" ? payload.usage : null,
-      finishReason: choice?.finish_reason || null,
+      finishReason: useResponses ? payload?.incomplete_details?.reason || payload?.status || null : choice?.finish_reason || null,
     };
   });
 }
@@ -119,8 +163,11 @@ module.exports = {
   REQUEST_TIMEOUT_MS,
   endpoint,
   extractTextContent,
+  extractResponsesText,
   listProviderModels,
   providerChat,
   providerHeaders,
+  responsesInput,
+  responsesTextFormat,
   testProvider,
 };

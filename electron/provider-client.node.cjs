@@ -34,3 +34,42 @@ test("遠端 Gateway 使用 Bearer Key 且錯誤不回傳金鑰", async () => {
     (error) => /provider-http-503:model unavailable for \[redacted\]/.test(error.message) && !error.message.includes("secret-key"),
   );
 });
+
+test("Responses API 轉換欄位、停用遠端儲存並解析巢狀 output_text", async () => {
+  let sent;
+  const fetchImpl = async (url, options = {}) => {
+    sent = { url, headers: options.headers, body: JSON.parse(options.body) };
+    return jsonResponse({
+      id: "resp_test",
+      model: "openai/gpt-test",
+      status: "completed",
+      output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "Responses 回覆正常" }] }],
+      usage: { input_tokens: 12, output_tokens: 5, total_tokens: 17 },
+    });
+  };
+  const result = await providerChat(fetchImpl, { type: "openai-compatible", apiMode: "responses", baseUrl: "https://gateway.example.com/v1", model: "openai/gpt-test", apiKey: "gateway-key" }, {
+    messages: [{ role: "system", content: "系統規則" }, { role: "user", content: "問題" }, { role: "assistant", content: "先前回答" }, { role: "user", content: "追問" }],
+    maxTokens: 4_000,
+    responseFormat: { type: "json_schema", json_schema: { name: "answer", strict: true, schema: { type: "object" } } },
+  });
+  assert.equal(sent.url, "https://gateway.example.com/v1/responses");
+  assert.equal(sent.body.instructions, "系統規則");
+  assert.deepEqual(sent.body.input, [{ role: "user", content: "問題" }, { role: "assistant", content: "先前回答" }, { role: "user", content: "追問" }]);
+  assert.equal(sent.body.max_output_tokens, 4_000);
+  assert.equal(sent.body.max_tokens, undefined);
+  assert.equal(sent.body.store, false);
+  assert.deepEqual(sent.body.text.format, { type: "json_schema", name: "answer", schema: { type: "object" }, strict: true });
+  assert.equal(result.text, "Responses 回覆正常");
+  assert.equal(result.finishReason, "completed");
+});
+
+test("Ollama Responses 模式維持非狀態式且不傳送 store", async () => {
+  let sent;
+  const fetchImpl = async (url, options = {}) => { sent = { url, body: JSON.parse(options.body) }; return jsonResponse({ model: "qwen3:8b", status: "completed", output_text: "本機完成" }); };
+  const result = await providerChat(fetchImpl, { type: "ollama", apiMode: "responses", baseUrl: "http://127.0.0.1:11434/v1", model: "qwen3:8b", apiKey: "" }, { messages: [{ role: "user", content: "測試" }] });
+  assert.equal(sent.url, "http://127.0.0.1:11434/v1/responses");
+  assert.equal(sent.body.store, undefined);
+  assert.equal(sent.body.previous_response_id, undefined);
+  assert.equal(sent.body.conversation, undefined);
+  assert.equal(result.text, "本機完成");
+});

@@ -7,6 +7,7 @@ const SETTINGS_FILE = "ai-provider-settings.json";
 const VAULT_NAMESPACE = "ai-provider-secrets";
 const PROFILE_LIMIT = 12;
 const TYPES = new Set(["openai-compatible", "ollama"]);
+const API_MODES = new Set(["chat-completions", "responses"]);
 
 function safeText(value, maximum) {
   return typeof value === "string" ? value.trim().slice(0, maximum) : "";
@@ -31,6 +32,7 @@ function normalizeBaseUrl(value, type = "openai-compatible") {
 
 function normalizeProfile(value = {}, previous = null, preserveTimestamps = false) {
   const type = TYPES.has(value.type) ? value.type : previous?.type || "openai-compatible";
+  const apiMode = API_MODES.has(value.apiMode) ? value.apiMode : API_MODES.has(previous?.apiMode) ? previous.apiMode : "chat-completions";
   const now = Date.now();
   const id = /^[a-zA-Z0-9_-]{8,80}$/.test(String(value.id || "")) ? String(value.id) : previous?.id || randomUUID();
   const name = safeText(value.name, 80) || previous?.name || (type === "ollama" ? "Ollama" : "Custom Gateway");
@@ -40,6 +42,7 @@ function normalizeProfile(value = {}, previous = null, preserveTimestamps = fals
     id,
     name,
     type,
+    apiMode,
     baseUrl: normalizeBaseUrl(value.baseUrl || previous?.baseUrl, type),
     model,
     createdAt: Number(previous?.createdAt) > 0 ? Number(previous.createdAt) : now,
@@ -123,6 +126,7 @@ async function providerProfileWithSecret(userDataDirectory, id) {
 }
 
 module.exports = {
+  API_MODES,
   PROFILE_LIMIT,
   SETTINGS_FILE,
   VAULT_NAMESPACE,

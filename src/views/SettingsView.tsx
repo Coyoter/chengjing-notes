@@ -3,6 +3,7 @@ import {
   Activity,
   BadgeDollarSign,
   Check,
+  ChevronDown,
   Brush,
   Cloud,
   CloudCog,
@@ -38,11 +39,13 @@ import { QuickCaptureSettingsPanel } from "../components/QuickCaptureSettings";
 import { AdvancedAIProviderSettings } from "../components/AdvancedAIProviderSettings";
 import { getAdvancedProviderCopy } from "../lib/advancedProviderCopy";
 import { McpSettingsPanel } from "../components/McpSettings";
+import { SettingsJumpNav } from "../components/SettingsJumpNav";
+import { getSettingsDisclosureCopy } from "../lib/settingsAnchorCopy";
 
 const FEATURED_MODELS = [
   { id: "openai/gpt-5.6-luna", label: "GPT-5.6 Luna", note: "settings.modelDefault" as MessageKey },
   { id: "deepseek/deepseek-v4-flash-0731", label: "DeepSeek V4 Flash 0731", note: "settings.modelFast" as MessageKey },
-  { id: "google/gemini-3.7-flash", label: "Gemini 3.7 Flash", note: "settings.modelLong" as MessageKey },
+  { id: "google/gemini-3.8-flash", label: "Gemini 3.8 Flash", note: "settings.modelLong" as MessageKey },
 ];
 
 const ROUTING_ICONS: Record<OpenRouterRoutingMode, typeof Gauge> = { balanced: Gauge, speed: Zap, economy: BadgeDollarSign };
@@ -70,6 +73,7 @@ export function SettingsView() {
   const supportCopy = useMemo(() => getSettingsEnhancementCopy(language), [language]);
   const routingCopy = useMemo(() => getOpenRouterRoutingCopy(language), [language]);
   const providerCopy = useMemo(() => getAdvancedProviderCopy(language), [language]);
+  const disclosureCopy = useMemo(() => getSettingsDisclosureCopy(language), [language]);
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [keyStatus, setKeyStatus] = useState<{ configured: boolean; encrypted: boolean; storage: "app-local-aes-256-gcm"; error?: string }>({ configured: false, encrypted: true, storage: "app-local-aes-256-gcm" });
@@ -81,11 +85,14 @@ export function SettingsView() {
   const [downloadFile, setDownloadFile] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [modelSettingsOpen, setModelSettingsOpen] = useState(engine === "openrouter");
 
   useEffect(() => {
     window.chengjing?.ai?.keyStatus?.().then(setKeyStatus);
     inspectLocalModel().then(setLocalStatus);
   }, [language]);
+
+  useEffect(() => { setModelSettingsOpen(engine === "openrouter"); }, [engine]);
 
   const recentModels = useMemo(() => [...models].sort((a, b) => b.created - a.created).slice(0, 12), [models]);
 
@@ -161,6 +168,7 @@ export function SettingsView() {
   return (
     <div className="page-scroll settings-page">
       {notice && <div className="settings-notice" role="status"><Check size={15} /><span>{notice}</span><button type="button" onClick={() => setNotice("")}>{t("common.close")}</button></div>}
+      <SettingsJumpNav />
 
       <section className="settings-section language-settings" id="language-settings">
         <header><span><Languages size={14} /> {t("language.eyebrow")}</span><h2>{t("language.title")}</h2><p>{t("language.description")}</p></header>
@@ -180,40 +188,52 @@ export function SettingsView() {
             <CloudCog size={21} /><span><b>{providerCopy.title}</b><small>{providerCopy.summary}</small></span>{engine === "custom-provider" && <Check size={17} />}
           </button>
         </div>
+        {engine === "openrouter" && <div className="active-engine-settings">
+          <div className="settings-card engine-runtime-card">
+            <header><KeyRound size={18} /><div><h3>{t("settings.keyTitle")}</h3><p>{keyStatus.configured ? t("settings.keySaved") : t("settings.keyMissing")}</p></div><i className={keyStatus.configured ? "status-dot is-ready" : "status-dot"} /></header>
+            <form className="api-key-form" onSubmit={saveKey}><label><input type={showKey ? "text" : "password"} value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={keyStatus.configured ? t("settings.replaceKey") : "sk-or-v1-…"} /><button type="button" aria-label={showKey ? t("settings.hideKey") : t("settings.showKey")} onClick={() => setShowKey(!showKey)}>{showKey ? <EyeOff size={16} /> : <Eye size={16} />}</button></label><button className="primary-button" type="submit" disabled={!apiKey.trim()}>{t("settings.saveKey")}</button></form>
+            <div className="key-connection-row"><button type="button" className="secondary-button" disabled={!keyStatus.configured || testingKey} onClick={testOpenRouter}><Activity size={15} className={testingKey ? "spin" : ""} />{testingKey ? t("settings.testing") : t("settings.testOpenRouter")}</button><span>{t("settings.testNoCost")}</span></div>
+            <p className="local-key-boundary">{t("settings.keyBoundary")}</p>
+            <footer><span><ShieldCheck size={13} />{t("settings.keyFooter")}</span>{keyStatus.configured && <button type="button" className="danger-text" onClick={async () => { const result = await window.chengjing?.ai.clearKey(); if (result) setKeyStatus(result); }}>{t("common.remove")}</button>}</footer>
+          </div>
+        </div>}
+        {engine === "local-gemma" && <div className="active-engine-settings">
+          <div className="settings-card local-model-card engine-runtime-card">
+            <header><HardDrive size={18} /><div><h3>{t("settings.localModel")}</h3><p>{localStatus.message}</p></div><i className={localStatus.cached ? "status-dot is-ready" : "status-dot"} /></header>
+            <div className="model-storage"><span><b>{formatBytes(localStatus.size)}</b><small>q4f16・WebGPU</small></span>{localStatus.cached ? <button type="button" className="secondary-button" onClick={removeModel}><Trash2 size={15} />{t("settings.removeModel")}</button> : <button type="button" className="primary-button" disabled={busy || localStatus.state === "unsupported"} onClick={downloadModel}><Download size={15} />{busy ? t("settings.downloading") : t("settings.downloadModel")}</button>}</div>
+            {busy && <div className="download-progress"><div><i style={{ width: `${downloadProgress}%` }} /></div><span>{downloadProgress.toFixed(1)}% · {downloadFile || t("local.preparing")}</span></div>}
+            <footer><span><ShieldCheck size={13} />{t("settings.localPrivacy")}</span></footer>
+          </div>
+        </div>}
         <AdvancedAIProviderSettings />
-      </section>
-
-      <section className="settings-section two-column-settings">
-        <div className="settings-card">
-          <header><KeyRound size={18} /><div><h3>{t("settings.keyTitle")}</h3><p>{keyStatus.configured ? t("settings.keySaved") : t("settings.keyMissing")}</p></div><i className={keyStatus.configured ? "status-dot is-ready" : "status-dot"} /></header>
-          <form className="api-key-form" onSubmit={saveKey}><label><input type={showKey ? "text" : "password"} value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={keyStatus.configured ? t("settings.replaceKey") : "sk-or-v1-…"} /><button type="button" aria-label={showKey ? t("settings.hideKey") : t("settings.showKey")} onClick={() => setShowKey(!showKey)}>{showKey ? <EyeOff size={16} /> : <Eye size={16} />}</button></label><button className="primary-button" type="submit" disabled={!apiKey.trim()}>{t("settings.saveKey")}</button></form>
-          <div className="key-connection-row"><button type="button" className="secondary-button" disabled={!keyStatus.configured || testingKey} onClick={testOpenRouter}><Activity size={15} className={testingKey ? "spin" : ""} />{testingKey ? t("settings.testing") : t("settings.testOpenRouter")}</button><span>{t("settings.testNoCost")}</span></div>
-          <p className="local-key-boundary">{t("settings.keyBoundary")}</p>
-          <footer><span><ShieldCheck size={13} />{t("settings.keyFooter")}</span>{keyStatus.configured && <button type="button" className="danger-text" onClick={async () => { const result = await window.chengjing?.ai.clearKey(); if (result) setKeyStatus(result); }}>{t("common.remove")}</button>}</footer>
-        </div>
-        <div className="settings-card local-model-card">
-          <header><HardDrive size={18} /><div><h3>{t("settings.localModel")}</h3><p>{localStatus.message}</p></div><i className={localStatus.cached ? "status-dot is-ready" : "status-dot"} /></header>
-          <div className="model-storage"><span><b>{formatBytes(localStatus.size)}</b><small>q4f16・WebGPU</small></span>{localStatus.cached ? <button type="button" className="secondary-button" onClick={removeModel}><Trash2 size={15} />{t("settings.removeModel")}</button> : <button type="button" className="primary-button" disabled={busy || localStatus.state === "unsupported"} onClick={downloadModel}><Download size={15} />{busy ? t("settings.downloading") : t("settings.downloadModel")}</button>}</div>
-          {busy && <div className="download-progress"><div><i style={{ width: `${downloadProgress}%` }} /></div><span>{downloadProgress.toFixed(1)}% · {downloadFile || t("local.preparing")}</span></div>}
-          <footer><span><ShieldCheck size={13} />{t("settings.localPrivacy")}</span></footer>
+        <div className="ai-common-settings">
+          <header><b>{disclosureCopy.common}</b><small>{disclosureCopy.commonHint}</small></header>
+          <label className="settings-range"><span><b>{t("settings.creativity")}</b><small>{temperature.toFixed(2)} · {temperature < 0.4 ? t("settings.stable") : temperature < 0.75 ? t("settings.balanced") : t("settings.free")}</small></span><input type="range" min="0" max="1" step="0.05" value={temperature} onChange={(event) => setTemperature(Number(event.target.value))} /></label>
+          <label className="switch-row"><span><b>{t("settings.searchSpace")}</b><small>{t("settings.searchSpaceHint")}</small></span><input type="checkbox" checked={spaceSearch} onChange={(event) => setSpaceSearch(event.target.checked)} /><i /></label>
         </div>
       </section>
 
-      <section className="settings-section">
-        <header className="settings-inline-header"><div><span>{t("settings.modelsEyebrow")}</span><h2>{t("settings.modelsTitle")}</h2></div><button type="button" className="secondary-button" disabled={loadingModels} onClick={loadModels}><RefreshCw size={15} className={loadingModels ? "spin" : ""} />{loadingModels ? t("settings.syncing") : t("settings.syncModels")}</button></header>
-        <div className="featured-models">
-          {FEATURED_MODELS.map((item) => <button type="button" key={item.id} className={!customModel && model === item.id ? "is-active" : ""} onClick={() => { setModel(item.id); setCustomModel(""); }}><Cloud size={17} /><span><b>{item.label}</b><small>{t(item.note)}</small><code>{item.id}</code></span>{!customModel && model === item.id && <Check size={16} />}</button>)}
+      <details className="settings-section engine-config-section" open={modelSettingsOpen} onToggle={(event) => setModelSettingsOpen(event.currentTarget.open)}>
+        <summary>
+          <span className="engine-config-icon"><Cloud size={18} /></span>
+          <span><small>{t("settings.modelsEyebrow")}</small><b>{t("settings.modelsTitle")}</b></span>
+          <em className={engine === "openrouter" ? "is-active" : ""}>{engine === "openrouter" ? disclosureCopy.active : disclosureCopy.inactive}</em>
+          <ChevronDown size={16} />
+        </summary>
+        <div className="engine-config-body">
+          <div className="engine-config-toolbar"><span>{disclosureCopy.hint}</span><button type="button" className="secondary-button" disabled={loadingModels} onClick={loadModels}><RefreshCw size={15} className={loadingModels ? "spin" : ""} />{loadingModels ? t("settings.syncing") : t("settings.syncModels")}</button></div>
+          <div className="featured-models">
+            {FEATURED_MODELS.map((item) => <button type="button" key={item.id} className={!customModel && model === item.id ? "is-active" : ""} onClick={() => { setModel(item.id); setCustomModel(""); }}><Cloud size={17} /><span><b>{item.label}</b><small>{t(item.note)}</small><code>{item.id}</code></span>{!customModel && model === item.id && <Check size={16} />}</button>)}
+          </div>
+          {recentModels.length > 0 && <label className="settings-field"><span>{t("settings.latestModels")}</span><select value={customModel || model} onChange={(event) => { setCustomModel(event.target.value); }}><option value="">{t("settings.chooseModel")}</option>{recentModels.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.id}</option>)}</select></label>}
+          <label className="settings-field"><span>{t("settings.customModel")}</span><input value={customModel} onChange={(event) => setCustomModel(event.target.value)} placeholder={t("settings.customModelPlaceholder")} /><small>{t("settings.customModelHint")}</small></label>
+          <div className="routing-mode-setting" aria-label={routingCopy.title}>
+            <header><b>{routingCopy.title}</b><span>{routingCopy.description}</span></header>
+            <div className="routing-mode-grid">{routingCopy.options.map((option) => { const Icon = ROUTING_ICONS[option.value]; const active = routingMode === option.value; return <button type="button" key={option.value} className={active ? "is-active" : ""} aria-pressed={active} onClick={() => setRoutingMode(option.value)}><Icon size={17} /><span><b>{option.label}{option.value === "balanced" && <em>{routingCopy.defaultLabel}</em>}</b><small>{option.description}</small></span>{active && <Check size={15} />}</button>; })}</div>
+            <p>{routingCopy.note}</p>
+          </div>
         </div>
-        {recentModels.length > 0 && <label className="settings-field"><span>{t("settings.latestModels")}</span><select value={customModel || model} onChange={(event) => { setCustomModel(event.target.value); }}><option value="">{t("settings.chooseModel")}</option>{recentModels.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.id}</option>)}</select></label>}
-        <label className="settings-field"><span>{t("settings.customModel")}</span><input value={customModel} onChange={(event) => setCustomModel(event.target.value)} placeholder={t("settings.customModelPlaceholder")} /><small>{t("settings.customModelHint")}</small></label>
-        <div className="routing-mode-setting" aria-label={routingCopy.title}>
-          <header><b>{routingCopy.title}</b><span>{routingCopy.description}</span></header>
-          <div className="routing-mode-grid">{routingCopy.options.map((option) => { const Icon = ROUTING_ICONS[option.value]; const active = routingMode === option.value; return <button type="button" key={option.value} className={active ? "is-active" : ""} aria-pressed={active} onClick={() => setRoutingMode(option.value)}><Icon size={17} /><span><b>{option.label}{option.value === "balanced" && <em>{routingCopy.defaultLabel}</em>}</b><small>{option.description}</small></span>{active && <Check size={15} />}</button>; })}</div>
-          <p>{routingCopy.note}</p>
-        </div>
-        <label className="settings-range"><span><b>{t("settings.creativity")}</b><small>{temperature.toFixed(2)} · {temperature < 0.4 ? t("settings.stable") : temperature < 0.75 ? t("settings.balanced") : t("settings.free")}</small></span><input type="range" min="0" max="1" step="0.05" value={temperature} onChange={(event) => setTemperature(Number(event.target.value))} /></label>
-        <label className="switch-row"><span><b>{t("settings.searchSpace")}</b><small>{t("settings.searchSpaceHint")}</small></span><input type="checkbox" checked={spaceSearch} onChange={(event) => setSpaceSearch(event.target.checked)} /><i /></label>
-      </section>
+      </details>
 
       <McpSettingsPanel />
 
@@ -221,7 +241,7 @@ export function SettingsView() {
 
       <QuickCaptureSettingsPanel />
 
-      <section className="settings-section">
+      <section className="settings-section" id="appearance-settings">
         <header><span>{t("settings.appearance")}</span><h2>{t("settings.reading")}</h2></header>
         <div className="theme-grid">{themeChoices.map((choice) => { const Icon = choice.icon; return <button type="button" key={choice.value} className={theme === choice.value ? "is-active" : ""} onClick={() => setTheme(choice.value)}><Icon size={18} /><span>{t(choice.label)}</span>{theme === choice.value && <Check size={15} />}</button>; })}</div>
         <div className="font-scale-setting">
@@ -230,7 +250,7 @@ export function SettingsView() {
         </div>
       </section>
 
-      <section className="settings-section">
+      <section className="settings-section" id="backup-settings">
         <AutoBackupSettingsPanel />
       </section>
 

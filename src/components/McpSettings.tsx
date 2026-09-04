@@ -10,12 +10,13 @@ const empty: McpSettings = { enabled: false, accessMode: "read-only", port: 4783
 export function McpSettingsPanel() {
   const { language } = useI18n(); const copy = useMemo(() => getMcpSettingsCopy(language), [language]);
   const [settings, setSettings] = useState<McpSettings>(empty); const [audit, setAudit] = useState<McpAuditEntry[]>([]); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState(""); const [port, setPort] = useState("47831");
+  const [expanded, setExpanded] = useState(false);
   useEffect(() => {
     const mcp = window.chengjing?.mcp;
     if (!mcp?.getSettings || !mcp?.getAudit) return;
     let active = true;
     Promise.all([mcp.getSettings(), mcp.getAudit()]).then(([nextSettings, nextAudit]) => {
-      if (!active || !nextSettings) return; setSettings(nextSettings); setPort(String(nextSettings.port)); setAudit(nextAudit || []);
+      if (!active || !nextSettings) return; setSettings(nextSettings); setPort(String(nextSettings.port)); setAudit(nextAudit || []); if (nextSettings.enabled) setExpanded(true);
     }).catch(() => {});
     return () => { active = false; };
   }, []);
@@ -38,9 +39,14 @@ export function McpSettingsPanel() {
   }
   const statusLabel = settings.error ? copy.failed : settings.running ? copy.running : copy.stopped;
   return (
-    <section className="settings-section mcp-section" id="mcp-settings">
-      <header><span><Network size={14} /> {copy.eyebrow}</span><h2>{copy.title}</h2><p>{copy.description}</p></header>
-      <div className="mcp-control-surface">
+    <details className="settings-section mcp-section" id="mcp-settings" open={expanded} onToggle={(event) => setExpanded(event.currentTarget.open)}>
+      <summary className="mcp-section-summary">
+        <span className="mcp-section-icon"><Network size={18} /></span>
+        <span><small>{copy.eyebrow}</small><b>{copy.title}</b><p>{copy.description}</p></span>
+        <em className={settings.error ? "is-error" : settings.running ? "is-running" : ""}><CircleDot size={12} />{statusLabel}</em>
+        <ChevronDown size={16} />
+      </summary>
+      <div className="mcp-section-body"><div className="mcp-control-surface">
         <div className="mcp-primary-row">
           <span className="mcp-symbol"><Laptop size={20} /></span>
           <span><b>{copy.enabled}</b><small>{copy.enabledHint}</small></span>
@@ -69,7 +75,7 @@ export function McpSettingsPanel() {
           <summary><span><b>{copy.recent}</b><small>{audit.length ? `${audit.length}` : copy.noRecent}</small></span><ChevronDown size={15} /></summary>
           <div>{audit.length ? audit.slice(0, 8).map((entry) => <article key={entry.id}><i className={`is-${entry.outcome}`} /><span><b>{entry.tool}</b><small>{entry.summary}</small></span><time>{copy.outcomes[entry.outcome]} · {new Intl.DateTimeFormat(language, { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(entry.createdAt)}</time></article>) : <p>{copy.noRecent}</p>}</div>
         </details>
-      </div>
-    </section>
+      </div></div>
+    </details>
   );
 }

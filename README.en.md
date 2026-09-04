@@ -1,4 +1,4 @@
-# ChengJing Notes v0.9.0
+# ChengJing Notes v0.9.1
 
 <p align="center">
   <a href="README.md">繁體中文</a>
@@ -48,7 +48,7 @@ The macOS build is currently ad-hoc signed and is not notarized with an Apple De
 - Import for PDF, DOCX, Markdown, plain text, HTML, images, audio, and video
 - Web article capture and YouTube source cards
 - OpenRouter integration with local AES-256-GCM key storage, curated models, model synchronization, and custom model names
-- Custom AI providers with multiple OpenAI-compatible gateways or local Ollama connections, model discovery, testing, and encrypted keys
+- Custom AI providers with multiple OpenAI-compatible gateways or local Ollama connections, per-profile Chat Completions or Responses API mode, model discovery, testing, and encrypted keys
 - Gemma 4 E2B local WebGPU generation with on-demand download, progress display, and removal
 - Global AI assistant, card actions, and a safe action plan for creating, editing, and deleting content
 - Snippets that can be saved, pinned, edited, copied, converted into cards, or sent to a whiteboard, board, or Second Brain
@@ -67,6 +67,16 @@ The macOS build is currently ad-hoc signed and is not notarized with an Apple De
 - Semi-automatic updates through GitHub, Cloudflare Worker, release feeds, edge cache, and KV fallback layers
 
 ## Selected recent releases
+
+### v0.9.1: Responses API and an organized Settings page
+
+- Each custom provider can use Chat Completions or the Responses API independently. Existing profiles remain on their original mode.
+- Responses mode uses `/responses`, `input`, `instructions`, and `max_output_tokens`. Remote gateways always receive `store: false`; Ollama uses its officially supported stateless flow.
+- A compact Jump to bar links to Language, AI, Integrations, Updates, Quick capture, Appearance, Backup, and Support without wrapping or widening the page.
+- AI settings now follow the selected engine: only its relevant key or local-model controls appear automatically. OpenRouter models and Custom provider details collapse when they are not active, but remain manually accessible.
+- Creativity and local knowledge search now sit in a clearly labeled shared-AI group. No original control, value, or capability was removed.
+- Gemini in the three featured OpenRouter models is now `google/gemini-3.8-flash`; the other two choices and their order are unchanged.
+- The selected engine uses one coherent solid control surface; disabled MCP collapses to a summary, and its anchor expands it before scrolling.
 
 ### v0.9.0: local MCP and custom AI providers
 
@@ -163,11 +173,11 @@ The model is approximately 2.9–3.2 GB. After the first download, it can run of
 ### Custom AI provider / Ollama
 
 1. Open Settings and choose Custom AI provider.
-2. Expand the advanced panel. For Ollama, keep `http://127.0.0.1:11434/v1` and enter an installed model ID such as `qwen3:8b`.
+2. Expand the advanced panel and choose either the broadly compatible Chat Completions mode or the newer Responses API mode. For Ollama, keep `http://127.0.0.1:11434/v1` and enter an installed model ID such as `qwen3:8b`.
 3. For a custom gateway, choose OpenAI-compatible gateway and enter its HTTPS API URL, model ID, and optional API key.
 4. Save the connection, optionally fetch models or test it, then make it active.
 
-ChengJing uses the OpenAI-compatible `/models` and `/chat/completions` endpoints. Remote services require HTTPS; local HTTP accepts only `localhost`, `127.0.0.1`, or `::1`. Keys stay encrypted on this computer and are excluded from backups.
+ChengJing uses the OpenAI-compatible `/models` endpoint and calls either `/chat/completions` or `/responses` for generation. Remote Responses requests always use `store: false`; Ollama receives the necessary history without server-side conversation IDs. Remote services require HTTPS; local HTTP accepts only `localhost`, `127.0.0.1`, or `::1`. Keys stay encrypted on this computer and are excluded from backups.
 
 ### Codex / Claude Code MCP
 

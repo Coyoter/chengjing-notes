@@ -15,6 +15,7 @@ export type BoardNodeKind = "card" | "text" | "section" | "mindmap";
 export type ThemeMode = "system" | "light" | "dark" | "ink";
 export type AIEngine = "openrouter" | "local-gemma" | "custom-provider";
 export type AIProviderType = "openai-compatible" | "ollama";
+export type AIProviderApiMode = "chat-completions" | "responses";
 export type OpenRouterRoutingMode = "balanced" | "speed" | "economy";
 export type AppLanguage = "zh-TW" | "zh-CN" | "en" | "ja" | "ko";
 export type BrainContentType = "card" | "board" | "fragment" | "task";
@@ -310,6 +311,7 @@ export interface AIProviderProfile {
   id: string;
   name: string;
   type: AIProviderType;
+  apiMode: AIProviderApiMode;
   baseUrl: string;
   model: string;
   createdAt: number;

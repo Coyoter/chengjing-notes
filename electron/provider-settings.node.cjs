@@ -15,9 +15,10 @@ test("進階 Provider 只允許 HTTPS 遠端或 loopback HTTP", () => {
 test("Provider API Key 獨立加密且不寫入公開設定", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "chengjing-provider-test-"));
   try {
-    let settings = await upsertProviderProfile(root, { name: "Local Ollama", type: "ollama", baseUrl: "http://localhost:11434/v1", model: "qwen3:8b", apiKey: "private-provider-key" });
+    let settings = await upsertProviderProfile(root, { name: "Local Ollama", type: "ollama", apiMode: "responses", baseUrl: "http://localhost:11434/v1", model: "qwen3:8b", apiKey: "private-provider-key" });
     assert.equal(settings.profiles.length, 1);
     assert.equal(settings.profiles[0].keyConfigured, true);
+    assert.equal(settings.profiles[0].apiMode, "responses");
     const raw = await fs.readFile(path.join(root, "ai-provider-settings.json"), "utf8");
     assert.equal(raw.includes("private-provider-key"), false);
     assert.equal((await fs.readFile(path.join(root, "ai-provider-secrets.vault.json"))).includes(Buffer.from("private-provider-key")), false);
