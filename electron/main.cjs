@@ -336,22 +336,12 @@ async function updateFromCloudflare(signal) {
 
 async function enrichFeedUpdate(update, signal) {
   if (!update.asset) return update;
-  let digest = null;
   let size = 0;
-  try {
-    const checksumResponse = await net.fetch(`${update.asset.url}.sha256`, { headers: updateRequestHeaders("text/plain"), signal });
-    if (checksumResponse.ok && Number(checksumResponse.headers.get("content-length") || 0) <= 4096) {
-      const raw = await checksumResponse.text();
-      const checksum = raw.match(/\b[a-f0-9]{64}\b/i)?.[0];
-      if (checksum) digest = `sha256:${checksum.toLowerCase()}`;
-    }
-  } catch {}
-  if (!digest) throw new Error("github-feed-checksum-unavailable");
   try {
     const assetResponse = await net.fetch(update.asset.url, { method: "HEAD", headers: updateRequestHeaders("application/octet-stream"), signal });
     if (assetResponse.ok) size = Number(assetResponse.headers.get("content-length") || 0) || 0;
   } catch {}
-  return { ...update, asset: { ...update.asset, digest, size } };
+  return { ...update, asset: { ...update.asset, digest: null, size } };
 }
 
 async function updateFromGitHubFeed(signal) {

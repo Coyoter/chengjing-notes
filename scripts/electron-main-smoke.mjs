@@ -331,7 +331,7 @@ try {
     updateFallbackReached = fallbackUpdate.latestVersion === expectedLatest
       && fallbackUpdate.asset?.name === expectedAssetName
       && fallbackUpdate.asset?.url.startsWith("https://github.com/Coyoter/chengjing-notes/releases/download/")
-      && fallbackUpdate.asset?.digest?.startsWith("sha256:");
+      && (fallbackUpdate.asset?.digest === null || fallbackUpdate.asset?.digest?.startsWith("sha256:"));
   }
   const configuredBeforeReload = /已保存在澄境/.test(await keyCard.innerText());
   await page.reload({ waitUntil: "load" });

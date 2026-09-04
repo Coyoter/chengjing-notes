@@ -60,6 +60,7 @@ test("GitHub Atom Feed 可作為 403 時的免登入備援", () => {
   assert.equal(result.notes, "更新內容\n- 修正 403");
   assert.equal(result.asset.name, "ChengJing-0.2.10-arm64.dmg");
   assert.equal(result.asset.url, "https://github.com/Coyoter/chengjing-notes/releases/download/v0.2.10/ChengJing-0.2.10-arm64.dmg");
+  assert.equal(result.asset.digest, null);
 });
 
 test("Windows GitHub Atom Feed 備援會指向相同架構的 EXE", () => {
@@ -67,6 +68,7 @@ test("Windows GitHub Atom Feed 備援會指向相同架構的 EXE", () => {
   const result = parseLatestReleaseFeed(feed, "0.7.4", "x64", "win32");
   assert.equal(result.asset.name, "ChengJing-0.7.5-x64-Installer.exe");
   assert.equal(result.asset.url, "https://github.com/Coyoter/chengjing-notes/releases/download/v0.7.5/ChengJing-0.7.5-x64-Installer.exe");
+  assert.equal(result.asset.digest, null);
 });
 
 test("比目前 App 更舊的索引必須視為過期，不能顯示成 GitHub 最新版", () => {

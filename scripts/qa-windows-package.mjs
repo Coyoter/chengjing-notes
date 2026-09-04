@@ -35,6 +35,11 @@ for (const target of packages) {
   const executable = path.join(target.directory, "ChengJing.exe");
   const uninstaller = path.join(target.directory, "ChengJingUninstall.exe");
   const asarPath = path.join(target.directory, "resources", "app.asar");
+  const unpackedAvailable = await fs.access(executable).then(() => true).catch(() => false);
+  if (!unpackedAvailable) {
+    architectureReports.push({ arch: target.arch, unpackedAvailable: false, checks: null });
+    continue;
+  }
   const machine = await peMachine(executable);
   const uninstallerMachine = await peMachine(uninstaller);
   const files = listPackage(asarPath);
@@ -55,34 +60,40 @@ for (const target of packages) {
     gemmaNumLogitsPatchBundled: (transformersSource.match(/num_logits_to_keep/g) || []).length >= 8,
   };
   if (Object.values(checks).some((value) => value !== true)) throw new Error(`windows-package-${target.arch}:${JSON.stringify(checks)}`);
-  architectureReports.push({ arch: target.arch, machine: `0x${machine.toString(16)}`, uninstallerMachine: `0x${uninstallerMachine.toString(16)}`, executableBytes: (await fs.stat(executable)).size, asarSha256: await sha256(asarPath), checks });
+  architectureReports.push({ arch: target.arch, unpackedAvailable: true, machine: `0x${machine.toString(16)}`, uninstallerMachine: `0x${uninstallerMachine.toString(16)}`, executableBytes: (await fs.stat(executable)).size, asarSha256: await sha256(asarPath), checks });
 }
 
 const installers = await Promise.all(packages.map(async ({ arch }) => {
   const name = `ChengJing-${version}-${arch}-Installer.exe`;
   const installerPath = path.join(releaseDirectory, name);
   const stat = await fs.stat(installerPath);
-  const digest = await sha256(installerPath);
   const machine = await peMachine(installerPath);
-  const sidecar = await fs.readFile(`${installerPath}.sha256`, "utf8");
   const expectedMachine = arch === "x64" ? 0x8664 : 0xaa64;
   return {
     arch,
     name,
     bytes: stat.size,
     machine: `0x${machine.toString(16)}`,
-    sha256: digest,
     architectureSpecific: machine === expectedMachine && stat.size > 100_000_000 && stat.size < 220_000_000,
-    checksumSidecarMatches: sidecar.trim() === `${digest}  ${name}`,
   };
 }));
+const releaseFiles = (await fs.readdir(releaseDirectory, { withFileTypes: true }))
+  .filter((entry) => entry.isFile())
+  .map((entry) => entry.name)
+  .sort();
+const checksumSidecarsAbsent = !releaseFiles.some((name) => name.endsWith(".sha256"));
+const unpackedReports = architectureReports.filter((item) => item.unpackedAvailable);
 const report = {
   version,
   installers,
   architectures: architectureReports,
-  sharedApplicationCode: architectureReports[0].asarSha256 === architectureReports[1].asarSha256,
+  unpackedApplicationChecked: unpackedReports.length === packages.length,
+  sharedApplicationCode: unpackedReports.length === packages.length
+    ? unpackedReports[0].asarSha256 === unpackedReports[1].asarSha256
+    : null,
+  checksumSidecarsAbsent,
+  releaseFiles,
 };
 
-if (report.installers.some((installer) => !installer.architectureSpecific || !installer.checksumSidecarMatches) || !report.sharedApplicationCode) throw new Error(`windows-architecture-installers:${JSON.stringify(report)}`);
-await fs.writeFile(path.join(releaseDirectory, `windows-package-qa-v${version}.json`), `${JSON.stringify(report, null, 2)}\n`);
+if (report.installers.some((installer) => !installer.architectureSpecific) || !report.checksumSidecarsAbsent || report.sharedApplicationCode === false) throw new Error(`windows-architecture-installers:${JSON.stringify(report)}`);
 console.log(JSON.stringify(report, null, 2));

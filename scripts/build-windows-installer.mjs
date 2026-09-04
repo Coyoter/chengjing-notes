@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -35,15 +34,12 @@ try {
   await fs.rm(payloadPath, { force: true });
 }
 await verifyPeArchitecture(installerPath, expectedMachine);
-const digest = await sha256(installerPath);
-await fs.writeFile(`${installerPath}.sha256`, `${digest}  ${installerName}\n`);
 const report = {
   version,
   architecture,
   installer: installerPath,
   installerBytes: (await fs.stat(installerPath)).size,
   installedBytes: await directoryBytes(appDirectory),
-  sha256: digest,
   executable: applicationPath,
   uninstaller: uninstallerPath,
 };
@@ -64,10 +60,6 @@ async function verifyPeArchitecture(filePath, expected) {
   } finally {
     await file.close();
   }
-}
-
-async function sha256(filePath) {
-  return createHash("sha256").update(await fs.readFile(filePath)).digest("hex");
 }
 
 async function directoryBytes(root) {

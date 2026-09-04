@@ -66,7 +66,7 @@
 - Windows ARM64：`release/ChengJing-0.8.0-arm64-Installer.exe`
 - Windows Intel／AMD x64：`release/ChengJing-0.8.0-x64-Installer.exe`
 - Apple Silicon Mac：`release/ChengJing-0.8.0-arm64.dmg`
-- 本機 `release` 只保留上述三個安裝檔，沒有 SHA-256 sidecar、blockmap、解壓縮 App 或 builder 中間檔。
+- 本機 `release` 只保留上述三個正式安裝檔。
 - `hdiutil verify`：通過。
 - 尚未使用 Apple Developer ID 簽章與公證，Windows 也尚未使用商業程式碼簽章。
 - DMG 內含：澄境 App 與 Applications 捷徑。

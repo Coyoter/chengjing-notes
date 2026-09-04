@@ -154,23 +154,7 @@ async function fetchFromApi(env: Env) {
   if (!response.ok) throw new Error(`github-api-${response.status}`);
   const release = normalizeApiRelease(await response.json());
   if (!release || release.assets.length === 0) throw new Error("github-api-invalid-release");
-  for (let index = 0; index < release.assets.length; index += 1) {
-    if (release.assets[index].digest) continue;
-    const digest = await fetchChecksum(release.assets[index].browser_download_url);
-    if (!digest) throw new Error(`github-api-checksum-unavailable:${release.assets[index].name}`);
-    release.assets[index] = { ...release.assets[index], digest };
-  }
   return release;
-}
-
-async function fetchChecksum(assetUrl: string) {
-  const response = await githubFetch(`${assetUrl}.sha256`, "text/plain");
-  if (!response.ok) return null;
-  const contentLength = Number(response.headers.get("content-length") || 0);
-  if (contentLength > 4096) return null;
-  const raw = await response.text();
-  const digest = raw.match(/\b[a-f0-9]{64}\b/i)?.[0];
-  return digest ? `sha256:${digest.toLowerCase()}` : null;
 }
 
 async function fetchAssetSize(assetUrl: string) {
@@ -192,9 +176,7 @@ async function fetchFromFeed(env: Env): Promise<ReleaseIndex> {
   ];
   const assets = await Promise.all(assetNames.map(async (name) => {
     const browser_download_url = `https://github.com/${env.GITHUB_OWNER}/${env.GITHUB_REPOSITORY}/releases/download/v${parsed.version}/${name}`;
-    const digest = await fetchChecksum(browser_download_url);
-    if (!digest) throw new Error(`github-feed-checksum-unavailable:${name}`);
-    return { name, browser_download_url, size: await fetchAssetSize(browser_download_url), digest };
+    return { name, browser_download_url, size: await fetchAssetSize(browser_download_url), digest: null };
   }));
   const { version: _version, ...release } = parsed;
   return { ...release, assets };
