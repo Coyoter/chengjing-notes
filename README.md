@@ -1,10 +1,26 @@
 # 澄境筆記 ChengJing Notes v0.7.8
 
+<p align="center">
+  <a href="README.md"><strong>繁體中文</strong></a>
+  &nbsp;·&nbsp;
+  <a href="README.en.md">English</a>
+</p>
+
 <p align="center"><img src="build/icon-1024.png" width="128" alt="澄境筆記圖示"></p>
 
 澄境是一款繁體中文、本機優先的視覺筆記與 AI 研究桌面應用。它最大的特色在於「第二大腦」，可以將日常的喃喃自語、會議記錄、白板規劃等一切資訊化為神經元，透過 AI 判斷神經元之間的聯繫，發現連你本人可能都從未發現的潛意識狀態。
 
 > 本機優先、無邊框的視覺筆記與第二大腦。支援 OpenRouter、Gemma 4，以及繁體中文、簡體中文、英文、日文與韓文介面。
+
+## 使用與授權
+
+澄境可以自由取得、使用、研究、修改、建立 fork，也可以免費分享修改後的版本。你可以在個人環境、公司工作流程中使用，也可以大量使用，並可使用自己的工具或 Agent 協助修改。
+
+唯一的實質限制是不能轉賣澄境本身。你不能把澄境、原始碼、安裝包，或主要功能仍然來自澄境的 fork／修改版，改名或小幅修改後當成自己的付費產品、付費下載、出租或付費服務出售。
+
+你可以把澄境用在工作上、公司內部或大量部署，也可以把它整合到加入自己重要功能的更大型產品或服務中；限制的是把澄境本身或實質相同的修改版當成商品販售。免費分享時請一併附上 [LICENSE.md](LICENSE.md) 或其網址。第三方套件與素材仍受各自的授權條款約束。
+
+這不是 OSI 正式定義的「開源軟體」，因為正式的 Open Source 授權不能禁止販售；它是「可自由使用、修改與分享，但禁止轉售」的 source-available 專案。完整條款請看 [English license](LICENSE.md) 或 [繁體中文說明](LICENSE.zh-TW.md)。
 
 ## 直接安裝
 
@@ -673,4 +689,4 @@ npm run dist:mac
 - 影音卡片可以保存媒體、字幕與筆記；尚未內建另一套 Whisper 語音模型自動轉錄。
 - 現有 URL 匯入取代瀏覽器 Web Clipper；若需要，可以再製作獨立 Chrome 擴充功能。
 - Windows 正式支援 ARM64 與 Intel／AMD x64；macOS 安裝包目前仍僅提供 Apple Silicon，Intel Mac 與 Linux 尚未發布正式安裝包。
-- GitHub 公開原始碼不代表授權自由重製；使用條款請見 [LICENSE.md](LICENSE.md)。
+- 原始碼、修改、fork 與免費分享採用 [ChengJing Free Use and No Resale License 1.0](LICENSE.md)；工作與商業環境使用可以，但不得把澄境本身或實質相同的修改版拿去販售。
