@@ -49,6 +49,19 @@ try {
   page.on("console", (message) => { if (message.type() === "error") errors.push(`console:${message.text()}`); });
   await page.locator(".app-shell").waitFor({ state: "attached" });
   await page.getByRole("button", { name: "設定", exact: true }).click();
+  const googleConnectButton = page.getByRole("button", { name: "連結 Google 帳號", exact: true });
+  await googleConnectButton.waitFor();
+  const googleConnectButtonVisible = await googleConnectButton.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const icon = element.querySelector("img");
+    return rect.width >= 180
+      && Math.abs(rect.height - 40) <= 0.5
+      && element.textContent?.trim() === "連結 Google 帳號"
+      && icon instanceof HTMLImageElement
+      && icon.complete
+      && icon.naturalWidth === 40
+      && icon.naturalHeight === 40;
+  });
   const cloudLocalProbe = await page.evaluate(async () => {
     const started = performance.now();
     const status = await window.chengjing.cloudBackups.getLocalStatus();
@@ -70,11 +83,11 @@ try {
   const renderedNodes = Number(await brain.getAttribute("data-brain-rendered-nodes"));
   const brainViewportBounded = renderedNodes === Math.min(200, brainNodes);
   await page.screenshot({ path: path.join(output, "second-brain.png"), fullPage: true });
-  const report = { storageText, storageSeparated, storageNoOverflow, cloudLocalProbe, brainNodes, renderedNodes, brainViewportBounded, errors };
+  const report = { storageText, storageSeparated, storageNoOverflow, googleConnectButtonVisible, cloudLocalProbe, brainNodes, renderedNodes, brainViewportBounded, errors };
   await fs.writeFile(path.join(output, "summary.json"), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   await page.evaluate(() => window.chengjing.app.quit());
-  if (!storageSeparated || !storageNoOverflow || !cloudLocalProbe.configured || cloudLocalProbe.connected || cloudLocalProbe.elapsedMs > 250 || !brainViewportBounded || errors.length) process.exitCode = 1;
+  if (!storageSeparated || !storageNoOverflow || !googleConnectButtonVisible || !cloudLocalProbe.configured || cloudLocalProbe.connected || cloudLocalProbe.elapsedMs > 250 || !brainViewportBounded || errors.length) process.exitCode = 1;
 } finally {
   await browser?.close().catch(() => {});
   if (child.exitCode === null) child.kill("SIGTERM");
