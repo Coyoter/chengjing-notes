@@ -227,12 +227,16 @@ export async function planAIActions(options: { engine: AIEngine; model: string; 
   const userContent = `<current_chengjing_state>\n${options.context}\n</current_chengjing_state>\n\n使用者要求：${options.prompt}\n\n請只輸出 {"summary":"...","actions":[...]}。`;
   const routingMode = useAppStore.getState().openRouterRoutingMode;
   async function requestPlan(content: string) {
-    if (options.engine === "openrouter" && window.chengjing?.ai.openRouterChat) {
+    if (options.engine !== "local-gemma" && window.chengjing?.ai) {
+      const messages = [{ role: "system" as const, content: plannerInstruction }, { role: "user" as const, content }];
+      const send = options.engine === "custom-provider"
+        ? (responseFormat?: Record<string, unknown>) => window.chengjing!.ai.providerChat({ profileId: useAppStore.getState().customProviderId, model: options.model, messages, temperature: 0.1, maxTokens: 5_000, responseFormat })
+        : (responseFormat?: Record<string, unknown>) => window.chengjing!.ai.openRouterChat({ model: options.model, messages, temperature: 0.1, maxTokens: 5_000, responseFormat, routingMode });
       try {
-        const response = await window.chengjing.ai.openRouterChat({ model: options.model, messages: [{ role: "system", content: plannerInstruction }, { role: "user", content }], temperature: 0.1, maxTokens: 5_000, responseFormat: ACTION_RESPONSE_FORMAT as unknown as Record<string, unknown>, routingMode });
+        const response = await send(ACTION_RESPONSE_FORMAT as unknown as Record<string, unknown>);
         return response.text;
       } catch {
-        const response = await window.chengjing.ai.openRouterChat({ model: options.model, messages: [{ role: "system", content: plannerInstruction }, { role: "user", content }], temperature: 0.1, maxTokens: 5_000, routingMode });
+        const response = await send();
         return response.text;
       }
     }

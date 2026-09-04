@@ -37,7 +37,7 @@ export function AIPanel() {
   const selectedBoardId = useAppStore((state) => state.selectedBoardId);
   const view = useAppStore((state) => state.view);
   const engine = useAppStore((state) => state.aiEngine);
-  const model = useAppStore((state) => state.customModel.trim() || state.openRouterModel);
+  const model = useAppStore((state) => state.aiEngine === "custom-provider" ? state.customProviderModel : state.customModel.trim() || state.openRouterModel);
   const temperature = useAppStore((state) => state.temperature);
   const spaceSearch = useAppStore((state) => state.spaceSearch);
   const setSpaceSearch = useAppStore((state) => state.setSpaceSearch);
@@ -68,6 +68,7 @@ export function AIPanel() {
   const contextKey = `${contextType}:${contextId || "root"}`;
   const contextLabel = card?.title || (contextType === "board" ? board?.title : t("ai.wholeSpace")) || t("ai.wholeSpace");
   const conversationReady = threadReady && messagesQuery !== undefined;
+  const activeModelLabel = engine === "local-gemma" ? "Gemma 4 E2B" : model;
   const suggestions = useMemo(() => [
     { icon: BookOpenText, label: t("ai.summarize"), prompt: t("ai.summarizePrompt"), action: false },
     { icon: Search, label: t("ai.findLinks"), prompt: t("ai.findLinksPrompt"), action: false },
@@ -180,13 +181,13 @@ export function AIPanel() {
       if (plan.actions.length === 0) {
         const summary = plan.summary.trim();
         if (!summary || summary === "AI change plan") throw new Error(actionCopy.empty);
-        await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "assistant", content: summary, model: engine === "openrouter" ? model : "Gemma 4 E2B", createdAt: Date.now() });
+        await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "assistant", content: summary, model: activeModelLabel, createdAt: Date.now() });
         await db.chatThreads.update(id, { updatedAt: Date.now() });
         setActionMode(false);
         return;
       }
       setPendingPlan(plan);
-      await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "assistant", content: plan.summary, model: engine === "openrouter" ? model : "Gemma 4 E2B", createdAt: Date.now() });
+      await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "assistant", content: plan.summary, model: activeModelLabel, createdAt: Date.now() });
       await db.chatThreads.update(id, { updatedAt: Date.now() });
     } catch (exception) { setError(exception instanceof Error ? exception.message : actionCopy.failed); }
     finally { setLoading(false); }
@@ -225,7 +226,7 @@ export function AIPanel() {
       contentHtml: renderSafeMarkdown(content),
       plainText: content,
       color: "violet",
-      properties: { [t("ai.propertyModel")]: engine === "openrouter" ? model : "Gemma 4 E2B", [t("ai.propertyContext")]: contextLabel },
+      properties: { [t("ai.propertyModel")]: activeModelLabel, [t("ai.propertyContext")]: contextLabel },
     });
     useAppStore.getState().openCard(cardRecord.id);
   }
@@ -287,7 +288,7 @@ export function AIPanel() {
         {contextType === "card" && <div className="ai-prompt-chips" aria-label={t("ai.recommendedPrompts")}><span>{t("ai.recommendedPrompts")}</span><button type="button" onClick={() => setInput(t("card.aiPrompt"))}><Sparkles size={12} />{t("ai.summarizeCard")}</button></div>}
         <div className="ai-composer">
           <textarea value={input} onChange={(event) => setInput(event.target.value)} onCompositionStart={() => { composingRef.current = true; }} onCompositionEnd={(event) => { composingRef.current = false; setInput(event.currentTarget.value); }} placeholder={t("ai.placeholder")} onKeyDown={(event) => { if (event.key !== "Enter" || event.shiftKey) return; if (composingRef.current || (event.nativeEvent as KeyboardEvent).isComposing || event.keyCode === 229) return; event.preventDefault(); void send(event.currentTarget.value); }} />
-          <div><button type="button" className={actionMode ? "ai-action-mode is-active" : "ai-action-mode"} aria-label={actionCopy.mode} title={actionCopy.modeHint} onClick={() => setActionMode(!actionMode)}><WandSparkles size={15} /><span>{actionCopy.mode}</span></button><span>{engine === "openrouter" ? <><Cloud size={12} />{t("ai.cloudPrivacy", { model })}</> : <><ShieldCheck size={12} />{t("ai.localPrivacy")}</>}</span><button type="button" className="send-button" disabled={!input.trim() || loading || !conversationReady} onClick={() => void send(input)} aria-label={t("ai.send")}><ArrowUp size={16} /></button></div>
+          <div><button type="button" className={actionMode ? "ai-action-mode is-active" : "ai-action-mode"} aria-label={actionCopy.mode} title={actionCopy.modeHint} onClick={() => setActionMode(!actionMode)}><WandSparkles size={15} /><span>{actionCopy.mode}</span></button><span>{engine === "local-gemma" ? <><ShieldCheck size={12} />{t("ai.localPrivacy")}</> : <><Cloud size={12} />{t("ai.cloudPrivacy", { model })}</>}</span><button type="button" className="send-button" disabled={!input.trim() || loading || !conversationReady} onClick={() => void send(input)} aria-label={t("ai.send")}><ArrowUp size={16} /></button></div>
         </div>
         <p>{t("ai.disclaimer")}</p>
       </footer>

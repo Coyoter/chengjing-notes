@@ -101,12 +101,15 @@ export async function runAI(options: {
       responseFormat: options.responseFormat,
       routingMode: useAppStore.getState().openRouterRoutingMode,
   };
+  const send = options.engine === "custom-provider"
+    ? (payload: typeof request) => window.chengjing!.ai.providerChat({ ...payload, profileId: useAppStore.getState().customProviderId })
+    : (payload: typeof request) => window.chengjing!.ai.openRouterChat(payload);
   try {
-    return await window.chengjing.ai.openRouterChat(request);
+    return await send(request);
   } catch (error) {
     if (options.responseFormat) {
       try {
-        return await window.chengjing.ai.openRouterChat({ ...request, responseFormat: undefined });
+        return await send({ ...request, responseFormat: undefined });
       } catch (fallbackError) {
         throw new Error(friendlyErrorMessage(fallbackError, translate(language, "ai.openRouterFailed")));
       }

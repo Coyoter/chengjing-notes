@@ -82,6 +82,21 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (!ready || !window.chengjing?.mcp) return;
+    const dispose = window.chengjing.mcp.onWorkspaceRequest(async (request) => {
+      try {
+        const { handleMcpWorkspaceRequest } = await import("./lib/mcpWorkspace");
+        const result = await handleMcpWorkspaceRequest(request);
+        await window.chengjing?.mcp.respond({ requestId: request.requestId, result });
+      } catch (error) {
+        await window.chengjing?.mcp.respond({ requestId: request.requestId, error: error instanceof Error ? error.message : "mcp-workspace-failed" });
+      }
+    });
+    const readyTimer = window.setTimeout(() => void window.chengjing?.mcp.rendererReady(), 650);
+    return () => { window.clearTimeout(readyTimer); dispose(); };
+  }, [ready]);
+
+  useEffect(() => {
     if (hasPersistedLanguagePreference()) return;
     void window.chengjing?.app?.getPreferredLanguage?.().then((preferred) => setLanguage(preferred.language)).catch(() => {});
   }, [setLanguage]);

@@ -5,6 +5,7 @@ import {
   Check,
   Brush,
   Cloud,
+  CloudCog,
   Download,
   ExternalLink,
   Eye,
@@ -34,6 +35,9 @@ import { AutoBackupSettingsPanel } from "../components/AutoBackupSettings";
 import { getSettingsEnhancementCopy } from "../lib/settingsEnhancementCopy";
 import { getOpenRouterRoutingCopy } from "../lib/openRouterRoutingCopy";
 import { QuickCaptureSettingsPanel } from "../components/QuickCaptureSettings";
+import { AdvancedAIProviderSettings } from "../components/AdvancedAIProviderSettings";
+import { getAdvancedProviderCopy } from "../lib/advancedProviderCopy";
+import { McpSettingsPanel } from "../components/McpSettings";
 
 const FEATURED_MODELS = [
   { id: "openai/gpt-5.6-luna", label: "GPT-5.6 Luna", note: "settings.modelDefault" as MessageKey },
@@ -65,6 +69,7 @@ export function SettingsView() {
   const { t } = useI18n();
   const supportCopy = useMemo(() => getSettingsEnhancementCopy(language), [language]);
   const routingCopy = useMemo(() => getOpenRouterRoutingCopy(language), [language]);
+  const providerCopy = useMemo(() => getAdvancedProviderCopy(language), [language]);
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [keyStatus, setKeyStatus] = useState<{ configured: boolean; encrypted: boolean; storage: "app-local-aes-256-gcm"; error?: string }>({ configured: false, encrypted: true, storage: "app-local-aes-256-gcm" });
@@ -163,7 +168,7 @@ export function SettingsView() {
       </section>
 
       <section className="settings-section" id="ai-settings">
-        <header><span>{t("settings.aiEyebrow")}</span><h2>{t("settings.aiTitle")}</h2><p>{t("settings.aiDescription")}</p></header>
+        <header><span>{t("settings.aiEyebrow")}</span><h2>{t("settings.aiTitle")}</h2><p>{providerCopy.aiDescription}</p></header>
         <div className="engine-choice-grid">
           <button type="button" className={engine === "openrouter" ? "is-active" : ""} onClick={() => setEngine("openrouter")}>
             <Cloud size={21} /><span><b>OpenRouter</b><small>{t("settings.openRouterNote")}</small></span>{engine === "openrouter" && <Check size={17} />}
@@ -171,7 +176,11 @@ export function SettingsView() {
           <button type="button" className={engine === "local-gemma" ? "is-active" : ""} onClick={() => setEngine("local-gemma")}>
             <ShieldCheck size={21} /><span><b>Gemma 4 E2B</b><small>{t("settings.gemmaNote")}</small></span>{engine === "local-gemma" && <Check size={17} />}
           </button>
+          <button type="button" className={engine === "custom-provider" ? "is-active" : ""} onClick={() => setEngine("custom-provider")}>
+            <CloudCog size={21} /><span><b>{providerCopy.title}</b><small>{providerCopy.summary}</small></span>{engine === "custom-provider" && <Check size={17} />}
+          </button>
         </div>
+        <AdvancedAIProviderSettings />
       </section>
 
       <section className="settings-section two-column-settings">
@@ -205,6 +214,8 @@ export function SettingsView() {
         <label className="settings-range"><span><b>{t("settings.creativity")}</b><small>{temperature.toFixed(2)} · {temperature < 0.4 ? t("settings.stable") : temperature < 0.75 ? t("settings.balanced") : t("settings.free")}</small></span><input type="range" min="0" max="1" step="0.05" value={temperature} onChange={(event) => setTemperature(Number(event.target.value))} /></label>
         <label className="switch-row"><span><b>{t("settings.searchSpace")}</b><small>{t("settings.searchSpaceHint")}</small></span><input type="checkbox" checked={spaceSearch} onChange={(event) => setSpaceSearch(event.target.checked)} /><i /></label>
       </section>
+
+      <McpSettingsPanel />
 
       <UpdateSettingsSection />
 

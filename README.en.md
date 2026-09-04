@@ -1,4 +1,4 @@
-# ChengJing Notes v0.8.2
+# ChengJing Notes v0.9.0
 
 <p align="center">
   <a href="README.md">繁體中文</a>
@@ -10,7 +10,7 @@
 
 ChengJing is a Traditional-Chinese, local-first visual notes and AI research desktop application. Its central idea is a “Second Brain” that turns everyday fragments, meeting notes, and whiteboard plans into neurons, then helps reveal relationships between them.
 
-> A local-first, frameless visual notebook and Second Brain. Supports OpenRouter, Gemma 4, and Traditional Chinese, Simplified Chinese, English, Japanese, and Korean interfaces.
+> A local-first, frameless visual notebook and Second Brain. Supports OpenRouter, Gemma 4, custom AI providers, local MCP, and Traditional Chinese, Simplified Chinese, English, Japanese, and Korean interfaces.
 
 ## Use and licensing
 
@@ -48,6 +48,7 @@ The macOS build is currently ad-hoc signed and is not notarized with an Apple De
 - Import for PDF, DOCX, Markdown, plain text, HTML, images, audio, and video
 - Web article capture and YouTube source cards
 - OpenRouter integration with local AES-256-GCM key storage, curated models, model synchronization, and custom model names
+- Custom AI providers with multiple OpenAI-compatible gateways or local Ollama connections, model discovery, testing, and encrypted keys
 - Gemma 4 E2B local WebGPU generation with on-demand download, progress display, and removal
 - Global AI assistant, card actions, and a safe action plan for creating, editing, and deleting content
 - Snippets that can be saved, pinned, edited, copied, converted into cards, or sent to a whiteboard, board, or Second Brain
@@ -58,6 +59,7 @@ The macOS build is currently ad-hoc signed and is not notarized with an Apple De
 - Shared Brain with private neurons kept separate from discovered shared neurons
 - AI Second Brain for text, semantic, time, and context-based relationship suggestions, with reversible links and daily reflection
 - Google cloud and local backup can run together; Google uses only ChengJing's hidden App Data and keeps a current snapshot plus a previous-day rescue point
+- Local MCP for controlled Codex, Claude Code, and compatible-tool access to notes, whiteboards, kanban boards, neurons, and tasks
 - Complete JSON backup/restore, Markdown plus attachment ZIP export, and incremental attachment backup with hash-based deduplication
 - Follow-system, light, dark, and low-saturation ink themes
 - Global interface scale at 90%, 100%, 110%, and 120%
@@ -65,6 +67,15 @@ The macOS build is currently ad-hoc signed and is not notarized with an Apple De
 - Semi-automatic updates through GitHub, Cloudflare Worker, release feeds, edge cache, and KV fallback layers
 
 ## Selected recent releases
+
+### v0.9.0: local MCP and custom AI providers
+
+- Codex, Claude Code, and other MCP-compatible tools can search and read ChengJing, then create or update content at the access level selected by the user.
+- MCP is off by default and starts in read-only mode. Users can instead confirm every write in ChengJing or explicitly allow token-holding tools to write.
+- The server binds only to `127.0.0.1`, validates Host and Origin, uses a separate encrypted token, limits request size, and is never exposed to the LAN or internet.
+- Permanent deletion is not exposed. Existing items require their latest `updatedAt` value before an update, and each external write becomes one undoable ChengJing action.
+- Advanced users can save and switch among OpenAI-compatible gateways and Ollama. Ollama defaults to `http://127.0.0.1:11434/v1`.
+- Remote gateways require HTTPS; HTTP is limited to loopback. Provider keys are encrypted locally and excluded from backups.
 
 ### v0.8.2: compact Google button spacing
 
@@ -148,6 +159,24 @@ The key is not stored in ordinary settings, the notes database, or backups. It i
 3. Select Download model.
 
 The model is approximately 2.9–3.2 GB. After the first download, it can run offline. Generated text is not sent to OpenRouter or Google.
+
+### Custom AI provider / Ollama
+
+1. Open Settings and choose Custom AI provider.
+2. Expand the advanced panel. For Ollama, keep `http://127.0.0.1:11434/v1` and enter an installed model ID such as `qwen3:8b`.
+3. For a custom gateway, choose OpenAI-compatible gateway and enter its HTTPS API URL, model ID, and optional API key.
+4. Save the connection, optionally fetch models or test it, then make it active.
+
+ChengJing uses the OpenAI-compatible `/models` and `/chat/completions` endpoints. Remote services require HTTPS; local HTTP accepts only `localhost`, `127.0.0.1`, or `::1`. Keys stay encrypted on this computer and are excluded from backups.
+
+### Codex / Claude Code MCP
+
+1. Open Settings → External integrations and enable Local MCP.
+2. Start with Ask every time; choose Read only if the tool should never change data.
+3. After Copy Codex config, paste the whole block into `~/.codex/config.toml` (on Windows: `%USERPROFILE%\.codex\config.toml`). Paste the copied Claude Code command into a terminal and run it.
+4. Keep ChengJing running. The tool can then search, read, create, and update notes, tasks, whiteboards, kanban boards, and neuron relationships.
+
+The copied setup includes a private token that works only with the local ChengJing endpoint. Do not share it. If it is exposed, replace the token in Advanced connection settings; earlier configurations stop working immediately. MCP does not expose permanent deletion, and external writes are added to ChengJing's undo history.
 
 ### Google cloud backup
 

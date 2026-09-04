@@ -180,3 +180,13 @@ export async function runWithoutGlobalHistory<T>(operation: () => Promise<T>) {
     suppressionDepth = Math.max(0, suppressionDepth - 1);
   }
 }
+
+/**
+ * 讓外部整合的一次寫入形成單一、可復原的歷史紀錄，並避免和使用者剛才
+ * 在介面上的編輯被 420ms 合併視窗黏在一起。
+ */
+export async function runGlobalHistoryAction<T>(operation: () => Promise<T>) {
+  commitPending();
+  try { return await operation(); }
+  finally { commitPending(); }
+}

@@ -13,7 +13,8 @@ export type CardState = "inbox" | "active" | "archived" | "trash";
 export type KnowledgeGroupKind = "area" | "topic";
 export type BoardNodeKind = "card" | "text" | "section" | "mindmap";
 export type ThemeMode = "system" | "light" | "dark" | "ink";
-export type AIEngine = "openrouter" | "local-gemma";
+export type AIEngine = "openrouter" | "local-gemma" | "custom-provider";
+export type AIProviderType = "openai-compatible" | "ollama";
 export type OpenRouterRoutingMode = "balanced" | "speed" | "economy";
 export type AppLanguage = "zh-TW" | "zh-CN" | "en" | "ja" | "ko";
 export type BrainContentType = "card" | "board" | "fragment" | "task";
@@ -288,6 +289,9 @@ export interface AISettings {
   openRouterModel: string;
   openRouterRoutingMode: OpenRouterRoutingMode;
   customModel: string;
+  customProviderId: string;
+  customProviderName: string;
+  customProviderModel: string;
   theme: ThemeMode;
   temperature: number;
   spaceSearch: boolean;
@@ -300,6 +304,47 @@ export interface OpenRouterModel {
   created: number;
   pricing: Record<string, string> | null;
   architecture: Record<string, unknown> | null;
+}
+
+export interface AIProviderProfile {
+  id: string;
+  name: string;
+  type: AIProviderType;
+  baseUrl: string;
+  model: string;
+  createdAt: number;
+  updatedAt: number;
+  keyConfigured: boolean;
+}
+
+export interface AIProviderSettings {
+  selectedProfileId: string;
+  profiles: AIProviderProfile[];
+}
+
+export interface AIProviderModel {
+  id: string;
+  name: string;
+}
+
+export type McpAccessMode = "read-only" | "ask" | "allow";
+
+export interface McpSettings {
+  enabled: boolean;
+  accessMode: McpAccessMode;
+  port: number;
+  running: boolean;
+  endpoint: string;
+  error: string;
+  tokenStored: boolean;
+}
+
+export interface McpAuditEntry {
+  id: string;
+  tool: string;
+  summary: string;
+  outcome: "success" | "denied" | "error";
+  createdAt: number;
 }
 
 export interface UpdateInfo {

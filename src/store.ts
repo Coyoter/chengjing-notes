@@ -21,6 +21,9 @@ interface AppState {
   openRouterModel: string;
   openRouterRoutingMode: OpenRouterRoutingMode;
   customModel: string;
+  customProviderId: string;
+  customProviderName: string;
+  customProviderModel: string;
   temperature: number;
   spaceSearch: boolean;
   fontScale: number;
@@ -50,6 +53,7 @@ interface AppState {
   setOpenRouterModel: (model: string) => void;
   setOpenRouterRoutingMode: (mode: OpenRouterRoutingMode) => void;
   setCustomModel: (model: string) => void;
+  setCustomProvider: (value: { id: string; name: string; model: string }) => void;
   setTemperature: (value: number) => void;
   setSpaceSearch: (value: boolean) => void;
   setFontScale: (value: number) => void;
@@ -102,6 +106,9 @@ export const useAppStore = create<AppState>()(
       openRouterModel: "openai/gpt-5.6-luna",
       openRouterRoutingMode: "balanced",
       customModel: "",
+      customProviderId: "",
+      customProviderName: "Custom Provider",
+      customProviderModel: "",
       temperature: 0.55,
       spaceSearch: true,
       fontScale: 1,
@@ -131,6 +138,7 @@ export const useAppStore = create<AppState>()(
       setOpenRouterModel: (openRouterModel) => set({ openRouterModel }),
       setOpenRouterRoutingMode: (openRouterRoutingMode) => set({ openRouterRoutingMode }),
       setCustomModel: (customModel) => set({ customModel }),
+      setCustomProvider: ({ id: customProviderId, name: customProviderName, model: customProviderModel }) => set({ customProviderId, customProviderName, customProviderModel }),
       setTemperature: (temperature) => set({ temperature }),
       setSpaceSearch: (spaceSearch) => set({ spaceSearch }),
       setFontScale: (fontScale) => set({ fontScale }),
@@ -146,6 +154,9 @@ export const useAppStore = create<AppState>()(
         openRouterModel: state.openRouterModel,
         openRouterRoutingMode: state.openRouterRoutingMode,
         customModel: state.customModel,
+        customProviderId: state.customProviderId,
+        customProviderName: state.customProviderName,
+        customProviderModel: state.customProviderModel,
         temperature: state.temperature,
         spaceSearch: state.spaceSearch,
         fontScale: state.fontScale,

@@ -41,11 +41,23 @@ let activeUpdateDownload = null;
 let autoBackupOperation = Promise.resolve();
 let cloudBackupOperation = Promise.resolve();
 let googleDriveBackupService = null;
+let mcpServer = null;
+let mcpServerStatus = { running: false, endpoint: "", error: "" };
+let mcpOperation = Promise.resolve();
+let mcpWriteOperation = Promise.resolve();
+let mcpStartupTimer = null;
+let mcpRendererReady = false;
+const mcpRendererWaiters = new Set();
+const mcpWorkspaceRequests = new Map();
 const isDev = process.argv.includes("--dev");
 const isSmoke = process.env.CHENGJING_SMOKE === "1";
 const explicitBackgroundLaunch = process.argv.includes("--background");
 let currentLanguage = "en";
 let trayImageDetails = { empty: true, width: 0, height: 0, path: "" };
+
+function mcpSettingsApi() { return require("./mcp-settings.cjs"); }
+function providerSettingsApi() { return require("./provider-settings.cjs"); }
+function providerClientApi() { return require("./provider-client.cjs"); }
 
 function languageFromPreferences(preferredLanguages = []) {
   const primary = String(preferredLanguages[0] || "").trim().toLowerCase().replaceAll("_", "-");
@@ -89,6 +101,138 @@ function cloudBackupService() {
     });
   }
   return googleDriveBackupService;
+}
+
+function serializeMcp(operation) {
+  const pending = mcpOperation.then(operation, operation);
+  mcpOperation = pending.catch(() => {});
+  return pending;
+}
+
+function mcpEndpoint(port) { return `http://127.0.0.1:${port}/mcp`; }
+
+function mcpSetupSnippet(target, endpoint, token) {
+  if (target === "claude") return `claude mcp add --transport http --scope user chengjing ${endpoint} --header "Authorization: Bearer ${token}"`;
+  return `# Paste into ~/.codex/config.toml\n# Windows: %USERPROFILE%\\.codex\\config.toml\n[mcp_servers.chengjing]\nurl = "${endpoint}"\nhttp_headers = { Authorization = "Bearer ${token}" }`;
+}
+
+const MCP_STATUS_MESSAGES = {
+  "zh-TW": { port: "這個連接埠正在被其他程式使用，請展開進階設定改用另一個號碼。", generic: "本機 MCP 無法啟動，請重新開啟澄境後再試。" },
+  "zh-CN": { port: "此端口正被其他程序使用，请在高级设置中改用其他号码。", generic: "本机 MCP 无法启动，请重新打开澄境后重试。" },
+  en: { port: "Another app is using this port. Open Advanced connection settings and choose another number.", generic: "Local MCP could not start. Restart ChengJing and try again." },
+  ja: { port: "このポートは別のアプリが使用中です。詳細設定で別の番号を選んでください。", generic: "ローカルMCPを起動できません。ChengJingを再起動してお試しください。" },
+  ko: { port: "다른 앱이 이 포트를 사용 중입니다. 고급 연결 설정에서 다른 번호를 선택하세요.", generic: "로컬 MCP를 시작할 수 없습니다. ChengJing을 다시 실행해 보세요." },
+};
+
+function friendlyMcpStartError(code) {
+  if (!code) return "";
+  const copy = MCP_STATUS_MESSAGES[currentLanguage] || MCP_STATUS_MESSAGES.en;
+  return code === "EADDRINUSE" || String(code).includes("EADDRINUSE") ? copy.port : copy.generic;
+}
+
+function mcpPublicStatus(settings) {
+  return {
+    ...settings,
+    running: mcpServerStatus.running,
+    endpoint: mcpEndpoint(settings.port),
+    error: friendlyMcpStartError(mcpServerStatus.error),
+    tokenStored: true,
+  };
+}
+
+async function stopMcpServer() {
+  const current = mcpServer; mcpServer = null;
+  if (current) await current.stop().catch(() => {});
+  mcpServerStatus = { running: false, endpoint: "", error: "" };
+}
+
+function waitForMcpRenderer(timeoutMs = 12_000) {
+  if (mcpRendererReady && mainWindow && !mainWindow.isDestroyed()) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const waiter = { resolve, reject };
+    const timer = setTimeout(() => { mcpRendererWaiters.delete(waiter); reject(new Error("mcp-renderer-not-ready")); }, timeoutMs);
+    waiter.resolve = () => { clearTimeout(timer); resolve(); };
+    mcpRendererWaiters.add(waiter);
+  });
+}
+
+function markMcpRendererReady() {
+  mcpRendererReady = true;
+  for (const waiter of mcpRendererWaiters) waiter.resolve();
+  mcpRendererWaiters.clear();
+}
+
+async function sendMcpWorkspaceRequest(tool, args) {
+  if (!mainWindow || mainWindow.isDestroyed()) await createWindow({ show: false });
+  await waitForMcpRenderer();
+  const requestId = randomUUID();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { mcpWorkspaceRequests.delete(requestId); reject(new Error("mcp-workspace-timeout")); }, 65_000);
+    mcpWorkspaceRequests.set(requestId, {
+      resolve: (value) => { clearTimeout(timer); resolve(value); },
+      reject: (error) => { clearTimeout(timer); reject(error); },
+    });
+    mainWindow.webContents.send("mcp:workspace-request", { requestId, tool, arguments: args });
+  });
+}
+
+const MCP_CONFIRM_MESSAGES = {
+  "zh-TW": { title: "允許外部工具修改澄境？", detail: "這項操作來自已連接的 Codex、Claude Code 或其他 MCP 用戶端。確認後仍可在澄境使用「復原」。", cancel: "不允許", allow: "允許這一次", readOnly: "澄境 MCP 目前是唯讀模式。請到設定調整後再試。" },
+  "zh-CN": { title: "允许外部工具修改澄境？", detail: "此操作来自已连接的 Codex、Claude Code 或其他 MCP 客户端。确认后仍可在澄境中撤销。", cancel: "不允许", allow: "仅允许这一次", readOnly: "澄境 MCP 当前为只读模式。请到设置中调整后重试。" },
+  en: { title: "Allow an external tool to change ChengJing?", detail: "This request comes from a connected Codex, Claude Code, or another MCP client. You can still Undo it in ChengJing.", cancel: "Don't allow", allow: "Allow once", readOnly: "ChengJing MCP is in read-only mode. Change the access level in Settings to continue." },
+  ja: { title: "外部ツールによるChengJingの変更を許可しますか？", detail: "接続中のCodex、Claude Code、または他のMCPクライアントからの操作です。ChengJingで取り消すことができます。", cancel: "許可しない", allow: "今回だけ許可", readOnly: "ChengJing MCPは読み取り専用です。設定でアクセス権を変更してください。" },
+  ko: { title: "외부 도구가 ChengJing을 변경하도록 허용할까요?", detail: "연결된 Codex, Claude Code 또는 다른 MCP 클라이언트의 요청입니다. ChengJing에서 실행 취소할 수 있습니다.", cancel: "허용 안 함", allow: "이번만 허용", readOnly: "ChengJing MCP가 읽기 전용 모드입니다. 설정에서 접근 수준을 변경하세요." },
+};
+
+async function executeMcpToolNow(tool, args, meta = {}) {
+  const { appendMcpAudit, readMcpSettings } = mcpSettingsApi();
+  const userDataDirectory = app.getPath("userData");
+  const settings = await readMcpSettings(userDataDirectory);
+  const copy = MCP_CONFIRM_MESSAGES[currentLanguage] || MCP_CONFIRM_MESSAGES.en;
+  if (meta.write && settings.accessMode === "read-only") {
+    await appendMcpAudit(userDataDirectory, { tool, summary: meta.summary, outcome: "denied" });
+    throw new Error(copy.readOnly);
+  }
+  if (meta.write && settings.accessMode === "ask") {
+    await showMainWindow();
+    const result = await dialog.showMessageBox(mainWindow, { type: "question", title: copy.title, message: copy.title, detail: `${String(meta.summary || tool).slice(0, 240)}\n\n${copy.detail}`, buttons: [copy.cancel, copy.allow], cancelId: 0, defaultId: 0, noLink: true });
+    if (result.response !== 1) {
+      await appendMcpAudit(userDataDirectory, { tool, summary: meta.summary, outcome: "denied" });
+      throw new Error("The ChengJing user did not allow this change.");
+    }
+  }
+  try {
+    const value = await sendMcpWorkspaceRequest(tool, args);
+    await appendMcpAudit(userDataDirectory, { tool, summary: meta.summary, outcome: "success" });
+    return value;
+  } catch (error) {
+    await appendMcpAudit(userDataDirectory, { tool, summary: meta.summary, outcome: "error" });
+    throw error;
+  }
+}
+
+function executeMcpTool(tool, args, meta = {}) {
+  if (!meta.write) return executeMcpToolNow(tool, args, meta);
+  const pending = mcpWriteOperation.then(() => executeMcpToolNow(tool, args, meta), () => executeMcpToolNow(tool, args, meta));
+  mcpWriteOperation = pending.catch(() => {});
+  return pending;
+}
+
+async function reconcileMcpServer() {
+  const { readMcpSettings, readOrCreateMcpToken } = mcpSettingsApi();
+  const userDataDirectory = app.getPath("userData");
+  const settings = await readMcpSettings(userDataDirectory);
+  await stopMcpServer();
+  if (!settings.enabled) return mcpPublicStatus(settings);
+  const { createChengJingMcpServer } = require("./mcp-server.cjs");
+  const token = await readOrCreateMcpToken(userDataDirectory);
+  const next = createChengJingMcpServer({ port: settings.port, token, version: currentAppVersion(), execute: executeMcpTool, onError: (error) => console.error(`[mcp] ${error instanceof Error ? error.message : String(error)}`) });
+  try {
+    const status = await next.start(); mcpServer = next; mcpServerStatus = { running: true, endpoint: status.endpoint, error: "" };
+  } catch (error) {
+    await next.stop().catch(() => {}); mcpServerStatus = { running: false, endpoint: "", error: String(error?.code || error?.message || "mcp-start-failed") };
+  }
+  return mcpPublicStatus(settings);
 }
 
 function safeAttachmentName(value) {
@@ -175,6 +319,31 @@ function message(key, variables = {}) {
   let value = platform[key] || base[key] || ERROR_MESSAGES["zh-TW"][key] || key;
   for (const [name, replacement] of Object.entries(variables)) value = value.replaceAll(`{${name}}`, String(replacement));
   return value;
+}
+
+const PROVIDER_MESSAGES = {
+  "zh-TW": { unavailable: "無法連上這個 AI Provider，請檢查網址、模型與服務是否正在執行。", timeout: "AI Provider 回應逾時，請確認服務與模型是否可用。", invalid: "AI Provider 回傳了無法辨識的內容。", empty: "AI Provider 沒有產生文字，請換一個模型再試。", url: "API 位址無效。遠端服務必須使用 HTTPS；HTTP 只允許 localhost。", model: "請輸入模型 ID。", limit: "最多可以保存 12 組 AI Provider 連線。" },
+  "zh-CN": { unavailable: "无法连接这个 AI Provider，请检查地址、模型和服务是否正在运行。", timeout: "AI Provider 响应超时，请确认服务和模型是否可用。", invalid: "AI Provider 返回了无法识别的内容。", empty: "AI Provider 没有生成文字，请更换模型重试。", url: "API 地址无效。远程服务必须使用 HTTPS；HTTP 仅允许 localhost。", model: "请输入模型 ID。", limit: "最多可保存 12 个 AI Provider 连接。" },
+  en: { unavailable: "Could not reach this AI provider. Check the URL, model, and whether the service is running.", timeout: "The AI provider timed out. Check that the service and model are available.", invalid: "The AI provider returned an unreadable response.", empty: "The AI provider returned no text. Try another model.", url: "The API URL is invalid. Remote services require HTTPS; HTTP is allowed only for localhost.", model: "Enter a model ID.", limit: "You can save up to 12 AI provider connections." },
+  ja: { unavailable: "このAI Providerに接続できません。URL、モデル、サービスの実行状態を確認してください。", timeout: "AI Providerの応答がタイムアウトしました。サービスとモデルを確認してください。", invalid: "AI Providerから認識できない応答が返されました。", empty: "AI Providerがテキストを生成しませんでした。別のモデルをお試しください。", url: "API URLが無効です。リモートはHTTPS必須で、HTTPはlocalhostだけ使用できます。", model: "モデルIDを入力してください。", limit: "AI Provider接続は最大12件まで保存できます。" },
+  ko: { unavailable: "이 AI Provider에 연결할 수 없습니다. URL, 모델 및 서비스 실행 상태를 확인하세요.", timeout: "AI Provider 응답 시간이 초과되었습니다. 서비스와 모델을 확인하세요.", invalid: "AI Provider가 인식할 수 없는 응답을 반환했습니다.", empty: "AI Provider가 텍스트를 생성하지 않았습니다. 다른 모델을 시도하세요.", url: "API 주소가 올바르지 않습니다. 원격 서비스는 HTTPS를 사용해야 하며 HTTP는 localhost에서만 허용됩니다.", model: "모델 ID를 입력하세요.", limit: "AI Provider 연결은 최대 12개까지 저장할 수 있습니다." },
+};
+
+function friendlyProviderError(error) {
+  const code = String(error?.message || "");
+  const copy = PROVIDER_MESSAGES[currentLanguage] || PROVIDER_MESSAGES.en;
+  if (code === "provider-timeout") return copy.timeout;
+  if (code === "provider-response-invalid" || code === "provider-response-too-large") return copy.invalid;
+  if (code === "provider-empty-response") return copy.empty;
+  if (code === "provider-base-url-invalid" || code === "provider-insecure-remote-url") return copy.url;
+  if (code === "provider-model-required") return copy.model;
+  if (code === "provider-profile-limit") return copy.limit;
+  if (/^provider-http-\d+/.test(code)) {
+    const detail = code.split(":").slice(1).join(":").trim();
+    return detail ? `${copy.unavailable} (${detail})` : copy.unavailable;
+  }
+  if (/^(provider-|fetch failed|net::)/i.test(code) || error instanceof TypeError) return copy.unavailable;
+  return copy.unavailable;
 }
 
 async function readApiKey() {
@@ -817,6 +986,7 @@ async function createWindow({ show = !isSmoke } = {}) {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: "deny" };
   });
+  mainWindow.webContents.on("did-start-loading", () => { mcpRendererReady = false; });
 
   mainWindow.webContents.on("will-navigate", (event, url) => {
     const allowedDev = isDev && url.startsWith("http://127.0.0.1:5173");
@@ -865,7 +1035,12 @@ async function createWindow({ show = !isSmoke } = {}) {
   }
 
   mainWindow.once("ready-to-show", () => { if (show && !isSmoke) mainWindow.show(); });
-  mainWindow.on("closed", () => { mainWindow = null; });
+  mainWindow.on("closed", () => {
+    mcpRendererReady = false;
+    for (const request of mcpWorkspaceRequests.values()) request.reject(new Error("mcp-renderer-closed"));
+    mcpWorkspaceRequests.clear();
+    mainWindow = null;
+  });
   return mainWindow;
 }
 
@@ -1053,6 +1228,45 @@ ipcMain.handle("clipboard:read", async () => {
   try { return { text, payload: JSON.parse(await (await item.getType(CLIPBOARD_MIME)).text()) }; }
   catch { return { text, payload: null }; }
 });
+
+ipcMain.handle("mcp:renderer-ready", async () => { markMcpRendererReady(); return { ready: true }; });
+ipcMain.handle("mcp:workspace-result", async (_event, response = {}) => {
+  const requestId = String(response.requestId || "");
+  const pending = mcpWorkspaceRequests.get(requestId);
+  if (!pending) return { accepted: false };
+  mcpWorkspaceRequests.delete(requestId);
+  if (response.error) pending.reject(new Error(String(response.error).slice(0, 800)));
+  else pending.resolve(response.result);
+  return { accepted: true };
+});
+ipcMain.handle("mcp:get-settings", async () => serializeMcp(async () => {
+  const { readMcpSettings, readOrCreateMcpToken } = mcpSettingsApi();
+  const userDataDirectory = app.getPath("userData");
+  const settings = await readMcpSettings(userDataDirectory);
+  await readOrCreateMcpToken(userDataDirectory);
+  if (settings.enabled && !mcpServerStatus.running && !mcpServerStatus.error) return reconcileMcpServer();
+  return mcpPublicStatus(settings);
+}));
+ipcMain.handle("mcp:update-settings", async (_event, patch = {}) => serializeMcp(async () => {
+  const { readMcpSettings, writeMcpSettings } = mcpSettingsApi();
+  const current = await readMcpSettings(app.getPath("userData"));
+  await writeMcpSettings(app.getPath("userData"), { ...current, ...patch });
+  return reconcileMcpServer();
+}));
+ipcMain.handle("mcp:regenerate-token", async () => serializeMcp(async () => {
+  const { regenerateMcpToken } = mcpSettingsApi();
+  await regenerateMcpToken(app.getPath("userData"));
+  return reconcileMcpServer();
+}));
+ipcMain.handle("mcp:copy-setup", async (_event, target) => serializeMcp(async () => {
+  const { readMcpSettings, readOrCreateMcpToken } = mcpSettingsApi();
+  const settings = await readMcpSettings(app.getPath("userData"));
+  const token = await readOrCreateMcpToken(app.getPath("userData"));
+  const normalizedTarget = target === "claude" ? "claude" : "codex";
+  clipboard.writeText(mcpSetupSnippet(normalizedTarget, mcpEndpoint(settings.port), token));
+  return { copied: true, target: normalizedTarget };
+}));
+ipcMain.handle("mcp:get-audit", async () => mcpSettingsApi().readMcpAudit(app.getPath("userData")));
 
 ipcMain.handle("update:check", async (_event, options) => checkForUpdate(options));
 ipcMain.handle("update:download", async () => downloadLatestUpdate());
@@ -1301,6 +1515,44 @@ ipcMain.handle("ai:openrouter-chat", async (_event, request) => {
   }
 });
 
+ipcMain.handle("ai:provider-settings", async () => providerSettingsApi().readProviderSettings(app.getPath("userData")));
+
+ipcMain.handle("ai:provider-upsert", async (_event, input = {}) => {
+  try { return await providerSettingsApi().upsertProviderProfile(app.getPath("userData"), input); }
+  catch (error) { throw new Error(friendlyProviderError(error)); }
+});
+
+ipcMain.handle("ai:provider-select", async (_event, id) => {
+  try { return await providerSettingsApi().selectProviderProfile(app.getPath("userData"), String(id || "")); }
+  catch (error) { throw new Error(friendlyProviderError(error)); }
+});
+
+ipcMain.handle("ai:provider-remove", async (_event, id) => {
+  try { return await providerSettingsApi().removeProviderProfile(app.getPath("userData"), String(id || "")); }
+  catch (error) { throw new Error(friendlyProviderError(error)); }
+});
+
+ipcMain.handle("ai:provider-test", async (_event, id) => {
+  try {
+    const profile = await providerSettingsApi().providerProfileWithSecret(app.getPath("userData"), String(id || ""));
+    return await providerClientApi().testProvider((url, options) => net.fetch(url, options), profile);
+  } catch (error) { throw new Error(friendlyProviderError(error)); }
+});
+
+ipcMain.handle("ai:provider-models", async (_event, id) => {
+  try {
+    const profile = await providerSettingsApi().providerProfileWithSecret(app.getPath("userData"), String(id || ""));
+    return await providerClientApi().listProviderModels((url, options) => net.fetch(url, options), profile);
+  } catch (error) { throw new Error(friendlyProviderError(error)); }
+});
+
+ipcMain.handle("ai:provider-chat", async (_event, request = {}) => {
+  try {
+    const profile = await providerSettingsApi().providerProfileWithSecret(app.getPath("userData"), String(request.profileId || ""));
+    return await providerClientApi().providerChat((url, options) => net.fetch(url, options), profile, request);
+  } catch (error) { throw new Error(friendlyProviderError(error)); }
+});
+
 ipcMain.handle("web:read", async (_event, rawUrl) => {
   const target = new URL(String(rawUrl || "").trim());
   if (!/^https?:$/.test(target.protocol)) throw new Error(message("webProtocol"));
@@ -1431,6 +1683,13 @@ app.whenReady().then(async () => {
     createTray();
   }
   if (!backgroundLaunch) await createWindow();
+  mcpStartupTimer = setTimeout(() => {
+    mcpStartupTimer = null;
+    void fs.readFile(path.join(app.getPath("userData"), "mcp-settings.json"), "utf8")
+      .then((raw) => JSON.parse(raw))
+      .then((saved) => { if (saved?.enabled) return serializeMcp(reconcileMcpServer); })
+      .catch(() => {});
+  }, 750);
   app.on("activate", async () => {
     if (quickCapturePresented || nativeQuickCapturePresented) return;
     await showMainWindow();
@@ -1438,7 +1697,7 @@ app.whenReady().then(async () => {
 });
 
 app.on("before-quit", () => { isQuitting = true; });
-app.on("will-quit", () => { stopQuickCaptureShortcut(); globalShortcut.unregisterAll(); });
+app.on("will-quit", () => { if (mcpStartupTimer) clearTimeout(mcpStartupTimer); stopQuickCaptureShortcut(); globalShortcut.unregisterAll(); void stopMcpServer(); });
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

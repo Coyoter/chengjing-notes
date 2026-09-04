@@ -1,4 +1,16 @@
-# 澄境筆記 v0.8.2 驗收報告
+# 澄境筆記 v0.9.0 驗收報告
+
+## 0.9.0 本機 MCP 與自訂 AI Provider
+
+- 本機 Streamable HTTP MCP 只監聽 `127.0.0.1`，Host 與 Origin 非 loopback 時回傳 403，未帶正確 Bearer 權杖時回傳 401；請求本文限制為 1 MiB。
+- MCP 預設關閉且預設唯讀；正式 Client 實測唯讀模式會拒絕新增筆記。允許寫入後，可經 Electron main → preload → renderer → Dexie 完成新增與防衝突更新，稽核清單正確記錄拒絕及成功結果。
+- 正式 MCP Client 可初始化、讀取 capability resource、列出 15 個工具，核心工具涵蓋搜尋、筆記、待辦、白板、看板與神經元關係。修改既有項目需比對 `updatedAt`，永久刪除不對 MCP 開放。
+- 外部一次寫入會在動作前後立即切開全域差異歷史，不和使用者相鄰編輯合併；寫入仍可用澄境的復原功能撤回。
+- 自訂 Provider 實測可儲存多組 OpenAI 相容／Ollama 設定、列出模型、測試連線，並由正式封裝 App 的 AI 面板取得本機 mock Gateway 回覆。
+- Provider 遠端 HTTP 會被拒絕，只有 loopback 可使用 HTTP；redirect 不會攜帶金鑰，API Key 以獨立 AES-256-GCM vault 保存，公開設定、備份與錯誤文字均無明碼。
+- 兩個設定面板在繁中、簡中、英文、日文與韓文下均完整顯示；120% 介面字級時沒有水平溢出。繁中截圖實測 Provider 面板 846px、MCP 面板 890px，內容均完整落在邊界內。
+- MCP SDK 與工作區處理採延遲載入；MCP 未啟用時不載入伺服器。同一台 Mac 各跑七輪的中位數，0.9.0 App shell 為 601ms（0.8.2：584ms）、首次操作 616ms（0.8.2：599ms）、RSS 757 MiB（0.8.2：754 MiB），差異 17ms／3 MiB，idle timer delay 均為 0ms。
+- 封裝排除 MCP／Zod 的 source map、型別與非 CJS 重複檔後，0.9.0 App 約 360 MiB；0.8.2 App 約 358 MiB。正式封裝仍完成 Provider、MCP 唯讀保護與實際資料寫入。
 
 ## 0.8.2 Google 按鈕留白
 
@@ -25,7 +37,7 @@
 ## 自動驗證
 
 - `npm run typecheck`：通過。
-- `npm test`：91 個前端單元測試與 37 個 Electron Node 測試全部通過。
+- `npm test`：92 個前端單元測試與 45 個 Electron Node 測試全部通過。
 - `npm run build`：Vite production build 通過。
 - `npm run qa`：6 張關鍵畫面，console／page error 為 0。
 - `npm run qa:functional`：新增、編輯、重新載入持久化、版本歷史、心智圖鍵盤、資料庫更新與指令搜尋通過。
@@ -34,6 +46,7 @@
 - `npm run qa:ai-conversation`：既有 AI 對話、中文輸入法、卡片＋AI、推薦 Prompt 與搜尋範圍均通過；收件匣分頁 hover 位移為 0，卡片本體、圖示、標題、摘要與底部資訊在 hover 前後的 x／y／寬／高完全一致；圖示背景前後皆透明、圓角為 0、transition 為 none。
 - `npm run qa:ai-actions`：第一次轉換計畫刻意只含 description、缺 title／content 時會自動修復一次；最終白板、區段、三張卡片標題與內文非空。右鍵轉白板、原卡片保留、關係線別名、無效單線部分套用、跨分類匯出、搜尋範圍、undo／redo 與刪除確認均通過。
 - `npm run qa:openrouter-routing`：平衡預設、三模式說明、極速持久化、一般聊天 speed payload、AI 動作 economy payload、平衡還原、五語及 1040px／120% 無溢出全部通過。
+- `npm run qa:advanced-integrations`：原始碼與正式封裝 App 均通過三種 AI 引擎、自訂 Provider 加密／模型／回覆、本機 MCP 15 工具、唯讀拒絕、允許寫入、稽核紀錄與五語零溢出。
 - `npm run qa:wish-pool`：右側開啟、留在 App、匿名名稱重生、願望、匿名回覆、管理員登入、管理員回覆與刪除通過；淺色／深色／墨色截圖、12px 最小字級與零水平溢出通過。
 - `npm run qa:wish-pool-live`：App 介面直接連公開 Worker，真實建立願望、管理員登入與刪除，最後公開池回讀為空，console／page error 為 0。
 - `npm run qa:local-gemma-runtime`：本機 `.mjs` 與 22 MB WASM 回傳 200；以 ONNX Runtime 執行 130-byte 測試模型，正確得到 `[1, 4, 9, 16, 25, 36]`，jsDelivr 請求為 0。
@@ -75,9 +88,9 @@
 
 ## 正式成品
 
-- Windows ARM64：`release/ChengJing-0.8.2-arm64-Installer.exe`
-- Windows Intel／AMD x64：`release/ChengJing-0.8.2-x64-Installer.exe`
-- Apple Silicon Mac：`release/ChengJing-0.8.2-arm64.dmg`
+- Windows ARM64：`release/ChengJing-0.9.0-arm64-Installer.exe`
+- Windows Intel／AMD x64：`release/ChengJing-0.9.0-x64-Installer.exe`
+- Apple Silicon Mac：`release/ChengJing-0.9.0-arm64.dmg`
 - 本機 `release` 只保留上述三個正式安裝檔。
 - `hdiutil verify`：通過。
 - 尚未使用 Apple Developer ID 簽章與公證，Windows 也尚未使用商業程式碼簽章。
@@ -113,4 +126,4 @@
 - AI 刪除卡片只移到垃圾桶；待辦刪除會同步原文與第二大腦連線，避免留下孤立資料。
 - 分享大腦預設排除日誌、隻言片語、待辦、完整內文、關鍵詞與 AI 反思。
 - 編輯器劃線以主題 token 顯示；舊版 HTML 內的固定亮黃色仍會被目前外觀覆蓋，資料不需遷移。
-- `npm audit --omit=dev` 目前回報 4 個 high，皆來自本機 Gemma 4 使用的 Transformers.js 之 `onnxruntime-node`／`adm-zip` 與 `sharp` 間接相依，套件目前沒有可用修正版。澄境只載入固定的 Gemma 模型，不把使用者 ZIP 或圖片交給這些受影響路徑；發佈包也排除其他作業系統原生函式庫與誤入的模型快取。此風險已記錄，後續有上游修正版時應優先升級。
+- `npm audit --omit=dev`：production dependencies 為 0 個已知 info／low／moderate／high／critical 漏洞。

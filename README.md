@@ -1,4 +1,4 @@
-# 澄境筆記 ChengJing Notes v0.8.2
+# 澄境筆記 ChengJing Notes v0.9.0
 
 <p align="center">
   <a href="README.md"><strong>繁體中文</strong></a>
@@ -10,7 +10,7 @@
 
 澄境是一款繁體中文、本機優先的視覺筆記與 AI 研究桌面應用。它最大的特色在於「第二大腦」，可以將日常的喃喃自語、會議記錄、白板規劃等一切資訊化為神經元，透過 AI 判斷神經元之間的聯繫，發現連你本人可能都從未發現的潛意識狀態。
 
-> 本機優先、無邊框的視覺筆記與第二大腦。支援 OpenRouter、Gemma 4，以及繁體中文、簡體中文、英文、日文與韓文介面。
+> 本機優先、無邊框的視覺筆記與第二大腦。支援 OpenRouter、Gemma 4、自訂 AI Provider、本機 MCP，以及繁體中文、簡體中文、英文、日文與韓文介面。
 
 ## 使用與授權
 
@@ -49,6 +49,7 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 - PDF、DOCX、Markdown、純文字、HTML、圖片、音訊與影片匯入
 - 網頁文章擷取與 YouTube 來源卡片
 - OpenRouter：本機 AES-256-GCM 加密金鑰、精選模型、同步最新模型、自訂模型名稱
+- 自訂 AI Provider：可連接多組 OpenAI 相容 Gateway 或本機 Ollama，支援模型清單、測試與加密金鑰
 - Gemma 4 E2B：WebGPU 隨選下載、本機生成、進度顯示與移除
 - AI 全域助理、卡片快捷動作與安全動作計畫；自然語言可真正新增、修改、刪除卡片、白板、待辦與隻言片語，並追加日誌
 - 隻言片語：兩三個字即可保存、釘選、修改、複製、轉成卡片、送進白板／看板或第二大腦
@@ -59,11 +60,21 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 - 共享大腦：私人神經元始終留在中心；可在外圍偶遇最多 20 顆陌生神經元、留下回聲或收成自己的共享副本
 - AI 第二大腦：綜合字面、語意、時間與脈絡尋找潛在關聯，保存可撤回連線並生成每日反思
 - Google 雲端與本地雙軌備份：兩者可同時執行；Google 只使用澄境自己的隱藏 App Data，並保留目前版本與前一天緊急救援點
+- 本機 MCP：Codex、Claude Code 等相容工具可在可控權限下搜尋、讀取、新增與修改筆記、白板、看板、神經元和待辦
 - 完整 JSON 備份／還原、Markdown＋附件 ZIP 匯出，以及附件內容雜湊去重的低負載增量自動備份
 - 跟隨系統、淺色、深色，以及低彩度日式「墨色」四種外觀
 - 90%／100%／110%／120% 全域介面文字比例
 - 五語介面：繁體中文、簡體中文、English、日本語、한국어；日期、AI 回答、原生選單與共享介面同步切換
 - 半自動更新：GitHub API、Cloudflare Worker、Release Feed、邊緣快取與 KV 多層備援，下載後驗證並開啟目前平台的 DMG 或 Windows 安裝程式
+
+## v0.9.0 本機 MCP 與自訂 AI Provider
+
+- Codex、Claude Code 與其他 MCP 相容工具可以搜尋、讀取，以及依使用者選擇新增或修改澄境內容。設定頁可直接複製完整連線設定。
+- MCP 預設關閉；啟用後預設唯讀，也可選擇每次寫入前由澄境詢問，或允許持有權杖的工具直接寫入。
+- 連線只綁定本機 `127.0.0.1`，並使用獨立加密權杖、Host／Origin 驗證與請求大小限制；不會把伺服器公開到區域網路或網際網路。
+- MCP 不提供永久刪除；修改既有項目必須先讀取並帶入最新版本時間，避免覆蓋同時發生的使用者編輯。每次外部寫入都能在澄境復原。
+- 進階使用者可建立多組 OpenAI 相容 Gateway 或 Ollama 連線，切換名稱、API 位址、模型與金鑰；Ollama 預設使用官方 OpenAI 相容位址 `http://127.0.0.1:11434/v1`。
+- 遠端 Gateway 必須使用 HTTPS，HTTP 只允許這台電腦的 loopback；API Key 加密留在本機，不進入 Google 或本地備份。
 
 ## v0.8.2 Google 登入按鈕精簡留白
 
@@ -651,6 +662,24 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 
 模型約 2.9–3.2 GB，第一次下載完成後可離線使用。生成時文字不會傳給 OpenRouter 或 Google。
 
+### 自訂 AI Provider／Ollama
+
+1. 打開「設定」，選擇「自訂 AI Provider」。
+2. 展開進階設定；使用 Ollama 時保留預設位址 `http://127.0.0.1:11434/v1`，填入已下載的模型 ID，例如 `qwen3:8b`。
+3. 自訂 Gateway 則選擇「OpenAI 相容 Gateway」，填入 HTTPS API 位址、模型 ID，以及該服務需要的 API Key。
+4. 儲存後可取得模型清單或測試連線，再把這組連線設為使用中。
+
+澄境使用 OpenAI 相容的 `/models` 與 `/chat/completions`。遠端服務只接受 HTTPS；本機 HTTP 只接受 `localhost`、`127.0.0.1` 或 `::1`。金鑰加密留在這台電腦，備份不包含金鑰。
+
+### Codex／Claude Code MCP
+
+1. 打開「設定 → 外部整合」，開啟「本機 MCP」。
+2. 初次建議使用「每次確認」；若只想讓工具查資料，選擇「唯讀」。
+3. 按「複製 Codex 設定」後，把整段貼進 `~/.codex/config.toml`（Windows 是 `%USERPROFILE%\.codex\config.toml`）；「複製 Claude Code 指令」則貼進終端機執行。
+4. 保持澄境執行。之後可請工具搜尋、讀取、新增或修改筆記、待辦、白板、看板與神經元關係。
+
+複製內容包含只供這台電腦本機連線的私密權杖，請勿分享。若曾誤貼到公開位置，回到「連線進階設定」更換權杖即可讓舊設定立即失效。MCP 不開放永久刪除；外部修改也會進入澄境的復原紀錄。
+
 ### Google 雲端備份
 
 1. 打開「設定 → 備份與復原」。
@@ -682,6 +711,7 @@ npm run qa:update
 npm run qa:tags
 npm run qa:auto-backup
 npm run qa:live-google-backup
+npm run qa:advanced-integrations
 npm run qa:task-timeline
 npm run smoke:electron-main
 npm run smoke:electron

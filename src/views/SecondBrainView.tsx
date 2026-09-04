@@ -381,6 +381,7 @@ export function SecondBrainView() {
   const engine = useAppStore((state) => state.aiEngine);
   const openRouterModel = useAppStore((state) => state.openRouterModel);
   const customModel = useAppStore((state) => state.customModel);
+  const customProviderModel = useAppStore((state) => state.customProviderModel);
   const temperature = useAppStore((state) => state.temperature);
   const openCard = useAppStore((state) => state.openCard);
   const openBoard = useAppStore((state) => state.openBoard);
@@ -414,7 +415,7 @@ export function SecondBrainView() {
   const selected = graph.nodes.find((node) => node.key === selectedKey) || null;
   const selectedShare = selected ? brainShares.find((item) => item.id === selected.key && item.status === "shared") || null : null;
   const selectedEdges = selected ? graph.edges.filter((edge) => edge.persisted && (edge.source === selected.key || edge.target === selected.key)) : [];
-  const model = customModel.trim() || openRouterModel;
+  const model = engine === "custom-provider" ? customProviderModel : customModel.trim() || openRouterModel;
   const canvasColor = useMemo(() => {
     const css = getComputedStyle(document.documentElement).getPropertyValue("--brain-canvas").trim();
     return css || (theme === "light" ? "#e8e5dc" : "#0d1311");

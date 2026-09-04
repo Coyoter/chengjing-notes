@@ -44,6 +44,20 @@ contextBridge.exposeInMainWorld("chengjing", {
     adoptCurrentForOverwrite: () => ipcRenderer.invoke("cloud-backup:adopt-current-for-overwrite"),
     qaCleanup: () => ipcRenderer.invoke("cloud-backup:qa-cleanup"),
   },
+  mcp: {
+    getSettings: () => ipcRenderer.invoke("mcp:get-settings"),
+    updateSettings: (patch) => ipcRenderer.invoke("mcp:update-settings", patch),
+    regenerateToken: () => ipcRenderer.invoke("mcp:regenerate-token"),
+    copySetup: (target) => ipcRenderer.invoke("mcp:copy-setup", target),
+    getAudit: () => ipcRenderer.invoke("mcp:get-audit"),
+    rendererReady: () => ipcRenderer.invoke("mcp:renderer-ready"),
+    respond: (response) => ipcRenderer.invoke("mcp:workspace-result", response),
+    onWorkspaceRequest: (callback) => {
+      const listener = (_event, value) => callback(value);
+      ipcRenderer.on("mcp:workspace-request", listener);
+      return () => ipcRenderer.removeListener("mcp:workspace-request", listener);
+    },
+  },
   ai: {
     keyStatus: () => ipcRenderer.invoke("ai:key-status"),
     setKey: (value) => ipcRenderer.invoke("ai:set-key", value),
@@ -51,6 +65,13 @@ contextBridge.exposeInMainWorld("chengjing", {
     testOpenRouter: () => ipcRenderer.invoke("ai:test-openrouter"),
     listModels: () => ipcRenderer.invoke("ai:list-models"),
     openRouterChat: (request) => ipcRenderer.invoke("ai:openrouter-chat", request),
+    providerSettings: () => ipcRenderer.invoke("ai:provider-settings"),
+    upsertProvider: (input) => ipcRenderer.invoke("ai:provider-upsert", input),
+    selectProvider: (id) => ipcRenderer.invoke("ai:provider-select", id),
+    removeProvider: (id) => ipcRenderer.invoke("ai:provider-remove", id),
+    testProvider: (id) => ipcRenderer.invoke("ai:provider-test", id),
+    listProviderModels: (id) => ipcRenderer.invoke("ai:provider-models", id),
+    providerChat: (request) => ipcRenderer.invoke("ai:provider-chat", request),
   },
   web: {
     read: (url) => ipcRenderer.invoke("web:read", url),

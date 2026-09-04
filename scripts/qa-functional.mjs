@@ -46,9 +46,14 @@ await page.waitForFunction(() => document.querySelectorAll(".flow-card").length 
 const before = await page.locator(".mindmap-node").count();
 await page.getByRole("button", { name: "新增心智圖", exact: true }).click();
 await page.waitForFunction((count) => document.querySelectorAll(".mindmap-node").length >= count + 1, before);
-await page.locator(".mindmap-title").last().press("Tab");
+const createdMindmapTitle = page.locator(".mindmap-title").last();
+await createdMindmapTitle.click();
+await createdMindmapTitle.evaluate((element) => element.focus());
+await page.keyboard.press("Tab");
 await page.waitForFunction((count) => document.querySelectorAll(".mindmap-node").length >= count + 2, before);
-await page.locator(".mindmap-title").last().press("Enter");
+const focusedMindmapTitle = page.locator(".mindmap-title:focus");
+await focusedMindmapTitle.waitFor();
+await page.keyboard.press("Enter");
 await page.waitForFunction((count) => document.querySelectorAll(".mindmap-node").length >= count + 3, before);
 const after = await page.locator(".mindmap-node").count();
 

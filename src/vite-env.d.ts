@@ -39,6 +39,16 @@ interface Window {
       adoptCurrentForOverwrite: () => Promise<import("./types").CloudBackupSettings>;
       qaCleanup?: () => Promise<{ removedManifests: number; removedAssets: number; settings: import("./types").CloudBackupSettings }>;
     };
+    mcp: {
+      getSettings: () => Promise<import("./types").McpSettings>;
+      updateSettings: (patch: Partial<Pick<import("./types").McpSettings, "enabled" | "accessMode" | "port">>) => Promise<import("./types").McpSettings>;
+      regenerateToken: () => Promise<import("./types").McpSettings>;
+      copySetup: (target: "codex" | "claude") => Promise<{ copied: boolean; target: "codex" | "claude" }>;
+      getAudit: () => Promise<import("./types").McpAuditEntry[]>;
+      rendererReady: () => Promise<{ ready: boolean }>;
+      respond: (response: { requestId: string; result?: unknown; error?: string }) => Promise<{ accepted: boolean }>;
+      onWorkspaceRequest: (callback: (request: import("./lib/mcpWorkspace").McpWorkspaceRequest) => void | Promise<void>) => () => void;
+    };
     ai: {
       keyStatus: () => Promise<{ configured: boolean; encrypted: boolean; storage: "app-local-aes-256-gcm"; error?: string }>;
       setKey: (value: string) => Promise<{ configured: boolean; encrypted: boolean; storage: "app-local-aes-256-gcm" }>;
@@ -59,6 +69,20 @@ interface Window {
         maxTokens?: number;
         responseFormat?: Record<string, unknown>;
         routingMode?: import("./types").OpenRouterRoutingMode;
+      }) => Promise<{ text: string; model: string; usage: Record<string, number> | null; finishReason: string | null }>;
+      providerSettings: () => Promise<import("./types").AIProviderSettings>;
+      upsertProvider: (input: { id?: string; name: string; type: import("./types").AIProviderType; baseUrl: string; model: string; apiKey?: string; select?: boolean }) => Promise<import("./types").AIProviderSettings>;
+      selectProvider: (id: string) => Promise<import("./types").AIProviderSettings>;
+      removeProvider: (id: string) => Promise<import("./types").AIProviderSettings>;
+      testProvider: (id: string) => Promise<{ ok: boolean; models: import("./types").AIProviderModel[]; modelAvailable: boolean }>;
+      listProviderModels: (id: string) => Promise<import("./types").AIProviderModel[]>;
+      providerChat: (request: {
+        profileId?: string;
+        model: string;
+        messages: AIMessage[];
+        temperature?: number;
+        maxTokens?: number;
+        responseFormat?: Record<string, unknown>;
       }) => Promise<{ text: string; model: string; usage: Record<string, number> | null; finishReason: string | null }>;
     };
     web: {

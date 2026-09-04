@@ -30,6 +30,8 @@ export function TopBar() {
   const aiEngine = useAppStore((state) => state.aiEngine);
   const openRouterModel = useAppStore((state) => state.openRouterModel);
   const customModel = useAppStore((state) => state.customModel);
+  const customProviderName = useAppStore((state) => state.customProviderName);
+  const customProviderModel = useAppStore((state) => state.customProviderModel);
   const setCommandOpen = useAppStore((state) => state.setCommandOpen);
   const setView = useAppStore((state) => state.setView);
   const setImportOpen = useAppStore((state) => state.setImportOpen);
@@ -49,7 +51,8 @@ export function TopBar() {
     : view === "kanban" && kanbanBoard
       ? { eyebrow: t("top.projectFlow"), title: kanbanBoard.title }
     : { eyebrow: t(titles[view].eyebrow), title: t(titles[view].title) };
-  const modelName = customModel.trim() || openRouterModel;
+  const modelName = aiEngine === "custom-provider" ? customProviderModel : customModel.trim() || openRouterModel;
+  const engineName = aiEngine === "openrouter" ? "OpenRouter" : aiEngine === "custom-provider" ? customProviderName : t("top.localGemma");
   const historyState = view === "boards" ? boardHistory : globalHistory;
   const windows = isWindows();
 
@@ -79,9 +82,9 @@ export function TopBar() {
         <kbd>{windows ? "Ctrl K" : <><Command size={12} />K</>}</kbd>
       </button>
       <div className="topbar-actions">
-        <button className="engine-status" type="button" onClick={openAISettings} aria-label={aiEngine === "openrouter" ? t("top.openRouterSettings") : t("top.gemmaSettings")} title={aiEngine === "openrouter" ? modelName : "Gemma 4 E2B"}>
-          {aiEngine === "openrouter" ? <Cloud size={14} /> : <ShieldCheck size={14} />}
-          <span>{aiEngine === "openrouter" ? "OpenRouter" : t("top.localGemma")}</span>
+        <button className="engine-status" type="button" onClick={openAISettings} aria-label={aiEngine === "local-gemma" ? t("top.gemmaSettings") : aiEngine === "custom-provider" ? `${customProviderName} AI Provider` : t("top.openRouterSettings")} title={aiEngine === "local-gemma" ? "Gemma 4 E2B" : modelName}>
+          {aiEngine === "local-gemma" ? <ShieldCheck size={14} /> : <Cloud size={14} />}
+          <span>{engineName}</span>
         </button>
         <button className="icon-button" type="button" onClick={() => setImportOpen(true)} aria-label={t("top.importBackup")}><Download size={17} /></button>
         <button className="ai-button" type="button" onClick={openAI}>
