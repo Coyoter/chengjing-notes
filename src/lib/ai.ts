@@ -78,6 +78,7 @@ export async function runAI(options: {
   temperature?: number;
   maxTokens?: number;
   responseFormat?: Record<string, unknown>;
+  reasoning?: { effort?: "low" | "medium" | "high"; max_tokens?: number; exclude?: boolean };
   onToken?: (text: string) => void;
   onProgress?: (progress: number, file: string) => void;
 }): Promise<AIResponse> {
@@ -105,6 +106,7 @@ export async function runAI(options: {
       temperature: options.temperature,
       maxTokens: options.maxTokens || 3072,
       responseFormat: options.responseFormat,
+      reasoning: options.reasoning,
       routingMode: useAppStore.getState().openRouterRoutingMode,
   };
   const profileId = useAppStore.getState().customProviderId;

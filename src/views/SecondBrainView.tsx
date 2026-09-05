@@ -739,15 +739,16 @@ export function SecondBrainView() {
         engine,
         model,
         temperature: localMode ? 0.05 : Math.min(0.28, temperature),
-        maxTokens: localMode ? LOCAL_BRAIN_SEMANTIC_LIMITS.linkMaxTokens : 6_000,
+        maxTokens: localMode ? LOCAL_BRAIN_SEMANTIC_LIMITS.linkMaxTokens : 16_000,
+        reasoning: !localMode && engine === "openrouter" ? { effort: "low", exclude: true } : undefined,
         responseFormat: BRAIN_CONNECTION_RESPONSE_FORMAT as unknown as Record<string, unknown>,
         context: semanticContext.text,
         prompt: localMode ? `${semanticCopy.organizePrompt}\n\n${semanticCopy.localPromptSuffix}` : semanticCopy.organizePrompt,
       });
       let parsedConnections: ReturnType<typeof parseAIConnections>;
       try {
-        if (response.finishReason === "length") throw new Error("truncated-ai-connection-json");
         parsedConnections = parseAIConnections(response.text, semanticContext.nodeKeys, language);
+        if (["length", "max_output_tokens"].includes(response.finishReason || "") && !parsedConnections.length) throw new Error("truncated-ai-connection-json");
       } catch {
         if (localMode) throw new Error(semanticCopy.localJsonFailed);
         setNotice(semanticCopy.repairingJson);
@@ -755,12 +756,16 @@ export function SecondBrainView() {
           engine,
           model,
           temperature: 0.05,
-          maxTokens: 6_000,
+          maxTokens: 32_000,
+          reasoning: engine === "openrouter" ? { effort: "low", exclude: true } : undefined,
           responseFormat: BRAIN_CONNECTION_RESPONSE_FORMAT as unknown as Record<string, unknown>,
           context: semanticContext.text,
           prompt: `${semanticCopy.organizePrompt}\n\n${semanticCopy.jsonRetryPrompt}`,
         });
-        try { parsedConnections = parseAIConnections(response.text, semanticContext.nodeKeys, language); }
+        try {
+          parsedConnections = parseAIConnections(response.text, semanticContext.nodeKeys, language);
+          if (["length", "max_output_tokens"].includes(response.finishReason || "") && !parsedConnections.length) throw new Error("truncated-ai-connection-json");
+        }
         catch { throw new Error(semanticCopy.invalidJson); }
       }
       const parsed = parsedConnections

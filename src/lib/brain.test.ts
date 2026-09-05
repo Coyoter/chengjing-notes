@@ -57,6 +57,15 @@ describe("第二大腦資料整理", () => {
     expect(parseAIConnections(truncated, new Set(["card:a", "task:t", "fragment:f"]))).toEqual([expect.objectContaining({ source: "card:a", target: "task:t" })]);
   });
 
+  it("接受不同模型常見的連線欄位與頂層格式", () => {
+    const values = parseAIConnections(JSON.stringify({ links: [{ from: "a", to: "b", relation_type: "leads_to", explanation: "成本上升可能促使重新議價", evidence: { source: "成本上升", target: "重新評估報價" }, score: 92 }] }), new Set(["card:a", "card:b"]));
+    expect(values).toEqual([{ source: "card:a", target: "card:b", relationType: "sequence", reason: "成本上升可能促使重新議價", evidence: ["成本上升", "重新評估報價"], confidence: 0.92 }]);
+    const array = parseAIConnections(JSON.stringify([{ source_id: "card:a", target_id: "card:b", type: "supports", rationale: "兩者互相支持", source_evidence: "來源線索", target_evidence: "目標線索", probability: 0.8 }]), new Set(["card:a", "card:b"]));
+    expect(array[0]).toMatchObject({ relationType: "reinforcement", confidence: 0.8, evidence: ["來源線索", "目標線索"] });
+    const nested = parseAIConnections(JSON.stringify({ result: { edges: [{ source: { id: "a" }, target: { node_id: "b" }, type: "causal", reason: "可能存在影響", source_quote: "來源", target_quote: "目標", confidence: "76%" }] } }), new Set(["card:a", "card:b"]));
+    expect(nested[0]).toMatchObject({ source: "card:a", target: "card:b", relationType: "possible_influence", confidence: 0.76, evidence: ["來源", "目標"] });
+  });
+
   it("即使沒有相同詞，也會把時間相近的跨主題內容交給 AI 做語意判斷", () => {
     const now = new Date("2026-08-26T12:00:00+08:00").getTime();
     const graph = buildBrainGraph({

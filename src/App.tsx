@@ -23,6 +23,7 @@ import { syncPendingCardTasks } from "./lib/taskSync";
 import { useUpdateStore } from "./updateStore";
 import { initializeGlobalHistory, redoGlobalAction, runWithoutGlobalHistory, undoGlobalAction } from "./lib/globalHistory";
 import { migrateLegacyAttachments } from "./lib/attachments";
+import { scrollIntoViewWhenReady } from "./lib/utils";
 
 let workspaceBootstrap: Promise<void> | null = null;
 const CardEditorPanel = lazy(() => import("./components/CardEditorPanel").then((module) => ({ default: module.CardEditorPanel })));
@@ -173,7 +174,7 @@ export function App() {
       if (value === "export") setImportOpen(true);
       if (value === "check-update") {
         useAppStore.getState().setView("settings");
-        window.setTimeout(() => document.getElementById("update-settings")?.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
+        scrollIntoViewWhenReady("update-settings", { behavior: "smooth", block: "center" });
         void useUpdateStore.getState().check(false);
       }
     });

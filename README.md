@@ -1,4 +1,4 @@
-# 澄境筆記 ChengJing Notes v0.9.3
+# 澄境筆記 ChengJing Notes v0.9.4
 
 <p align="center">
   <a href="README.md"><strong>繁體中文</strong></a>
@@ -66,6 +66,15 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 - 90%／100%／110%／120% 全域介面文字比例
 - 五語介面：繁體中文、簡體中文、English、日本語、한국어；日期、AI 回答、原生選單與共享介面同步切換
 - 半自動更新：GitHub API、Cloudflare Worker、Release Feed、邊緣快取與 KV 多層備援，下載後驗證並開啟目前平台的 DMG 或 Windows 安裝程式
+
+## v0.9.4 第二大腦模型相容性
+
+- 修正 Gemini 3.8 Flash 在聊天正常、第二大腦整理連結卻被上游 Provider 拒絕的問題；澄境會自動選擇該模型可接受的結構化輸出方式。
+- DeepSeek 等推理型模型會把更多輸出空間留給正式 JSON 答案；只有回覆不完整時才進行一次較大額度的修復請求。
+- 支援不同模型常見的 `connections`、`links`、`relations`、`edges` 與欄位別名，並在本機統一驗證神經元、信心值、關係與證據，不因格式小差異直接失敗。
+- 真實 OpenRouter 驗證中，Gemini 3.8 Flash 與 DeepSeek V4 Flash 0731 都能從相同測試資料建立 12 條有效連結。
+- 第一次切換左側功能時，澄境會依游標或鍵盤意圖提前準備該模組；準備完成前保留原工作區，不再先閃出整頁讀取畫面，也不會拖慢啟動去一次載入全部功能。
+- 第二大腦重用昂貴的文字斷詞與日期格式工具，並直接累計關鍵字，減少資料增加後的重複運算；完整神經元與搜尋範圍不縮水。
 
 ## v0.9.3 資料完整性與效能健檢
 

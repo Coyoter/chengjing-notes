@@ -11,12 +11,10 @@ const { clientId: googleOAuthClientId, clientSecret: googleOAuthClientSecret } =
 const { clearSecret, readSecret, secretStatus, writeSecret } = require("./key-vault.cjs");
 const { buildApplicationMenuTemplate, shouldUseUpdateMenuIcon } = require("./menu-template.cjs");
 const { parseMacHotkey } = require("./mac-hotkey.cjs");
-const { providerPreferencesForRoutingMode } = require("./openrouter-routing.cjs");
 const { isUpdateCandidateStale, parseLatestRelease, parseLatestReleaseFeed } = require("./update-service.cjs");
 const { DEFAULT_SHORTCUT, readQuickCaptureSettings, writeQuickCaptureSettings } = require("./quick-capture-settings.cjs");
 
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
-const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_KEY_URL = "https://openrouter.ai/api/v1/key";
 const GITHUB_RELEASE_URL = "https://api.github.com/repos/Coyoter/chengjing-notes/releases/latest";
 const GITHUB_RELEASE_FEED_URL = "https://github.com/Coyoter/chengjing-notes/releases.atom";
@@ -667,15 +665,6 @@ function friendlyNetworkError(error, action = message("actionConnect")) {
   if (code === "ECONNREFUSED" || code === "ECONNRESET") return message("connectionReset");
   if (String(code).includes("CERT")) return message("certificateProxy");
   return message("networkFallback", { action });
-}
-
-function extractTextContent(content) {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter((part) => part?.type === "text" && typeof part.text === "string")
-    .map((part) => part.text)
-    .join("");
 }
 
 function trayMessages() {
@@ -1467,39 +1456,10 @@ ipcMain.handle("ai:openrouter-chat", async (_event, request) => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 180_000);
   try {
-    const body = {
-      model,
-      messages: Array.isArray(request?.messages) ? request.messages : [],
-      temperature: Number.isFinite(request?.temperature) ? request.temperature : 0.55,
-      max_tokens: Math.min(Math.max(Number(request?.maxTokens || 2048), 256), 8192),
-      stream: false,
-      provider: providerPreferencesForRoutingMode(request?.routingMode),
-    };
-    if (request?.responseFormat && typeof request.responseFormat === "object") body.response_format = request.responseFormat;
-    const response = await net.fetch(OPENROUTER_CHAT_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "X-Title": "ChengJing",
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    const raw = await response.text();
-    let payload = {};
-    try { payload = raw ? JSON.parse(raw) : {}; } catch { payload = {}; }
-    if (!response.ok) throw new Error(friendlyOpenRouterError(response.status, payload));
-    const choice = payload?.choices?.[0];
-    const text = extractTextContent(choice?.message?.content).trim();
-    if (!text) throw new Error(message("noText"));
-    return {
-      text,
-      model: payload.model || model,
-      usage: payload.usage || null,
-      finishReason: choice?.finish_reason || null,
-    };
+    return await require("./openrouter-chat.cjs").openRouterChat(net.fetch.bind(net), apiKey, request, controller.signal);
   } catch (error) {
+    if (error.status) throw new Error(friendlyOpenRouterError(error.status, error.payload));
+    if (error.message === "openrouter-no-text") throw new Error(message("noText"));
     if (error?.name === "AbortError") throw new Error(message("generationTimeout"));
     if (error instanceof TypeError || /net::|fetch failed/i.test(String(error?.message))) throw new Error(friendlyNetworkError(error, message("actionConnect")));
     throw error;

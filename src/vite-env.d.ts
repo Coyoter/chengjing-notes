@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 type AIMessage = { role: "system" | "user" | "assistant"; content: string };
+type AIReasoning = { effort?: "low" | "medium" | "high"; max_tokens?: number; exclude?: boolean };
 
 interface Window {
   chengjing?: {
@@ -68,6 +69,7 @@ interface Window {
         temperature?: number;
         maxTokens?: number;
         responseFormat?: Record<string, unknown>;
+        reasoning?: AIReasoning;
         routingMode?: import("./types").OpenRouterRoutingMode;
       }) => Promise<{ text: string; model: string; usage: Record<string, number> | null; finishReason: string | null }>;
       providerSettings: () => Promise<import("./types").AIProviderSettings>;
@@ -83,6 +85,7 @@ interface Window {
         temperature?: number;
         maxTokens?: number;
         responseFormat?: Record<string, unknown>;
+        reasoning?: AIReasoning;
       }) => Promise<{ text: string; model: string; usage: Record<string, number> | null; finishReason: string | null }>;
     };
     web: {

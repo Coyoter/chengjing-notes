@@ -62,6 +62,19 @@ export function friendlyErrorMessage(error: unknown, fallback = "操作失敗，
     .trim() || fallback;
 }
 
+export function scrollIntoViewWhenReady(id: string, options: ScrollIntoViewOptions, timeoutMs = 2_000) {
+  const startedAt = performance.now();
+  const attempt = () => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView(options);
+      return;
+    }
+    if (performance.now() - startedAt < timeoutMs) window.requestAnimationFrame(attempt);
+  };
+  window.requestAnimationFrame(attempt);
+}
+
 export function dataUrlToBlob(dataUrl: string) {
   const [meta, encoded] = dataUrl.split(",");
   const mime = /data:([^;]+)/.exec(meta)?.[1] || "application/octet-stream";

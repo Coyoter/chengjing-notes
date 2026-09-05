@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   Archive,
@@ -27,6 +28,7 @@ import { useI18n } from "../hooks/useI18n";
 import type { MessageKey } from "../i18n";
 import { getWishPoolCopy } from "../lib/wishPoolCopy";
 import { primaryShortcut } from "../lib/platform";
+import { preloadWorkspaceView } from "./Workspace";
 
 const nav: Array<{ view: AppView; label: MessageKey; icon: typeof Archive; badge?: "tasks" }> = [
   { view: "today", label: "nav.today", icon: LayoutDashboard },
@@ -58,6 +60,30 @@ export function Sidebar() {
   const setCreateCardOpen = useAppStore((state) => state.setCreateCardOpen);
   const { t } = useI18n();
   const wishCopy = getWishPoolCopy(language);
+  const preloadTimer = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (preloadTimer.current !== null) window.clearTimeout(preloadTimer.current);
+  }, []);
+
+  function prepareView(nextView: AppView) {
+    if (nextView === view) return;
+    if (preloadTimer.current !== null) window.clearTimeout(preloadTimer.current);
+    preloadTimer.current = window.setTimeout(() => {
+      preloadTimer.current = null;
+      void preloadWorkspaceView(nextView).catch(() => {});
+    }, 80);
+  }
+
+  function cancelPrepareView() {
+    if (preloadTimer.current !== null) window.clearTimeout(preloadTimer.current);
+    preloadTimer.current = null;
+  }
+
+  function prepareViewNow(nextView: AppView) {
+    cancelPrepareView();
+    if (nextView !== view) void preloadWorkspaceView(nextView).catch(() => {});
+  }
 
   return (
     <aside className={`sidebar ${collapsed ? "is-collapsed" : ""}`}>
@@ -88,6 +114,10 @@ export function Sidebar() {
               key={item.view}
               type="button"
               className={view === item.view ? "is-active" : ""}
+              onPointerEnter={() => prepareView(item.view)}
+              onPointerLeave={cancelPrepareView}
+              onPointerDown={() => prepareViewNow(item.view)}
+              onFocus={() => prepareViewNow(item.view)}
               onClick={() => setView(item.view)}
               aria-current={view === item.view ? "page" : undefined}
               aria-label={label}
@@ -105,13 +135,17 @@ export function Sidebar() {
         <section className="sidebar-boards">
           <header>
             <span>{t("nav.recentBoards")}</span>
-            <button type="button" className="bare-button" onClick={() => setView("boards")} aria-label={t("nav.viewAllBoards")}><BookOpenText size={14} /></button>
+            <button type="button" className="bare-button" onPointerEnter={() => prepareView("boards")} onPointerLeave={cancelPrepareView} onPointerDown={() => prepareViewNow("boards")} onFocus={() => prepareViewNow("boards")} onClick={() => setView("boards")} aria-label={t("nav.viewAllBoards")}><BookOpenText size={14} /></button>
           </header>
           {boards.map((board) => (
             <button
               type="button"
               key={board.id}
               className={view === "boards" && selectedBoardId === board.id ? "is-active" : ""}
+              onPointerEnter={() => prepareView("boards")}
+              onPointerLeave={cancelPrepareView}
+              onPointerDown={() => prepareViewNow("boards")}
+              onFocus={() => prepareViewNow("boards")}
               onClick={() => openBoard(board.id)}
               onContextMenu={(event) => showContextMenuFromPointer(event, { kind: "board", id: board.id })}
             >
@@ -131,7 +165,7 @@ export function Sidebar() {
           <Droplets size={17} />
           {!collapsed && <span>{wishCopy.nav}</span>}
         </button>
-        <button type="button" className={view === "settings" ? "is-active" : ""} onClick={() => setView("settings")} title={collapsed ? t("nav.settings") : undefined}>
+        <button type="button" className={view === "settings" ? "is-active" : ""} onPointerEnter={() => prepareView("settings")} onPointerLeave={cancelPrepareView} onPointerDown={() => prepareViewNow("settings")} onFocus={() => prepareViewNow("settings")} onClick={() => setView("settings")} title={collapsed ? t("nav.settings") : undefined}>
           <Settings size={17} />
           {!collapsed && <span>{t("nav.settings")}</span>}
         </button>

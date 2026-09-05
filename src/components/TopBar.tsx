@@ -8,6 +8,7 @@ import { useI18n } from "../hooks/useI18n";
 import type { MessageKey } from "../i18n";
 import { redoGlobalAction, undoGlobalAction, useGlobalHistoryState } from "../lib/globalHistory";
 import { isWindows, primaryShortcut } from "../lib/platform";
+import { scrollIntoViewWhenReady } from "../lib/utils";
 
 const titles: Record<AppView, { eyebrow: MessageKey; title: MessageKey }> = {
   today: { eyebrow: "top.workspace", title: "nav.today" },
@@ -63,7 +64,7 @@ export function TopBar() {
 
   function openAISettings() {
     setView("settings");
-    window.setTimeout(() => document.getElementById("ai-settings")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    scrollIntoViewWhenReady("ai-settings", { behavior: "smooth", block: "start" });
   }
 
   return (

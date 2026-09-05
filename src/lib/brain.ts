@@ -139,6 +139,24 @@ const STOP_WORDS = new Set([
   "我們", "你們", "他們", "自己", "這個", "那個", "一個", "一些", "什麼", "怎麼", "可以", "可能", "應該", "還是", "但是", "因為", "所以", "如果", "沒有", "不是", "就是", "已經", "現在", "今天", "明天", "昨天", "最近", "事情", "東西", "感覺", "想法", "內容", "卡片", "白板", "筆記", "日誌", "進行", "需要", "希望", "覺得", "真的", "about", "with", "from", "that", "this", "have", "your", "the", "and", "for",
   "です", "ます", "する", "した", "して", "いる", "ある", "これ", "それ", "ため", "よう", "から", "今日", "自分", "생각", "내용", "오늘", "지금", "그리고", "하지만", "있는", "없는", "하는", "위해", "것이", "제가", "나는",
 ]);
+const WORD_SEGMENTERS = new Map<string, Intl.Segmenter>();
+const BRAIN_DATE_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+
+function wordSegmenter(locale: string) {
+  const existing = WORD_SEGMENTERS.get(locale);
+  if (existing) return existing;
+  const created = new Intl.Segmenter(locale, { granularity: "word" });
+  WORD_SEGMENTERS.set(locale, created);
+  return created;
+}
+
+function brainDateFormatter(locale: string) {
+  const existing = BRAIN_DATE_FORMATTERS.get(locale);
+  if (existing) return existing;
+  const created = new Intl.DateTimeFormat(locale, { year: "numeric", month: "short", day: "numeric" });
+  BRAIN_DATE_FORMATTERS.set(locale, created);
+  return created;
+}
 
 function hashString(value: string) {
   let hash = 2166136261;
@@ -169,25 +187,23 @@ export function journalBrainTitle(card: Pick<CardRecord, "plainText" | "journalD
 export function extractKeywords(value: string, limit = 16, language: AppLanguage = "zh-TW") {
   const locale = intlLocale[language];
   const normalized = value.toLocaleLowerCase(locale).replace(/https?:\/\/\S+/g, " ");
-  const words: string[] = [];
+  const counts = new Map<string, number>();
+  const add = (word: string) => counts.set(word, (counts.get(word) || 0) + 1);
   if (typeof Intl.Segmenter === "function") {
-    const segmenter = new Intl.Segmenter(locale, { granularity: "word" });
-    for (const part of segmenter.segment(normalized)) {
+    for (const part of wordSegmenter(locale).segment(normalized)) {
       const token = part.segment.trim().replace(/^[\p{P}\p{S}]+|[\p{P}\p{S}]+$/gu, "");
       if (!part.isWordLike || token.length < 2 || STOP_WORDS.has(token)) continue;
-      words.push(token);
+      add(token);
     }
   } else {
-    words.push(...normalized.split(/[^\p{L}\p{N}]+/gu).filter((token) => token.length >= 2 && !STOP_WORDS.has(token)));
+    normalized.split(/[^\p{L}\p{N}]+/gu).filter((token) => token.length >= 2 && !STOP_WORDS.has(token)).forEach(add);
   }
   for (const run of normalized.match(/[\p{Script=Han}]{2,}/gu) || []) {
     for (let index = 0; index < run.length - 1; index += 1) {
       const bigram = run.slice(index, index + 2);
-      if (!STOP_WORDS.has(bigram)) words.push(bigram);
+      if (!STOP_WORDS.has(bigram)) add(bigram);
     }
   }
-  const counts = new Map<string, number>();
-  words.forEach((word) => counts.set(word, (counts.get(word) || 0) + 1));
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
     .slice(0, limit)
@@ -328,6 +344,7 @@ export function buildBrainGraph(input: {
   const hierarchyCopy = getTaskHierarchyCopy(language);
   const tagMap = new Map(input.tags.map((tag) => [tag.id, tag.name]));
   const cardMap = new Map(input.cards.map((card) => [card.id, card]));
+  const dueDateFormatter = brainDateFormatter(intlLocale[language]);
   const boardText = new Map<string, string[]>();
   for (const node of input.boardNodes) {
     const text = !node.cardId && (node.title || node.text);
@@ -355,7 +372,7 @@ export function buildBrainGraph(input: {
     const sourceCard = task.cardId ? cardMap.get(task.cardId) : undefined;
     if (task.cardId && (!sourceCard || sourceCard.state === "trash")) return;
     const tagText = sourceCard?.tagIds.map((id) => tagMap.get(id)).filter(Boolean).join(" ") || "";
-    const due = task.dueAt ? new Intl.DateTimeFormat(intlLocale[language], { year: "numeric", month: "short", day: "numeric" }).format(task.dueAt) : "";
+    const due = task.dueAt ? dueDateFormatter.format(task.dueAt) : "";
     const details = [task.done ? taskCopy.taskDone : taskCopy.taskOpen, sourceCard ? `${taskCopy.source}: ${sourceCard.title}` : "", due ? taskCopyFormat(taskCopy.due, { date: due }) : taskCopy.noDue].filter(Boolean);
     const text = details.join("\n");
     drafts.push({ key: `task:${task.id}`, type: "task", id: task.id, title: task.title, text, sourceKind: "task", keywords: extractKeywords(`${task.title}\n${sourceCard?.title || ""}\n${tagText}`, 16, language), createdAt: task.createdAt, observedAt: task.createdAt, updatedAt: task.updatedAt });
@@ -482,7 +499,14 @@ function parseConnectionPayload(raw: string) {
   const candidate = start >= 0 ? source.slice(start, end >= start ? end + 1 : undefined) : source;
   const repaired = candidate.replace(/}\s*{/g, "},{").replace(/,\s*([}\]])/g, "$1");
   for (const attempt of [candidate, repaired, closeOpenJson(repaired)]) {
-    try { const parsed = JSON.parse(attempt); if (Array.isArray(parsed?.connections)) return parsed; } catch { /* Try the next conservative repair. */ }
+    try {
+      const parsed = JSON.parse(attempt);
+      if (Array.isArray(parsed)) return { connections: parsed };
+      for (const key of ["connections", "links", "relations", "edges"]) if (Array.isArray(parsed?.[key])) return { connections: parsed[key] };
+      for (const container of [parsed?.data, parsed?.result, parsed?.output]) {
+        for (const key of ["connections", "links", "relations", "edges"]) if (Array.isArray(container?.[key])) return { connections: container[key] };
+      }
+    } catch { /* Try the next conservative repair. */ }
   }
   const recovered = malformedConnectionObjects(source);
   if (recovered.length) return { connections: recovered };
@@ -494,21 +518,47 @@ export function parseAIConnections(raw: string, validKeys: Set<string>, language
   const values = Array.isArray(parsed?.connections) ? parsed.connections : [];
   const seen = new Set<string>();
   return values.slice(0, 36).flatMap((item: Record<string, unknown>) => {
-    const source = String(item.source || "");
-    const target = String(item.target || "");
+    const resolveKey = (value: unknown) => {
+      const raw = value && typeof value === "object"
+        ? (value as Record<string, unknown>).key || (value as Record<string, unknown>).id || (value as Record<string, unknown>).nodeId || (value as Record<string, unknown>).node_id
+        : value;
+      const key = String(raw || "").trim();
+      if (validKeys.has(key)) return key;
+      const matches = [...validKeys].filter((candidate) => candidate.endsWith(`:${key}`));
+      return matches.length === 1 ? matches[0] : key;
+    };
+    const source = resolveKey(item.source || item.from || item.sourceId || item.source_id || item.sourceKey || item.source_key || item.fromId || item.from_id);
+    const target = resolveKey(item.target || item.to || item.targetId || item.target_id || item.targetKey || item.target_key || item.toId || item.to_id);
     const pair = [source, target].sort().join("|");
     if (!validKeys.has(source) || !validKeys.has(target) || source === target || seen.has(pair)) return [];
     seen.add(pair);
-    const confidence = Number(item.confidence);
-    const relationType = AI_RELATION_TYPES.has(String(item.relationType || "") as BrainRelationType) ? String(item.relationType) as BrainRelationType : "semantic";
-    const evidence = (Array.isArray(item.evidence) ? item.evidence : [])
+    const confidenceValue = item.confidence ?? item.score ?? item.probability;
+    const rawConfidence = typeof confidenceValue === "string" ? Number.parseFloat(confidenceValue.replace("%", "")) : Number(confidenceValue);
+    const confidence = rawConfidence > 1 && rawConfidence <= 100 ? rawConfidence / 100 : rawConfidence;
+    const relation = String(item.relationType || item.relation_type || item.type || "").toLowerCase();
+    const relationAliases: Record<string, BrainRelationType> = {
+      related: "semantic", related_to: "semantic", semantic_relation: "semantic", similarity: "semantic", similar: "semantic",
+      same_context: "shared_context", common_context: "shared_context", shared_theme: "shared_context",
+      influences: "possible_influence", influence: "possible_influence", causal: "possible_influence", causes: "possible_influence",
+      leads_to: "sequence", continuation: "sequence", precedes: "sequence", follows: "sequence",
+      obstacle: "goal_obstacle", obstacle_to: "goal_obstacle", supports: "reinforcement", reinforces: "reinforcement",
+      contradicts: "contrast", contradiction: "contrast", conflict: "contrast", tension: "contrast",
+    };
+    const relationType = AI_RELATION_TYPES.has(relation as BrainRelationType) ? relation as BrainRelationType : relationAliases[relation] || "semantic";
+    const evidenceValue = item.evidence;
+    const evidenceCandidates = Array.isArray(evidenceValue) ? evidenceValue
+      : evidenceValue && typeof evidenceValue === "object" ? Object.values(evidenceValue)
+        : [item.sourceEvidence, item.source_evidence, item.evidenceSource, item.evidence_source, item.sourceQuote, item.source_quote,
+          item.targetEvidence, item.target_evidence, item.evidenceTarget, item.evidence_target, item.targetQuote, item.target_quote];
+    const evidence = evidenceCandidates
+      .filter((value) => value !== undefined && value !== null)
       .map((value) => String(value).trim().slice(0, 160))
       .filter(Boolean)
       .slice(0, 3);
     return [{
       source,
       target,
-      reason: String(item.reason || translate(language, "brain.possibleShared")).slice(0, 180),
+      reason: String(item.reason || item.explanation || item.rationale || item.description || translate(language, "brain.possibleShared")).slice(0, 180),
       confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0.65,
       relationType,
       evidence,

@@ -1,4 +1,13 @@
-# 澄境筆記 v0.9.3 驗收報告
+# 澄境筆記 v0.9.4 驗收報告
+
+## 0.9.4 第二大腦模型相容性
+
+- 使用 OpenRouter 真實端點與 40 筆不含使用者資料的合成神經元驗證：`google/gemini-3.8-flash` 的完整 JSON Schema 請求先由 Google AI Studio 回覆 400，澄境自動改用 JSON 物件後成功，建立 12 條有效連結。
+- 同一份合成資料送往 `deepseek/deepseek-v4-flash-0731`，由 Baidu Provider 直接接受 JSON Schema 並建立 12 條有效連結。
+- Node 回歸涵蓋 Schema → JSON 物件 → 純 JSON 指令、推理參數拒絕、`temperature` 拒絕、空白回覆換路徑、截斷交回本機解析、上游錯誤保留與金鑰遮蔽。
+- 前端單元測試涵蓋頂層陣列與 `links`、來源／目標別名、百分比信心值、關係別名及證據物件；不完整欄位不會被誤存成文字。
+- 最重的第二大腦模組在左側按鈕 hover 180ms 後已開始預載；單獨驗收時點擊後 205ms 掛載，與其他兩項 QA 同時執行時為 687ms，兩次整頁讀取骨架都為 0。預載本身不掛載頁面或查詢資料庫。
+- 1,200 張卡片、400 則片語、400 筆待辦與 300 則劃記壓測中，第二大腦完整節點準備為 1,749ms，畫面維持 200 顆視野上限，未載入視野的舊神經元仍可搜尋。
 
 ## 0.9.3 總體健檢
 
@@ -62,8 +71,9 @@
 ## 自動驗證
 
 - `npm run typecheck`：通過。
-- `npm test`：92 個前端單元測試與 45 個 Electron Node 測試全部通過。
+- `npm test`：104 個前端單元測試與 61 個 Electron Node 測試全部通過。
 - `npm run build`：Vite production build 通過。
+- `npm run qa:navigation-readiness`：第二大腦模組在點擊前開始準備；切換時保留目前工作區，整頁讀取骨架為 0，console／page error 為 0。
 - `npm run qa`：6 張關鍵畫面，console／page error 為 0。
 - `npm run qa:functional`：新增、編輯、重新載入持久化、版本歷史、心智圖鍵盤、資料庫更新與指令搜尋通過。
 - `npm run qa:knowledge-library`：知識問答入口與舊索引表均不存在；領域／主題生命週期、中文輸入、拖曳分類、統一新增入口及真實 PDF 匯入／文字抽取／預覽仍正常。
@@ -113,9 +123,9 @@
 
 ## 正式成品
 
-- Windows ARM64：`release/ChengJing-0.9.3-arm64-Installer.exe`
-- Windows Intel／AMD x64：`release/ChengJing-0.9.3-x64-Installer.exe`
-- Apple Silicon Mac：`release/ChengJing-0.9.3-arm64.dmg`
+- Windows ARM64：`release/ChengJing-0.9.4-arm64-Installer.exe`
+- Windows Intel／AMD x64：`release/ChengJing-0.9.4-x64-Installer.exe`
+- Apple Silicon Mac：`release/ChengJing-0.9.4-arm64.dmg`
 - 本機 `release` 只保留上述三個正式安裝檔。
 - `hdiutil verify`：通過。
 - 尚未使用 Apple Developer ID 簽章與公證，Windows 也尚未使用商業程式碼簽章。

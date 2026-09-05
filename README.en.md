@@ -1,4 +1,4 @@
-# ChengJing Notes v0.9.3
+# ChengJing Notes v0.9.4
 
 <p align="center">
   <a href="README.md">繁體中文</a>
@@ -67,6 +67,15 @@ The macOS build is currently ad-hoc signed and is not notarized with an Apple De
 - Semi-automatic updates through GitHub, Cloudflare Worker, release feeds, edge cache, and KV fallback layers
 
 ## Selected recent releases
+
+### v0.9.4: Second Brain model compatibility
+
+- Fixes the case where Gemini 3.8 Flash worked in chat but its upstream provider rejected the Second Brain's full JSON Schema. ChengJing now selects a compatible structured-output mode automatically.
+- Reasoning models such as DeepSeek reserve more of the output budget for the final JSON answer. A larger repair request is made only when the first response is incomplete.
+- Accepts common model variations including `connections`, `links`, `relations`, `edges`, and field aliases, then validates neuron IDs, confidence, relation types, and evidence locally.
+- Live OpenRouter checks confirmed that Gemini 3.8 Flash and DeepSeek V4 Flash 0731 each produced 12 valid links from the same synthetic 40-neuron dataset.
+- Sidebar hover or keyboard focus now prepares the intended view before navigation. ChengJing keeps the current workspace visible until that code is ready instead of flashing a full-page loading skeleton, without eagerly loading every feature at startup.
+- The Second Brain reuses expensive text segmenters and date formatters and counts keywords without a duplicate intermediate array, preserving the complete neuron and search scope.
 
 ### v0.9.3: integrity and performance health check
 

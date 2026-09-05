@@ -1,6 +1,6 @@
 {
   "name": "chengjing",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "private": true,
   "author": "Techtarian",
   "description": "澄境 ChengJing — 本機優先的繁體中文視覺筆記與 AI 研究桌面應用",
@@ -25,6 +25,7 @@
     "qa:regressions": "node scripts/qa-regressions.mjs",
     "qa:typography": "node scripts/qa-typography.mjs",
     "qa:responsive": "node scripts/qa-responsive.mjs",
+    "qa:navigation-readiness": "node scripts/qa-navigation-readiness.mjs",
     "qa:board": "node scripts/qa-board.mjs",
     "qa:board-kanban": "node scripts/qa-board-kanban.mjs",
     "qa:installed-board-kanban": "node scripts/qa-installed-board-kanban.mjs",
