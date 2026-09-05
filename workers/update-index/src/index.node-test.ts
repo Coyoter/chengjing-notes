@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cacheGenerationForRelease, compareReleaseIndexes, normalizeApiRelease, parseReleaseFeed } from "./index.ts";
+import { cacheGenerationForRelease, compareReleaseIndexes, normalizeApiRelease, parseReleaseFeed, reconcileRelease } from "./index.ts";
 
 test("只輸出正式 Release 與可信的 macOS／Windows 安裝檔", () => {
   const release = normalizeApiRelease({
@@ -52,4 +52,14 @@ test("同版本的說明或資產更新會使用新的快取世代", () => {
   const changedAsset = base ? { ...base, assets: base.assets.map((asset) => ({ ...asset, digest: `sha256:${"b".repeat(64)}` })) } : null;
   assert.notEqual(cacheGenerationForRelease(base), cacheGenerationForRelease(changedBody));
   assert.notEqual(cacheGenerationForRelease(base), cacheGenerationForRelease(changedAsset));
+});
+
+test("備援不能降低版本，且保留相同檔案已驗證的 digest", () => {
+  const previous = normalizeApiRelease({ tag_name: "v0.9.2", body: "old", assets: [{ name: "app.exe", browser_download_url: "https://github.com/example/app.exe", size: 200, digest: `sha256:${"a".repeat(64)}` }] })!;
+  const fallback = { ...previous, body: "new", assets: previous.assets.map((asset) => ({ ...asset, digest: null })) };
+  assert.equal(reconcileRelease(fallback, previous).assets[0].digest, previous.assets[0].digest);
+  assert.equal(reconcileRelease(fallback, previous).body, "new");
+  assert.equal(reconcileRelease({ ...fallback, tag_name: "v0.9.1" }, previous).tag_name, "v0.9.2");
+  const replaced = { ...fallback, assets: fallback.assets.map((asset) => ({ ...asset, size: 300 })) };
+  assert.equal(reconcileRelease(replaced, previous).assets[0].digest, null);
 });

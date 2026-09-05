@@ -129,7 +129,7 @@ async function providerChat(fetchImpl, rawProfile, request = {}) {
     const useResponses = profile.apiMode === "responses";
     const prepared = responsesInput(messages);
     const textFormat = responsesTextFormat(request.responseFormat);
-    const temperatureCapability = `${profile.id || profile.baseUrl}\u0000${model}`;
+    const temperatureCapability = JSON.stringify([profile.id || "", profile.type, profile.baseUrl, model]);
     const body = useResponses ? {
       model,
       input: prepared.input,
@@ -158,7 +158,8 @@ async function providerChat(fetchImpl, rawProfile, request = {}) {
       return { response, payload: await readJsonResponse(response) };
     };
     let { response, payload } = await send(body);
-    if (useResponses && Object.hasOwn(body, "temperature") && (!response.ok || payload?.error) && rejectsTemperature(payload)) {
+    if (useResponses && Object.hasOwn(body, "temperature") && ([400, 422].includes(response.status) || (response.ok && payload?.error)) && rejectsTemperature(payload)) {
+      if (responsesWithoutTemperature.size >= 128) responsesWithoutTemperature.delete(responsesWithoutTemperature.values().next().value);
       responsesWithoutTemperature.add(temperatureCapability);
       const { temperature: _temperature, ...compatibleBody } = body;
       ({ response, payload } = await send(compatibleBody));

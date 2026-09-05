@@ -248,12 +248,6 @@ function resolveAttachmentPath(relativePath) {
   return candidate;
 }
 
-async function sha256File(filePath) {
-  const hash = createHash("sha256");
-  for await (const chunk of createReadStream(filePath)) hash.update(chunk);
-  return hash.digest("hex");
-}
-
 async function importAttachmentPath(request = {}) {
   const sourcePath = path.resolve(String(request.sourcePath || ""));
   const stat = await fs.stat(sourcePath);
@@ -339,8 +333,7 @@ function friendlyProviderError(error) {
   if (code === "provider-model-required") return copy.model;
   if (code === "provider-profile-limit") return copy.limit;
   if (/^provider-http-\d+/.test(code)) {
-    const detail = code.split(":").slice(1).join(":").trim();
-    return detail ? `${copy.unavailable} (${detail})` : copy.unavailable;
+    return require("./provider-errors.cjs").providerHttpError(code, currentLanguage) || copy.unavailable;
   }
   if (/^(provider-|fetch failed|net::)/i.test(code) || error instanceof TypeError) return copy.unavailable;
   return copy.unavailable;
@@ -1616,11 +1609,13 @@ ipcMain.handle("file:open", async (_event, options) => {
 
 ipcMain.handle("attachment:import-path", async (_event, request) => importAttachmentPath(request));
 ipcMain.handle("attachment:import-data", async (_event, request) => importAttachmentData(request));
-ipcMain.handle("attachment:remove", async (_event, request = {}) => {
-  const filePath = resolveAttachmentPath(request.relativePath);
-  await fs.rm(filePath, { force: true });
-  return { removed: true };
-});
+let attachmentRemovalQueue;
+function pendingAttachmentRemovals() {
+  return attachmentRemovalQueue ||= require("./attachment-recovery.cjs").createAttachmentRemovalQueue(attachmentsDirectory(), app.getPath("userData"));
+}
+ipcMain.handle("attachment:remove", async (_event, request = {}) => pendingAttachmentRemovals().defer(request.relativePath));
+ipcMain.handle("attachment:pending-paths", async () => pendingAttachmentRemovals().pendingPaths());
+ipcMain.handle("attachment:sweep-pending", async (_event, request = {}) => pendingAttachmentRemovals().sweep(Array.isArray(request.keep) ? request.keep : []));
 ipcMain.handle("attachment:stats", async () => directoryBytes(attachmentsDirectory()));
 ipcMain.handle("attachment:read-data", async (_event, request = {}) => (await fs.readFile(resolveAttachmentPath(request.relativePath))).toString("base64"));
 ipcMain.handle("attachment:cleanup", async (_event, request = {}) => {
@@ -1638,11 +1633,7 @@ ipcMain.handle("attachment:cleanup", async (_event, request = {}) => {
   return { removed };
 });
 ipcMain.handle("attachment:restore-from-backup", async (_event, request = {}) => {
-  const hash = String(request.sha256 || "").toLowerCase();
-  if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error("invalid-backup-attachment");
-  const backupFilePath = path.resolve(String(request.backupFilePath || ""));
-  const sourcePath = path.join(path.dirname(backupFilePath), "ChengJing-AutoBackup-Assets", hash);
-  return importAttachmentPath({ ...request, sourcePath });
+  return require("./attachment-recovery.cjs").restoreAttachmentFile(attachmentsDirectory(), request);
 });
 
 app.whenReady().then(async () => {

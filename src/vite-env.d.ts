@@ -118,6 +118,8 @@ interface Window {
       stats: () => Promise<{ bytes: number; count: number }>;
       readData: (relativePath: string) => Promise<string>;
       cleanup: (keep: string[]) => Promise<{ removed: number }>;
+      sweepPending?: (keep: string[]) => Promise<{ removed: number }>;
+      pendingPaths?: () => Promise<string[]>;
       restoreFromBackup: (request: { id: string; backupFilePath: string; sha256: string; name: string; mime: string; createdAt?: number }) => Promise<import("./types").AttachmentRecord>;
     };
     clipboard: {

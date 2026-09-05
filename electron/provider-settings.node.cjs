@@ -33,3 +33,13 @@ test("Provider API Key 獨立加密且不寫入公開設定", async () => {
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+test("同時保存不同 Provider 不會遺失連線或金鑰", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "chengjing-provider-concurrent-"));
+  try {
+    await Promise.all(Array.from({ length: 5 }, (_, index) => upsertProviderProfile(root, { name: `Model ${index}`, type: "ollama", model: `model-${index}`, apiKey: `key-${index}` })));
+    const settings = await readProviderSettings(root);
+    assert.equal(settings.profiles.length, 5);
+    for (const profile of settings.profiles) assert.equal((await providerProfileWithSecret(root, profile.id)).apiKey, `key-${profile.model.slice(-1)}`);
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
+});

@@ -62,10 +62,14 @@ export function AIPanel() {
   const [applyingPlan, setApplyingPlan] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composingRef = useRef(false);
+  const requestVersion = useRef(0);
+  const requestBusy = useRef(false);
 
   const contextType = selectedCardId ? "card" : view === "boards" && selectedBoardId ? "board" : "space";
   const contextId = selectedCardId || (contextType === "board" ? selectedBoardId : null) || undefined;
   const contextKey = `${contextType}:${contextId || "root"}`;
+  const currentContext = useRef(contextKey);
+  currentContext.current = contextKey;
   const contextLabel = card?.title || (contextType === "board" ? board?.title : t("ai.wholeSpace")) || t("ai.wholeSpace");
   const conversationReady = threadReady && messagesQuery !== undefined;
   const activeModelLabel = engine === "local-gemma" ? "Gemma 4 E2B" : model;
@@ -77,6 +81,9 @@ export function AIPanel() {
 
   useEffect(() => {
     let active = true;
+    requestVersion.current += 1;
+    requestBusy.current = false;
+    setLoading(false);
     setThreadId(null);
     setThreadReady(false);
     setPendingPlan(null);
@@ -88,7 +95,7 @@ export function AIPanel() {
       setThreadId(threads.at(-1)?.id || null);
       setThreadReady(true);
     });
-    return () => { active = false; };
+    return () => { active = false; requestVersion.current += 1; };
   }, [contextId, contextKey, contextType]);
 
   useEffect(() => {
@@ -108,7 +115,7 @@ export function AIPanel() {
     const id = crypto.randomUUID();
     const timestamp = Date.now();
     await db.chatThreads.add({ id, title: contextLabel, contextType, contextId, createdAt: timestamp, updatedAt: timestamp });
-    setThreadId(id);
+    if (currentContext.current === contextKey) setThreadId(id);
     return id;
   }
 
@@ -128,7 +135,7 @@ export function AIPanel() {
 
   async function send(prompt = input) {
     const clean = prompt.trim();
-    if (!clean || loading || !conversationReady) return;
+    if (!clean || loading || requestBusy.current || !conversationReady) return;
     setInput("");
     setAIDraft("");
     if (actionMode || looksLikeAIAction(clean)) {
@@ -139,9 +146,12 @@ export function AIPanel() {
     setStreamingText("");
     setModelProgress(0);
     setLoading(true);
-    const id = await ensureThread();
-    await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "user", content: clean, createdAt: Date.now() });
+    requestBusy.current = true;
+    const version = ++requestVersion.current;
+    const current = () => requestVersion.current === version && currentContext.current === contextKey;
     try {
+      const id = await ensureThread();
+      await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "user", content: clean, createdAt: Date.now() });
       const explicitContext = contextType === "card" && selectedCardId
         ? await contextForCard(selectedCardId)
         : contextType === "board" && selectedBoardId
@@ -149,6 +159,7 @@ export function AIPanel() {
           : "";
       const searched = spaceSearch ? await buildSpaceContext(clean) : "";
       const context = [explicitContext, searched].filter(Boolean).join("\n\n---\n\n");
+      if (!current()) return;
       const result = await runAI({
         engine,
         model,
@@ -156,28 +167,36 @@ export function AIPanel() {
         context,
         history,
         temperature,
-        onToken: setStreamingText,
-        onProgress: (progress) => setModelProgress(progress),
+        onToken: (text) => { if (current()) setStreamingText(text); },
+        onProgress: (progress) => { if (current()) setModelProgress(progress); },
       });
-      await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "assistant", content: result.text, model: result.model, createdAt: Date.now() });
-      await db.chatThreads.update(id, { updatedAt: Date.now() });
-      setStreamingText("");
+      await db.transaction("rw", [db.chatThreads, db.chatMessages], async () => {
+        if (!await db.chatThreads.get(id)) return;
+        await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "assistant", content: result.text, model: result.model, createdAt: Date.now() });
+        await db.chatThreads.update(id, { updatedAt: Date.now() });
+      });
+      if (current()) setStreamingText("");
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : t("ai.unavailable"));
+      if (current()) setError(exception instanceof Error ? exception.message : t("ai.unavailable"));
     } finally {
-      setLoading(false);
+      if (current()) { setLoading(false); requestBusy.current = false; }
     }
   }
 
   async function planChanges(prompt: string) {
     const clean = prompt.trim();
-    if (!clean || loading) return;
+    if (!clean || loading || requestBusy.current) return;
     setInput(""); setError(""); setPendingPlan(null); setLoading(true);
-    const id = await ensureThread();
-    await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "user", content: clean, createdAt: Date.now() });
+    requestBusy.current = true;
+    const version = ++requestVersion.current;
+    const current = () => requestVersion.current === version && currentContext.current === contextKey;
     try {
+      const id = await ensureThread();
+      await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "user", content: clean, createdAt: Date.now() });
       const context = await buildAIActionContext(contextType, selectedCardId, selectedBoardId, spaceSearch);
+      if (!current()) return;
       const plan = await planAIActions({ engine, model, prompt: clean, context, temperature: 0.1 });
+      if (!current()) return;
       if (plan.actions.length === 0) {
         const summary = plan.summary.trim();
         if (!summary || summary === "AI change plan") throw new Error(actionCopy.empty);
@@ -189,8 +208,8 @@ export function AIPanel() {
       setPendingPlan(plan);
       await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "assistant", content: plan.summary, model: activeModelLabel, createdAt: Date.now() });
       await db.chatThreads.update(id, { updatedAt: Date.now() });
-    } catch (exception) { setError(exception instanceof Error ? exception.message : actionCopy.failed); }
-    finally { setLoading(false); }
+    } catch (exception) { if (current()) setError(exception instanceof Error ? exception.message : actionCopy.failed); }
+    finally { if (current()) { setLoading(false); requestBusy.current = false; } }
   }
 
   useEffect(() => {

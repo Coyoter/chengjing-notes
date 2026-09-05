@@ -1,4 +1,11 @@
-# 澄境筆記 v0.9.2 驗收報告
+# 澄境筆記 v0.9.3 驗收報告
+
+## 0.9.3 總體健檢
+
+- 詳細問題、修正與限制記錄於 [HEALTH_CHECK.md](HEALTH_CHECK.md)。
+- 新增成功／取消交易、Undo／Redo、背景維護隔離、MCP 並發修改、格式保留、子待辦、同名匯出、備份安全、Provider 並發保存及重試目的地回歸。
+- 第二大腦靜止畫面一秒內繪圖呼叫：已安裝 0.9.1（與 0.9.2 相同繪圖程式）為 15,120，修改版為 0；WASD 實際操作仍改變視野。
+- 既有情境與完整封裝驗收結果以本次 `qa-artifacts/health-check` 記錄為準。
 
 ## 0.9.2 Responses 相容性與快速前往收尾
 
@@ -106,9 +113,9 @@
 
 ## 正式成品
 
-- Windows ARM64：`release/ChengJing-0.9.2-arm64-Installer.exe`
-- Windows Intel／AMD x64：`release/ChengJing-0.9.2-x64-Installer.exe`
-- Apple Silicon Mac：`release/ChengJing-0.9.2-arm64.dmg`
+- Windows ARM64：`release/ChengJing-0.9.3-arm64-Installer.exe`
+- Windows Intel／AMD x64：`release/ChengJing-0.9.3-x64-Installer.exe`
+- Apple Silicon Mac：`release/ChengJing-0.9.3-arm64.dmg`
 - 本機 `release` 只保留上述三個正式安裝檔。
 - `hdiutil verify`：通過。
 - 尚未使用 Apple Developer ID 簽章與公證，Windows 也尚未使用商業程式碼簽章。

@@ -71,6 +71,23 @@ export function compareReleaseIndexes(left: Pick<ReleaseIndex, "tag_name"> | nul
   return 0;
 }
 
+export function reconcileRelease(candidate: ReleaseIndex, previous: ReleaseIndex | null): ReleaseIndex {
+  if (!previous) return candidate;
+  const order = compareReleaseIndexes(candidate, previous);
+  if (order < 0) return previous;
+  if (order > 0) return candidate;
+  const previousAssets = new Map(previous.assets.map((asset) => [asset.browser_download_url, asset]));
+  const assets = candidate.assets.map((asset) => {
+    const prior = previousAssets.get(asset.browser_download_url);
+    if (!prior || prior.name !== asset.name || (asset.size > 0 && prior.size !== asset.size)) return asset;
+    return { ...asset, size: asset.size || prior.size, digest: asset.digest || prior.digest };
+  });
+  // A failing HEAD request in the feed must not remove a previously valid asset.
+  const seen = new Set(assets.map((asset) => asset.browser_download_url));
+  if (candidate.source === "github-feed") for (const asset of previous.assets) if (!seen.has(asset.browser_download_url)) assets.push(asset);
+  return { ...candidate, assets };
+}
+
 export function cacheGenerationForRelease(release: ReleaseIndex | null) {
   const version = stableVersionFromTag(release?.tag_name || "") || "bootstrap";
   const assets = release?.assets.map((asset) => `${asset.name}:${asset.digest || ""}:${asset.size}`).sort() || [];
@@ -216,11 +233,12 @@ function withHeader(response: Response, name: string, value: string, headOnly = 
 async function persistLastKnownGood(env: Env, release: ReleaseIndex, expirationTtl: number) {
   const previous = await env.RELEASE_STATE.get("latest-release", { type: "json" });
   const normalized = normalizeApiRelease(previous);
+  release = reconcileRelease(release, normalized);
   const previousAssets = normalized?.assets.map((asset) => `${asset.name}:${asset.digest || ""}:${asset.size}`).sort().join("|") || "";
   const releaseAssets = release.assets.map((asset) => `${asset.name}:${asset.digest || ""}:${asset.size}`).sort().join("|");
   const lastRenewedAt = isRecord(previous) ? numberValue(previous.kv_saved_at) : 0;
   const needsRenewal = Date.now() - lastRenewedAt >= 7 * 86_400_000;
-  if (normalized?.tag_name === release.tag_name && previousAssets === releaseAssets && !needsRenewal) return;
+  if (normalized?.tag_name === release.tag_name && normalized.body === release.body && previousAssets === releaseAssets && !needsRenewal) return;
   await env.RELEASE_STATE.put("latest-release", JSON.stringify({ ...release, kv_saved_at: Date.now() }), { expirationTtl });
 }
 
@@ -265,7 +283,7 @@ export default {
     }
 
     try {
-      const release = await fetchLatest(env);
+      const release = reconcileRelease(await fetchLatest(env), lastKnownGood);
       const response = jsonResponse(release, cacheSeconds);
       const staleResponse = jsonResponse(release, staleSeconds);
       ctx.waitUntil(Promise.all([cache.put(freshKey, response.clone()), cache.put(staleKey, staleResponse), persistLastKnownGood(env, release, kvStaleSeconds)]).catch((error) => {

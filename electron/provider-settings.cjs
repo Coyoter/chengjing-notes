@@ -8,6 +8,17 @@ const VAULT_NAMESPACE = "ai-provider-secrets";
 const PROFILE_LIMIT = 12;
 const TYPES = new Set(["openai-compatible", "ollama"]);
 const API_MODES = new Set(["chat-completions", "responses"]);
+const writeQueues = new Map();
+
+function serializeSettings(operation) {
+  return (directory, ...args) => {
+    const pending = (writeQueues.get(directory) || Promise.resolve()).then(() => operation(directory, ...args));
+    const settled = pending.catch(() => {});
+    writeQueues.set(directory, settled);
+    void settled.then(() => { if (writeQueues.get(directory) === settled) writeQueues.delete(directory); });
+    return pending;
+  };
+}
 
 function safeText(value, maximum) {
   return typeof value === "string" ? value.trim().slice(0, maximum) : "";
@@ -135,8 +146,8 @@ module.exports = {
   normalizeProfile,
   providerProfileWithSecret,
   readProviderSettings,
-  removeProviderProfile,
-  selectProviderProfile,
+  removeProviderProfile: serializeSettings(removeProviderProfile),
+  selectProviderProfile: serializeSettings(selectProviderProfile),
   settingsPath,
-  upsertProviderProfile,
+  upsertProviderProfile: serializeSettings(upsertProviderProfile),
 };

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { db } from "../db";
+import { ignoreTransactionHistory } from "./historyTransactions";
 
 type HistoryValue = Record<string, unknown>;
 type HistoryChange = {
@@ -26,7 +27,6 @@ let entries: HistoryEntry[] = [];
 let index = -1;
 let initialized = false;
 let restoring = false;
-let suppressionDepth = 0;
 let captureTimer: ReturnType<typeof setTimeout> | null = null;
 let hookedTableCount = 0;
 let state = { canUndo: false, canRedo: false, restoring: false, entryCount: 0, changedRecordCount: 0, hookedTableCount: 0 };
@@ -51,7 +51,7 @@ function sameValue(left: HistoryValue | undefined, right: HistoryValue | undefin
 }
 
 function queueChange(change: HistoryChange) {
-  if (!initialized || restoring || suppressionDepth > 0) return;
+  if (!initialized) return;
   const id = changeId(change.table, change.key);
   const current = pending.get(id);
   const merged: HistoryChange = current
@@ -117,7 +117,8 @@ function commitPending() {
 async function applyEntry(entry: HistoryEntry, direction: "undo" | "redo") {
   const changes = direction === "undo" ? [...entry.changes].reverse() : entry.changes;
   const tables = [...new Set(changes.map((change) => change.table))].map((name) => db.table(name));
-  await db.transaction("rw", tables, async () => {
+  await db.transaction("rw", tables, async (transaction) => {
+    ignoreTransactionHistory(transaction);
     for (const change of changes) {
       const value = direction === "undo" ? change.before : change.after;
       const table = db.table(change.table);
@@ -173,12 +174,19 @@ export function globalHistoryState() {
 }
 
 export async function runWithoutGlobalHistory<T>(operation: () => Promise<T>) {
-  suppressionDepth += 1;
-  try {
-    return await operation();
-  } finally {
-    suppressionDepth = Math.max(0, suppressionDepth - 1);
-  }
+  return db.transaction("rw", db.tables, (transaction) => {
+    ignoreTransactionHistory(transaction);
+    return operation();
+  });
+}
+
+export function clearGlobalHistory() {
+  if (captureTimer) clearTimeout(captureTimer);
+  captureTimer = null;
+  pending.clear();
+  entries = [];
+  index = -1;
+  publish();
 }
 
 /**

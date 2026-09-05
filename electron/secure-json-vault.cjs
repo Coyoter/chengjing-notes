@@ -1,4 +1,4 @@
-const { createCipheriv, createDecipheriv, randomBytes } = require("node:crypto");
+const { createCipheriv, createDecipheriv, randomBytes, randomUUID } = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
@@ -19,7 +19,7 @@ function vaultPaths(userDataDirectory, rawNamespace) {
 
 async function writeAtomic(destination, data, mode = 0o600) {
   await fs.mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
-  const temporary = `${destination}.tmp-${process.pid}-${Date.now()}`;
+  const temporary = `${destination}.tmp-${randomUUID()}`;
   const handle = await fs.open(temporary, "wx", mode);
   try {
     await handle.writeFile(data);

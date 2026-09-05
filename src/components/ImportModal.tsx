@@ -4,7 +4,7 @@ import { Download, FileArchive, FileText, Globe2, Link2, LoaderCircle, Upload, X
 import { useAppStore } from "../store";
 import { useI18n } from "../hooks/useI18n";
 import { importFile, importWebUrl } from "../lib/importers";
-import { restoreBackup, saveJsonBackup, saveMarkdownArchive } from "../lib/backup";
+import { restoreLocalBackup, saveJsonBackup, saveMarkdownArchive } from "../lib/backup";
 import { dataUrlToBlob } from "../lib/utils";
 
 export function ImportModal() {
@@ -65,7 +65,7 @@ export function ImportModal() {
     setBusy(true);
     try {
       const bytes = Uint8Array.from(atob(result.files[0].data), (char) => char.charCodeAt(0));
-      await restoreBackup(new TextDecoder().decode(bytes), result.files[0].path);
+      if (!await restoreLocalBackup(new TextDecoder().decode(bytes), result.files[0].path)) return;
       setStatus(t("import.backupRestored"));
     } catch (error) { setStatus(error instanceof Error ? error.message : t("import.backupFailed")); }
     finally { setBusy(false); }

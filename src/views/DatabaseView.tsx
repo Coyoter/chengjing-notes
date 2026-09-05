@@ -10,7 +10,7 @@ import { useI18n } from "../hooks/useI18n";
 import type { MessageKey } from "../i18n";
 import { setTaskDone } from "../lib/taskSync";
 import { getTaskIntegrationCopy, taskCopyFormat } from "../lib/taskIntegrationCopy";
-import { searchQueryTerms } from "../lib/searchIndex";
+import { includesQuery, searchRecords } from "../lib/searchRecords";
 import { isMaterializedCard } from "../lib/journalVisibility";
 
 const stages = ["待整理", "研究中", "進行中", "已驗證", "已整理", "完成"];
@@ -32,6 +32,8 @@ export function DatabaseView() {
   const tagSaving = useRef(false);
   const { language, t } = useI18n();
   const tags = useLiveQuery(() => db.tags.orderBy("name").toArray(), [], []);
+  const trashCardIds = useLiveQuery(() => db.cards.where("state").equals("trash").primaryKeys(), [], []);
+  const trashCardSet = useMemo(() => new Set(trashCardIds), [trashCardIds]);
   const selectedTag = tags.find((tag) => tag.id === selectedTagId);
   const taggedCardIds = useLiveQuery(async () => selectedTagId
     ? (await db.cards.where("tagIds").equals(selectedTagId).filter((card) => card.state !== "trash" && isMaterializedCard(card)).primaryKeys()).map(String)
@@ -43,11 +45,10 @@ export function DatabaseView() {
     && scope !== "tasks"
     && (scope !== "pinned" || card.favorite)
     && (!selectedTagId || card.tagIds.includes(selectedTagId))
-    && (!normalized || `${card.title} ${card.plainText}`.toLocaleLowerCase(language).includes(normalized));
+    && includesQuery(`${card.title} ${card.plainText}`, query, language);
   const cards = useLiveQuery(async () => {
-    const terms = searchQueryTerms(query, language);
     if (scope === "tasks") return [];
-    if (terms.length) return (await db.cards.where("searchTerms").anyOf(terms).distinct().toArray()).filter(cardMatches).sort((left, right) => Number(right.favorite) - Number(left.favorite) || right.updatedAt - left.updatedAt).slice(0, displayLimit);
+    if (query.trim()) return (await searchRecords(db.cards, query, language, cardMatches, displayLimit)).sort((left, right) => Number(right.favorite) - Number(left.favorite) || right.updatedAt - left.updatedAt);
     const recent = await db.cards.orderBy("updatedAt").reverse().filter(cardMatches).limit(displayLimit).toArray();
     if (scope === "pinned") return recent;
     const pinned = await db.cards.filter((card) => card.favorite && cardMatches(card)).limit(displayLimit).toArray();
@@ -55,15 +56,12 @@ export function DatabaseView() {
   }, [displayLimit, language, query, scope, selectedTagId], []);
   const tasks = useLiveQuery(async () => {
     if (scope === "cards" || scope === "pinned") return [];
-    const terms = searchQueryTerms(query, language);
-    const candidates = terms.length
-      ? await db.tasks.where("searchTerms").anyOf(terms).distinct().toArray()
-      : await db.tasks.orderBy("updatedAt").reverse().filter((task) => !selectedTagId || Boolean(task.cardId && taggedCardSet.has(task.cardId))).limit(displayLimit).toArray();
-    const filtered = candidates.filter((task) => (!selectedTagId || Boolean(task.cardId && taggedCardSet.has(task.cardId))) && (!normalized || task.title.toLocaleLowerCase(language).includes(normalized)));
+    const candidates = await searchRecords(db.tasks, query, language, (task) => (!task.cardId || !trashCardSet.has(task.cardId)) && (!selectedTagId || Boolean(task.cardId && taggedCardSet.has(task.cardId))) && includesQuery(task.title, query, language), displayLimit);
+    const filtered = candidates;
     const sourceCards = await db.cards.bulkGet([...new Set(filtered.map((task) => task.cardId).filter(Boolean) as string[])]);
     const sourceStates = new Map(sourceCards.filter(Boolean).map((card) => [card!.id, card!.state]));
     return filtered.filter((task) => !task.cardId || sourceStates.get(task.cardId) !== "trash").slice(0, displayLimit);
-  }, [displayLimit, language, normalized, query, scope, selectedTagId, taggedCardIds.join("|")], []);
+  }, [displayLimit, language, normalized, query, scope, selectedTagId, taggedCardIds.join("|"), trashCardIds.join("|")], []);
   const openCard = useAppStore((state) => state.openCard);
   const setView = useAppStore((state) => state.setView);
   const copy = getTaskIntegrationCopy(language);
@@ -76,22 +74,16 @@ export function DatabaseView() {
   const filteredIds = useMemo(() => filteredCards.map((card) => card.id), [filteredCards]);
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
   const totalFiltered = useLiveQuery(async () => {
-    const terms = searchQueryTerms(query, language);
-    const cardCount = scope === "tasks" ? 0 : terms.length
-      ? (await db.cards.where("searchTerms").anyOf(terms).distinct().toArray()).filter(cardMatches).length
-      : await db.cards.filter(cardMatches).count();
+    const cardCount = scope === "tasks" ? 0 : await db.cards.filter(cardMatches).count();
     if (scope === "cards" || scope === "pinned") return cardCount;
-    const taskCandidates = terms.length ? await db.tasks.where("searchTerms").anyOf(terms).distinct().toArray() : null;
-    const taskCount = taskCandidates
-      ? taskCandidates.filter((task) => (!selectedTagId || Boolean(task.cardId && taggedCardSet.has(task.cardId))) && (!normalized || task.title.toLocaleLowerCase(language).includes(normalized))).length
-      : await db.tasks.filter((task) => !selectedTagId || Boolean(task.cardId && taggedCardSet.has(task.cardId))).count();
+    const taskCount = await db.tasks.filter((task) => (!task.cardId || !trashCardSet.has(task.cardId)) && (!selectedTagId || Boolean(task.cardId && taggedCardSet.has(task.cardId))) && includesQuery(task.title, query, language)).count();
     return cardCount + taskCount;
-  }, [language, normalized, query, scope, selectedTagId, taggedCardIds.join("|")], 0);
+  }, [language, normalized, query, scope, selectedTagId, taggedCardIds.join("|"), trashCardIds.join("|")], 0);
   const databaseCounts = useLiveQuery(async () => {
     const [allCards, pinnedCards, allTasks, tagCounts] = await Promise.all([
       db.cards.filter((card) => card.state !== "trash" && isMaterializedCard(card)).count(),
       db.cards.filter((card) => card.state !== "trash" && card.favorite && isMaterializedCard(card)).count(),
-      db.tasks.count(),
+      db.tasks.filter((task) => !task.cardId || !trashCardSet.has(task.cardId)).count(),
       Promise.all(tags.map(async (tag) => {
         const cardIds = (await db.cards.where("tagIds").equals(tag.id).filter((card) => card.state !== "trash" && isMaterializedCard(card)).primaryKeys()).map(String);
         const taskCount = cardIds.length ? await db.tasks.where("cardId").anyOf(cardIds).count() : 0;
@@ -99,7 +91,7 @@ export function DatabaseView() {
       })),
     ]);
     return { allCards, pinnedCards, allTasks, tagCounts: Object.fromEntries(tagCounts) as Record<string, number> };
-  }, [tags.map((tag) => tag.id).join("|")], { allCards: 0, pinnedCards: 0, allTasks: 0, tagCounts: {} as Record<string, number> });
+  }, [tags.map((tag) => tag.id).join("|"), trashCardIds.join("|")], { allCards: 0, pinnedCards: 0, allTasks: 0, tagCounts: {} as Record<string, number> });
   const displayedCards = filteredCards;
   const displayedTasks = useMemo(() => filteredTasks.slice(0, Math.max(0, displayLimit - displayedCards.length)), [displayLimit, displayedCards.length, filteredTasks]);
   const displayedCount = displayedCards.length + displayedTasks.length;

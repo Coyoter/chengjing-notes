@@ -42,7 +42,9 @@ async function extractPdf(blob: Blob) {
   const currentLanguage = language();
   const { getPdfDocument } = await import("./pdfRuntime");
   const data = new Uint8Array(await blob.arrayBuffer());
-  const document = await getPdfDocument({ data }).promise;
+  const loadingTask = getPdfDocument({ data });
+  const document = await loadingTask.promise;
+  try {
   const pages: string[] = [];
   for (let index = 1; index <= document.numPages; index += 1) {
     const page = await document.getPage(index);
@@ -50,6 +52,7 @@ async function extractPdf(blob: Blob) {
     pages.push(content.items.map((item) => ("str" in item ? item.str : "")).join(" ").replace(/\s+/g, " ").trim());
   }
   return { text: pages.map((text, index) => `${translate(currentLanguage, "importer.page", { page: index + 1 })}\n${text}`).join("\n\n"), pageCount: document.numPages };
+  } finally { await loadingTask.destroy(); }
 }
 
 function textToHtml(text: string) {

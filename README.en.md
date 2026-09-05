@@ -1,4 +1,4 @@
-# ChengJing Notes v0.9.2
+# ChengJing Notes v0.9.3
 
 <p align="center">
   <a href="README.md">繁體中文</a>
@@ -67,6 +67,14 @@ The macOS build is currently ad-hoc signed and is not notarized with an Apple De
 - Semi-automatic updates through GitHub, Cloudflare Worker, release feeds, edge cache, and KV fallback layers
 
 ## Selected recent releases
+
+### v0.9.3: integrity and performance health check
+
+- Fixes transaction-aware undo, duplicate Markdown filenames, backup validation, attachment recovery, and atomic MCP updates while preserving formatting and task relationships.
+- Search covers late matches, single characters, normalized text, and content beyond truncated indexes. Task counts now follow trash state.
+- The Second Brain renders on demand when idle while retaining navigation, selection, and animations.
+- Custom providers gain a Test a reply action and clearer configuration, authorization, quota, and server errors.
+- [Full health-check report](HEALTH_CHECK.md).
 
 ### v0.9.2: Responses compatibility and a naturally sized Jump to bar
 

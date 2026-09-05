@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { pruneAllCardVersions, pruneLegacyDemoSourceCard, pruneUntouchedJournalDrafts, seedDatabase } from "./db";
+import { db, pruneAllCardVersions, pruneLegacyDemoSourceCard, pruneUntouchedJournalDrafts, seedDatabase } from "./db";
+import { getHealthCopy } from "./lib/healthCopy";
 import { hasPersistedLanguagePreference, useAppStore } from "./store";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
@@ -31,19 +32,27 @@ const CreateCardModal = lazy(() => import("./components/CreateCardModal").then((
 const ImportModal = lazy(() => import("./components/ImportModal").then((module) => ({ default: module.ImportModal })));
 
 function prepareWorkspace() {
-  if (!workspaceBootstrap) workspaceBootstrap = seedDatabase();
+  if (!workspaceBootstrap) workspaceBootstrap = seedDatabase().then(async () => {
+    const sweep = window.chengjing?.attachments?.sweepPending;
+    const pending = await window.chengjing?.attachments?.pendingPaths?.().catch(() => []) || [];
+    if (sweep && pending.length) {
+      const paths = new Set(pending);
+      const attachments = await db.attachments.where("storage").equals("file").filter((item) => Boolean(item.relativePath && paths.has(item.relativePath))).toArray();
+      await sweep(attachments.map((item) => item.relativePath).filter(Boolean) as string[]).catch((error) => console.error("Attachment cleanup failed", error));
+    }
+  });
   return workspaceBootstrap;
 }
 
 function scheduleWorkspaceMaintenance() {
-  const task = () => void runWithoutGlobalHistory(async () => {
+  const task = () => void (async () => {
     await migrateLegacyAttachments();
-    await pruneLegacyDemoSourceCard();
-    await syncPendingCardTasks();
+    await runWithoutGlobalHistory(() => pruneLegacyDemoSourceCard());
+    await syncPendingCardTasks(40, true);
     const state = useAppStore.getState();
-    await pruneUntouchedJournalDrafts(state.view === "journal" ? state.journalDate : undefined);
+    await runWithoutGlobalHistory(() => pruneUntouchedJournalDrafts(state.view === "journal" ? state.journalDate : undefined));
     await pruneAllCardVersions();
-  });
+  })().catch((error) => console.error("Workspace maintenance failed", error));
   if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(task, { timeout: 8_000 });
   else window.setTimeout(task, 1_200);
 }
@@ -58,6 +67,7 @@ function applyTheme(theme: ThemeMode) {
 
 export function App() {
   const [ready, setReady] = useState(false);
+  const [startupError, setStartupError] = useState("");
   const theme = useAppStore((state) => state.theme);
   const language = useAppStore((state) => state.language);
   const fontScale = useAppStore((state) => state.fontScale);
@@ -73,12 +83,13 @@ export function App() {
   const setImportOpen = useAppStore((state) => state.setImportOpen);
   const setLanguage = useAppStore((state) => state.setLanguage);
   const { t } = useI18n();
+  const healthCopy = getHealthCopy(language);
 
   useEffect(() => {
     prepareWorkspace().then(initializeGlobalHistory).then(() => {
       setReady(true);
       scheduleWorkspaceMaintenance();
-    });
+    }).catch((error) => setStartupError(error instanceof Error ? error.message : String(error)));
   }, []);
 
   useEffect(() => {
@@ -181,7 +192,8 @@ export function App() {
         <img src={markUrl} alt="" />
         <div>
           <strong>澄境</strong>
-          <span>{t("app.loading")}</span>
+          <span>{startupError ? healthCopy.startupError : t("app.loading")}</span>
+          {startupError && <><button type="button" className="primary-button" onClick={() => window.location.reload()}>{healthCopy.retry}</button><details className="launch-error-details"><summary>{healthCopy.details}</summary><p>{startupError}</p></details></>}
         </div>
       </main>
     );

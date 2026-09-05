@@ -1,4 +1,4 @@
-# 澄境筆記 ChengJing Notes v0.9.2
+# 澄境筆記 ChengJing Notes v0.9.3
 
 <p align="center">
   <a href="README.md"><strong>繁體中文</strong></a>
@@ -66,6 +66,14 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 - 90%／100%／110%／120% 全域介面文字比例
 - 五語介面：繁體中文、簡體中文、English、日本語、한국어；日期、AI 回答、原生選單與共享介面同步切換
 - 半自動更新：GitHub API、Cloudflare Worker、Release Feed、邊緣快取與 KV 多層備援，下載後驗證並開啟目前平台的 DMG 或 Windows 安裝程式
+
+## v0.9.3 資料完整性與效能健檢
+
+- 修正復原紀錄、同名匯出、備份驗證、附件復原與 MCP 防衝突寫入；筆記格式及既有待辦關聯會保留。
+- 搜尋補上被候選上限遮住的結果、單字元、全半形與長文尾端；待辦總數與垃圾桶狀態一致。
+- 第二大腦在靜止時採按需繪製，減少顯示卡持續重畫；操作、選取與動畫保留。
+- 自訂 Provider 可「試送訊息」確認模型實際回答，並清楚區分設定、授權、額度與服務錯誤。
+- [查看完整健檢報告](HEALTH_CHECK.md)。
 
 ## v0.9.2 Responses 相容性與快速前往收尾
 

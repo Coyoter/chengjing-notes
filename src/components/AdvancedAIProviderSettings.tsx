@@ -5,6 +5,7 @@ import { getAdvancedProviderCopy, getProviderApiModeCopy } from "../lib/advanced
 import { useAppStore } from "../store";
 import type { AIProviderApiMode, AIProviderModel, AIProviderProfile, AIProviderSettings, AIProviderType } from "../types";
 import { friendlyErrorMessage } from "../lib/utils";
+import { getHealthCopy } from "../lib/healthCopy";
 
 const emptySettings: AIProviderSettings = { selectedProfileId: "", profiles: [] };
 
@@ -12,6 +13,7 @@ export function AdvancedAIProviderSettings() {
   const { language } = useI18n();
   const copy = useMemo(() => getAdvancedProviderCopy(language), [language]);
   const modeCopy = useMemo(() => getProviderApiModeCopy(language), [language]);
+  const healthCopy = getHealthCopy(language);
   const engine = useAppStore((state) => state.aiEngine);
   const setEngine = useAppStore((state) => state.setAIEngine);
   const setCustomProvider = useAppStore((state) => state.setCustomProvider);
@@ -25,11 +27,12 @@ export function AdvancedAIProviderSettings() {
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [models, setModels] = useState<AIProviderModel[]>([]);
-  const [busy, setBusy] = useState<"save" | "test" | "models" | "">("");
+  const [busy, setBusy] = useState<"save" | "test" | "models" | "generate" | "">("");
   const [notice, setNotice] = useState("");
   const [expanded, setExpanded] = useState(false);
   const activeProfile = settings.profiles.find((profile) => profile.id === settings.selectedProfileId);
   const editingProfile = settings.profiles.find((profile) => profile.id === editingId);
+  const unsaved = Boolean(editingProfile && (editingProfile.type !== type || editingProfile.apiMode !== apiMode || editingProfile.baseUrl !== baseUrl.trim().replace(/\/$/, "") || editingProfile.model !== model.trim() || apiKey.trim()));
 
   function activate(profile: AIProviderProfile) {
     setCustomProvider({ id: profile.id, name: profile.name, model: profile.model });
@@ -82,7 +85,7 @@ export function AdvancedAIProviderSettings() {
   }
 
   async function testConnection() {
-    if (!window.chengjing || !editingId) return;
+    if (!window.chengjing || !editingId || unsaved || busy) return;
     setBusy("test"); setNotice("");
     try { const result = await window.chengjing.ai.testProvider(editingId); setModels(result.models); setNotice(copy.connected(result.models.length)); }
     catch (error) { setNotice(friendlyErrorMessage(error, copy.desktop)); }
@@ -90,7 +93,7 @@ export function AdvancedAIProviderSettings() {
   }
 
   async function fetchModels() {
-    if (!window.chengjing || !editingId) return;
+    if (!window.chengjing || !editingId || unsaved || busy) return;
     setBusy("models"); setNotice("");
     try { const result = await window.chengjing.ai.listProviderModels(editingId); setModels(result); setNotice(copy.connected(result.length)); }
     catch (error) { setNotice(friendlyErrorMessage(error, copy.desktop)); }
@@ -107,6 +110,16 @@ export function AdvancedAIProviderSettings() {
       else { resetForm(); if (engine === "custom-provider") setEngine("openrouter"); }
       setNotice(copy.removed);
     } catch (error) { setNotice(friendlyErrorMessage(error, copy.desktop)); }
+  }
+
+  async function testGeneration() {
+    if (!window.chengjing || !editingProfile || unsaved || busy) return;
+    setBusy("generate"); setNotice("");
+    try {
+      await window.chengjing.ai.providerChat({ profileId: editingProfile.id, model: editingProfile.model, messages: [{ role: "user", content: "Reply with OK." }], maxTokens: 2048 });
+      setNotice(healthCopy.generationOK);
+    } catch (error) { setNotice(friendlyErrorMessage(error, copy.desktop)); }
+    finally { setBusy(""); }
   }
 
   async function removeKey() {
@@ -156,10 +169,11 @@ export function AdvancedAIProviderSettings() {
           <label className="provider-wide-field"><span>{copy.baseUrl}</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} maxLength={1000} placeholder={type === "ollama" ? "http://127.0.0.1:11434/v1" : "https://gateway.example.com/v1"} required /></label>
           <label className="provider-wide-field"><span>{copy.apiKey}</span><div><KeyRound size={14} /><input type={showKey ? "text" : "password"} value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={editingProfile?.keyConfigured ? copy.keySaved : copy.keyOptional} /><button type="button" aria-label={showKey ? "Hide" : "Show"} onClick={() => setShowKey(!showKey)}>{showKey ? <EyeOff size={15} /> : <Eye size={15} />}</button></div></label>
           {notice && <p className="provider-notice" role="status">{notice}</p>}
+          {editingId && <div className="provider-generation-check"><span>{unsaved ? healthCopy.saveFirst : healthCopy.generationHint}</span><button type="button" className="secondary-button" disabled={Boolean(busy) || unsaved} onClick={() => void testGeneration()}><Activity size={14} className={busy === "generate" ? "spin" : ""} />{busy === "generate" ? healthCopy.generating : healthCopy.generation}</button></div>}
           <footer>
             <span>{editingProfile?.keyConfigured && <button type="button" className="provider-clear-key" onClick={() => void removeKey()}>{copy.clearKey}</button>}</span>
-            {editingId && <button type="button" className="secondary-button" disabled={Boolean(busy)} onClick={() => void fetchModels()}><RefreshCw size={14} className={busy === "models" ? "spin" : ""} />{copy.models}</button>}
-            {editingId && <button type="button" className="secondary-button" disabled={Boolean(busy)} onClick={() => void testConnection()}><Activity size={14} className={busy === "test" ? "spin" : ""} />{busy === "test" ? copy.testing : copy.test}</button>}
+            {editingId && <button type="button" className="secondary-button" disabled={Boolean(busy) || unsaved} onClick={() => void fetchModels()}><RefreshCw size={14} className={busy === "models" ? "spin" : ""} />{copy.models}</button>}
+            {editingId && <button type="button" className="secondary-button" disabled={Boolean(busy) || unsaved} onClick={() => void testConnection()}><Activity size={14} className={busy === "test" ? "spin" : ""} />{busy === "test" ? copy.testing : copy.test}</button>}
             <button type="submit" className="primary-button" disabled={Boolean(busy)}>{busy === "save" ? copy.saving : copy.save}</button>
           </footer>
         </form>

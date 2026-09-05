@@ -91,9 +91,15 @@ const firstFocus = await brain.getAttribute("data-brain-viewport-focus");
 await page.screenshot({ path: path.join(output, "brain-private-window-and-20-shared.png"), fullPage: true });
 
 await page.locator(".second-brain-page canvas").click({ position: { x: 40, y: 40 } });
+const movementStartedAt = Date.now();
 await page.keyboard.down("w");
-await page.waitForTimeout(2_000);
-await page.keyboard.up("w");
+try {
+  await page.waitForFunction((keys) => {
+    const visible = [...document.querySelectorAll("[data-brain-node-key]")].map((item) => item.getAttribute("data-brain-node-key"));
+    return keys.some((key) => !visible.includes(key));
+  }, firstKeys);
+} finally { await page.keyboard.up("w"); }
+const movementMs = Date.now() - movementStartedAt;
 await page.waitForTimeout(600);
 const movedKeys = await page.locator("[data-brain-node-key]").evaluateAll((items) => items.map((item) => item.getAttribute("data-brain-node-key")));
 const movedFocus = await brain.getAttribute("data-brain-viewport-focus");
@@ -144,6 +150,7 @@ const report = {
   brainReadyMs,
   privateViewportCount,
   changedPrivateWindow,
+  movementMs,
   firstFocus,
   movedFocus,
   remoteAlwaysVisible,

@@ -78,15 +78,20 @@ await editorDueAction.waitFor();
 const editorTaskContextMenu = await editorDueAction.isVisible();
 await editorDueAction.click();
 const dueDialog = page.locator(".task-due-dialog");
+const nextMonthDates = await page.evaluate(() => {
+  const now = new Date(); const month = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const prefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
+  return { first: `${prefix}-18`, second: `${prefix}-22` };
+});
 await dueDialog.getByRole("button", { name: "目標期限", exact: true }).click();
 await dueDialog.getByRole("button", { name: "下一個月", exact: true }).click();
-await dueDialog.locator('[data-date="2026-09-18"]').click();
+await dueDialog.locator(`[data-date="${nextMonthDates.first}"]`).click();
 await dueDialog.getByRole("button", { name: "儲存期限", exact: true }).click();
 
 await page.getByRole("button", { name: "待辦", exact: true }).click();
 syncedArticle = page.locator(".task-groups article").filter({ hasText: "完成第一個可執行版本" });
 await syncedArticle.waitFor();
-const editorDueVisible = await page.locator('[data-task-date="2026-09-18"]').filter({ hasText: "完成第一個可執行版本" }).count() === 1;
+const editorDueVisible = await page.locator(`[data-task-date="${nextMonthDates.first}"]`).filter({ hasText: "完成第一個可執行版本" }).count() === 1;
 await syncedArticle.click({ button: "right" });
 const dueContext = page.locator('[data-context-menu="task"]');
 await dueContext.getByRole("menuitem", { name: "修改期限…", exact: true }).waitFor();
@@ -99,11 +104,11 @@ const directTaskTitle = "直接建立的期限待辦";
 await page.locator(".task-add-main input").fill(directTaskTitle);
 await page.locator(".task-add .task-date-trigger").click();
 await page.locator(".task-add .task-calendar-popover").getByRole("button", { name: "下一個月", exact: true }).click();
-await page.locator(".task-add .task-calendar-popover").locator('[data-date="2026-09-22"]').click();
+await page.locator(".task-add .task-calendar-popover").locator(`[data-date="${nextMonthDates.second}"]`).click();
 await page.locator(".task-add").getByRole("button", { name: "加入", exact: true }).click();
 const directArticle = page.locator(".task-groups article").filter({ hasText: directTaskTitle });
 await directArticle.waitFor();
-const directDueCreated = await page.locator('[data-task-date="2026-09-22"]').filter({ hasText: directTaskTitle }).count() === 1;
+const directDueCreated = await page.locator(`[data-task-date="${nextMonthDates.second}"]`).filter({ hasText: directTaskTitle }).count() === 1;
 await page.screenshot({ path: path.join(output, "02-task-deadlines.png"), fullPage: true });
 
 await page.getByRole("button", { name: "卡片庫", exact: true }).click();

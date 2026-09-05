@@ -67,10 +67,12 @@ function CameraControls({ onViewportFocus, focusRequest }: { onViewportFocus: (f
   const lastReportAt = useRef(0);
   const lastFocus = useRef(new THREE.Vector3(Number.POSITIVE_INFINITY, 0, 0));
   const focusDestination = useRef<THREE.Vector3 | null>(null);
-  const { camera } = useThree();
+  const { camera, invalidate } = useThree();
+  const vectors = useMemo(() => ({ forward: new THREE.Vector3(), right: new THREE.Vector3(), movement: new THREE.Vector3(), before: new THREE.Vector3() }), []);
 
   useEffect(() => {
     focusDestination.current = focusRequest ? new THREE.Vector3(...focusRequest.position) : null;
+    invalidate();
   }, [focusRequest?.key]);
 
   useEffect(() => {
@@ -81,6 +83,7 @@ function CameraControls({ onViewportFocus, focusRequest }: { onViewportFocus: (f
       if (["w", "a", "s", "d"].includes(key)) {
         event.preventDefault();
         pressed.current.add(key);
+        invalidate();
       }
     };
     const onKeyUp = (event: KeyboardEvent) => pressed.current.delete(event.key.toLowerCase());
@@ -98,10 +101,10 @@ function CameraControls({ onViewportFocus, focusRequest }: { onViewportFocus: (f
   useFrame((state, delta) => {
     if (!controls.current) return;
     if (pressed.current.size) {
-      const forward = new THREE.Vector3();
+      const { forward, right, movement } = vectors;
       camera.getWorldDirection(forward).normalize();
-      const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
-      const movement = new THREE.Vector3();
+      right.crossVectors(forward, camera.up).normalize();
+      movement.set(0, 0, 0);
       if (pressed.current.has("w")) movement.add(forward);
       if (pressed.current.has("s")) movement.sub(forward);
       if (pressed.current.has("d")) movement.add(right);
@@ -114,15 +117,16 @@ function CameraControls({ onViewportFocus, focusRequest }: { onViewportFocus: (f
     }
     if (focusDestination.current) {
       const target = controls.current.target as THREE.Vector3;
-      const before = target.clone();
+      const before = vectors.before.copy(target);
       const factor = 1 - Math.exp(-Math.min(delta, 0.05) * 8);
       target.lerp(focusDestination.current, factor);
-      camera.position.add(target.clone().sub(before));
+      camera.position.add(vectors.movement.copy(target).sub(before));
       if (target.distanceToSquared(focusDestination.current) < 0.0025) {
         target.copy(focusDestination.current);
         focusDestination.current = null;
       }
     }
+    if (pressed.current.size || focusDestination.current) invalidate();
     if (state.clock.elapsedTime - lastReportAt.current < 0.16) return;
     lastReportAt.current = state.clock.elapsedTime;
     const target = controls.current.target as THREE.Vector3;
@@ -159,6 +163,7 @@ function BrainNeuron({
 }) {
   const [hovered, setHovered] = useState(false);
   const mesh = useRef<THREE.Mesh>(null);
+  const invalidate = useThree((state) => state.invalidate);
   const dendrites = useMemo(() => {
     const seed = [...node.key].reduce((total, character) => total + character.charCodeAt(0), 0);
     return Array.from({ length: Math.min(6, 3 + Math.floor(node.weight)) }, (_, index) => {
@@ -174,6 +179,7 @@ function BrainNeuron({
     if (!mesh.current) return;
     const pulse = selected || linking ? 1 + Math.sin(state.clock.elapsedTime * 2.4) * 0.045 : 1;
     mesh.current.scale.setScalar(pulse);
+    if (selected || linking) invalidate();
   });
   const color = selected || linking ? "#a8c0af" : NODE_COLORS[node.type];
   return (
@@ -218,12 +224,14 @@ function BrainNeuron({
 function SharedRemoteNeuron({ node, selected, showAllLabels, onSelect }: { node: SharedNeuronSceneNode; selected: boolean; showAllLabels: boolean; onSelect: (node: SharedNeuronSceneNode) => void }) {
   const [hovered, setHovered] = useState(false);
   const group = useRef<THREE.Group>(null);
+  const invalidate = useThree((state) => state.invalidate);
   const seed = useMemo(() => [...node.id].reduce((total, character) => total + character.charCodeAt(0), 0), [node.id]);
   useFrame((state, delta) => {
     if (!group.current) return;
     group.current.rotation.y += delta * (selected ? 0.16 : 0.07);
     const pulse = 1 + Math.sin(state.clock.elapsedTime * 1.25 + seed) * (selected ? 0.045 : 0.018);
     group.current.scale.setScalar(pulse);
+    invalidate();
   });
   return <group ref={group} position={node.position}>
     <mesh scale={1.42}>
@@ -816,7 +824,7 @@ export function SecondBrainView() {
 
   return (
     <div className="second-brain-page" data-brain-nodes={graph.nodes.length} data-brain-rendered-nodes={sceneNodes.length} data-brain-viewport-focus={viewportFocus.map((value) => value.toFixed(2)).join(",")} data-brain-persisted-links={graph.edges.filter((edge) => edge.persisted).length} data-brain-editable-edge-hit-targets={graph.edges.filter((edge) => edge.persisted).length}>
-      <Canvas camera={{ position: [0, 1.5, 19], fov: 54, near: 0.1, far: 120 }} dpr={[1, 1.75]} gl={{ antialias: true, alpha: false }} onPointerMissed={() => { setSelectedKey(null); setSelectedRemoteId(null); setRemoteDetail(null); }}>
+      <Canvas frameloop="demand" camera={{ position: [0, 1.5, 19], fov: 54, near: 0.1, far: 120 }} dpr={[1, 1.75]} gl={{ antialias: true, alpha: false }} onPointerMissed={() => { setSelectedKey(null); setSelectedRemoteId(null); setRemoteDetail(null); }}>
         <BrainScene nodes={sceneNodes} edges={filteredEdges} remoteNodes={filteredRemoteNodes} ownSharedKeys={ownSharedKeys} selectedKey={selectedKey} selectedRemoteId={selectedRemoteId} linkSource={linkSource} showAllLabels={showAllLabels} canvasColor={canvasColor} onSelect={selectNode} onOpen={openNode} onNodeContext={nodeContext} onEdgeContext={edgeContext} onRemoteSelect={(node) => void openRemoteNeuron(node.id)} onViewportFocus={setViewportFocus} focusRequest={searchFocusRequest} />
       </Canvas>
 

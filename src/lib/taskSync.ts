@@ -1,5 +1,6 @@
 import { db } from "../db";
 import type { TaskRecord } from "../types";
+import { ignoreTransactionHistory } from "./historyTransactions";
 
 export interface EditorTaskSnapshot {
   sourceTaskId: string;
@@ -80,6 +81,7 @@ export async function syncCardTasksFromHtml(cardId: string, html: string) {
       const previous = bySource.get(snapshot.sourceTaskId);
       const changed = !previous || previous.title !== snapshot.title || previous.done !== snapshot.done;
       const record: TaskRecord = {
+        ...previous,
         id: previous?.id || editorTaskRecordId(cardId, snapshot.sourceTaskId),
         title: snapshot.title,
         done: snapshot.done,
@@ -115,14 +117,19 @@ export async function syncAllCardTasks() {
   });
 }
 
-export async function syncPendingCardTasks(batchSize = 40) {
+export async function syncPendingCardTasks(batchSize = 40, maintenance = false) {
   let synced = 0;
   while (true) {
     const cards = await db.cards.where("taskSyncState").equals("pending").limit(batchSize).toArray();
     if (!cards.length) break;
     for (const card of cards) {
-      if (card.state === "trash") await db.cards.update(card.id, { taskSyncState: "synced" });
-      else await syncCardTasksFromHtml(card.id, card.contentHtml);
+      await db.transaction("rw", [db.cards, db.tasks, db.brainEdges], async (transaction) => {
+        if (maintenance) ignoreTransactionHistory(transaction);
+        const current = await db.cards.get(card.id);
+        if (!current || current.taskSyncState !== "pending") return;
+        if (current.state === "trash") await db.cards.update(card.id, { taskSyncState: "synced" });
+        else await syncCardTasksFromHtml(current.id, current.contentHtml);
+      });
       synced += 1;
     }
     await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0));

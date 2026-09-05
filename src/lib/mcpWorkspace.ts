@@ -5,7 +5,8 @@ import { richHtmlFromPlainText } from "./boardContent";
 import { runGlobalHistoryAction } from "./globalHistory";
 import { createKanbanBoard, createKanbanList, moveKanbanPlacement, placeCardOnKanban } from "./kanban";
 import { searchQueryTerms } from "./searchIndex";
-import { dueDateInputToTimestamp, updateTaskEverywhere } from "./taskSync";
+import { includesQuery, searchRecords } from "./searchRecords";
+import { createTaskChild, dueDateInputToTimestamp, updateTaskEverywhere } from "./taskSync";
 
 export type McpWorkspaceTool =
   | "chengjing_status" | "chengjing_search" | "chengjing_get_item"
@@ -31,7 +32,7 @@ function numberValue(value: unknown, fallback = 0, minimum = -20_000, maximum = 
 function booleanValue(value: unknown, fallback = false) { return typeof value === "boolean" ? value : fallback; }
 function cleanDate(value: unknown) { const date = text(value, 10); return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : ""; }
 function localeLower(value: string) { return value.toLocaleLowerCase(useAppStore.getState().language || "zh-TW"); }
-function matchesQuery(value: string, query: string, terms: string[]) { const haystack = localeLower(value); return haystack.includes(localeLower(query)) || (terms.length > 0 && terms.every((term) => haystack.includes(localeLower(term)))); }
+function matchesQuery(value: string, query: string, terms: string[]) { const haystack = localeLower(value); return includesQuery(value, query, useAppStore.getState().language || "zh-TW") || (terms.length > 0 && terms.every((term) => haystack.includes(localeLower(term)))); }
 function compactCard(card: CardRecord, contentLimit = 4_000) { return { type: "note", id: card.id, title: card.title, content: card.plainText.slice(0, contentLimit), contentTruncated: card.plainText.length > contentLimit, kind: card.kind, state: card.state, favorite: card.favorite, tagIds: card.tagIds, collectionId: card.collectionId, createdAt: card.createdAt, updatedAt: card.updatedAt }; }
 function assertExpected(type: string, id: string, current: number, expected: unknown) {
   const value = Number(expected);
@@ -56,25 +57,26 @@ async function workspaceSearch(args: Record<string, unknown>) {
   const requested = Array.isArray(args.types) ? new Set(args.types.map((item) => String(item))) : new Set(["note", "whiteboard", "kanban", "task", "fragment"]);
   const limit = Math.floor(numberValue(args.limit, 20, 1, 50));
   const terms = searchQueryTerms(query, useAppStore.getState().language || "zh-TW");
+  const language = useAppStore.getState().language || "zh-TW";
   const results: Array<Record<string, unknown>> = [];
-  if (requested.has("note") && terms.length) {
-    const values = await db.cards.where("searchTerms").anyOf(terms).distinct().limit(limit * 5).toArray();
+  if (requested.has("note")) {
+    const values = await searchRecords(db.cards, query, language, (card) => card.state !== "trash" && matchesQuery(`${card.title} ${card.plainText}`, query, terms), limit + 1);
     for (const card of values) if (card.state !== "trash" && matchesQuery(`${card.title} ${card.plainText}`, query, terms)) results.push({ ...compactCard(card, 700), excerpt: card.plainText.slice(0, 700) });
   }
-  if (requested.has("task") && terms.length) {
-    const values = await db.tasks.where("searchTerms").anyOf(terms).distinct().limit(limit * 4).toArray();
+  if (requested.has("task")) {
+    const values = await searchRecords(db.tasks, query, language, (task) => matchesQuery(task.title, query, terms), limit + 1);
     for (const task of values) if (matchesQuery(task.title, query, terms)) results.push({ type: "task", id: task.id, title: task.title, done: task.done, cardId: task.cardId, parentTaskId: task.parentTaskId, dueAt: task.dueAt, createdAt: task.createdAt, updatedAt: task.updatedAt });
   }
-  if (requested.has("fragment") && terms.length) {
-    const values = await db.fragments.where("searchTerms").anyOf(terms).distinct().limit(limit * 4).toArray();
+  if (requested.has("fragment")) {
+    const values = await searchRecords(db.fragments, query, language, (fragment) => matchesQuery(fragment.text, query, terms), limit + 1);
     for (const fragment of values) if (matchesQuery(fragment.text, query, terms)) results.push({ type: "fragment", id: fragment.id, text: fragment.text.slice(0, 900), pinned: fragment.pinned, tagIds: fragment.tagIds, createdAt: fragment.createdAt, updatedAt: fragment.updatedAt });
   }
   if (requested.has("whiteboard")) {
-    const values = await db.boards.orderBy("updatedAt").reverse().limit(300).toArray();
+    const values = await searchRecords(db.boards, query, language, (board) => matchesQuery(`${board.title} ${board.description}`, query, terms), limit + 1);
     for (const board of values) if (matchesQuery(`${board.title} ${board.description}`, query, terms)) results.push({ type: "whiteboard", id: board.id, title: board.title, description: board.description.slice(0, 800), updatedAt: board.updatedAt });
   }
   if (requested.has("kanban")) {
-    const values = await db.kanbanBoards.orderBy("updatedAt").reverse().limit(200).toArray();
+    const values = await searchRecords(db.kanbanBoards, query, language, (board) => matchesQuery(`${board.title} ${board.description}`, query, terms), limit + 1);
     for (const board of values) if (matchesQuery(`${board.title} ${board.description}`, query, terms)) results.push({ type: "kanban", id: board.id, title: board.title, description: board.description.slice(0, 800), updatedAt: board.updatedAt });
   }
   results.sort((left, right) => Number(right.updatedAt || 0) - Number(left.updatedAt || 0));
@@ -128,7 +130,8 @@ async function updateNote(args: Record<string, unknown>) {
   if (typeof args.content === "string") {
     const incoming = text(args.content, 100_000); const replace = args.contentMode === "replace";
     patch.plainText = replace ? incoming : `${card.plainText}\n\n${incoming}`.trim();
-    patch.contentHtml = richHtmlFromPlainText(patch.plainText, useAppStore.getState().language || "zh-TW");
+    const incomingHtml = richHtmlFromPlainText(incoming, useAppStore.getState().language || "zh-TW");
+    patch.contentHtml = replace ? incomingHtml : `${card.contentHtml}${incoming ? incomingHtml : ""}`;
   }
   if (typeof args.favorite === "boolean") patch.favorite = args.favorite;
   if (Object.keys(patch).length === 1) throw new Error("mcp-no-changes");
@@ -147,6 +150,14 @@ async function createTask(args: Record<string, unknown>) {
   if (parentTaskId && !parent) throw new Error("mcp-parent-task-not-found");
   if (!cardId && parent?.cardId) cardId = parent.cardId;
   const dueDate = cleanDate(args.dueDate);
+  if (args.dueDate && (!dueDate || !dueDateInputToTimestamp(dueDate))) throw new Error("mcp-date-invalid");
+  if (parentTaskId) {
+    const result = await createTaskChild(parentTaskId, title);
+    if (cardId !== parent?.cardId || dueDate) {
+      await db.tasks.update(result.task.id, { cardId, ...(dueDate ? { dueAt: dueDateInputToTimestamp(dueDate) } : {}) });
+    }
+    return { type: "task", ...await db.tasks.get(result.task.id), created: result.created };
+  }
   const task: TaskRecord = { id: crypto.randomUUID(), title, done: false, cardId, parentTaskId, dueAt: dueDate ? dueDateInputToTimestamp(dueDate) : parent?.dueAt, createdAt: timestamp, updatedAt: timestamp };
   await db.tasks.add(task); return { type: "task", ...task };
 }
@@ -282,5 +293,5 @@ export async function handleMcpWorkspaceRequest(request: McpWorkspaceRequest) {
   if (request.tool === "chengjing_search") return workspaceSearch(request.arguments);
   if (request.tool === "chengjing_get_item") return getItem(request.arguments);
   if (!isMcpWorkspaceWrite(request.tool)) throw new Error("mcp-tool-unsupported");
-  return runGlobalHistoryAction(() => executeWrite(request.tool, request.arguments));
+  return runGlobalHistoryAction(() => db.transaction("rw", db.tables, () => executeWrite(request.tool, request.arguments)));
 }

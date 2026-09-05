@@ -91,3 +91,17 @@ test("Responses 模型不支援 temperature 時自動重試並記住相容模式
   assert.equal(sent[1].temperature, undefined);
   assert.equal(sent[2].temperature, undefined);
 });
+
+test("temperature 相容快取會在位址改變後重新判斷，429 不重試", async () => {
+  let calls = 0;
+  const profile = { id: "scoped-cache-profile", type: "openai-compatible", apiMode: "responses", baseUrl: "https://first.example/v1", model: "reasoning" };
+  await providerChat(async (_url, options) => {
+    calls++;
+    return JSON.parse(options.body).temperature === undefined ? jsonResponse({ output_text: "OK" }) : jsonResponse({ error: { message: "temperature not supported" } }, 400);
+  }, profile);
+  assert.equal(calls, 2);
+  await providerChat(async (_url, options) => { assert.equal(typeof JSON.parse(options.body).temperature, "number"); return jsonResponse({ output_text: "OK" }); }, { ...profile, baseUrl: "https://second.example/v1" });
+  calls = 0;
+  await assert.rejects(providerChat(async () => { calls++; return jsonResponse({ error: { message: "Unsupported temperature; quota exceeded" } }, 429); }, { ...profile, model: "quota" }), /provider-http-429/);
+  assert.equal(calls, 1);
+});

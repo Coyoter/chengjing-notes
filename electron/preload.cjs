@@ -87,6 +87,8 @@ contextBridge.exposeInMainWorld("chengjing", {
     stats: () => ipcRenderer.invoke("attachment:stats"),
     readData: (relativePath) => ipcRenderer.invoke("attachment:read-data", { relativePath }),
     cleanup: (keep) => ipcRenderer.invoke("attachment:cleanup", { keep }),
+    sweepPending: (keep) => ipcRenderer.invoke("attachment:sweep-pending", { keep }),
+    pendingPaths: () => ipcRenderer.invoke("attachment:pending-paths"),
     restoreFromBackup: (request) => ipcRenderer.invoke("attachment:restore-from-backup", request),
   },
   clipboard: {

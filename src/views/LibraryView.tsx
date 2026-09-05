@@ -9,7 +9,7 @@ import { showContextMenuFromButton, showContextMenuFromPointer } from "../lib/co
 import { useI18n } from "../hooks/useI18n";
 import { getKnowledgeCopy } from "../lib/knowledgeCopy";
 import type { CardKind, CardRecord, KnowledgeGroupKind } from "../types";
-import { searchQueryTerms } from "../lib/searchIndex";
+import { includesQuery, searchRecords } from "../lib/searchRecords";
 import { isMaterializedCard } from "../lib/journalVisibility";
 
 const cardKinds: CardKind[] = ["note", "journal", "web", "pdf", "image", "audio", "video", "ai"];
@@ -49,20 +49,16 @@ export function LibraryView() {
       || (selectedGroup === "pinned" && card.favorite)
       || (selectedGroup === "unassigned" && !card.collectionId)
       || Boolean(card.collectionId && selectedTopicIds?.has(card.collectionId));
-    const q = query.trim().toLocaleLowerCase(language);
-    return isMaterializedCard(card) && collectionMatches && groupMatches && (kind === "all" || card.kind === kind) && (!q || `${card.title} ${card.plainText}`.toLocaleLowerCase(language).includes(q));
+    return isMaterializedCard(card) && collectionMatches && groupMatches && (kind === "all" || card.kind === kind) && includesQuery(`${card.title} ${card.plainText}`, query, language);
   }
   const cards = useLiveQuery(async () => {
-    const terms = searchQueryTerms(query, language);
-    if (terms.length) return (await db.cards.where("searchTerms").anyOf(terms).distinct().toArray()).filter(matchesCurrent).sort((left, right) => Number(right.favorite) - Number(left.favorite) || right.updatedAt - left.updatedAt).slice(0, visibleLimit);
+    if (query.trim()) return (await searchRecords(db.cards, query, language, matchesCurrent, visibleLimit)).sort((left, right) => Number(right.favorite) - Number(left.favorite) || right.updatedAt - left.updatedAt);
     const recent = await db.cards.orderBy("updatedAt").reverse().filter(matchesCurrent).limit(visibleLimit).toArray();
     if (selectedGroup === "pinned") return recent;
     const pinned = await db.cards.filter((card) => card.favorite && matchesCurrent(card)).limit(visibleLimit).toArray();
     return [...new Map([...pinned, ...recent].map((card) => [card.id, card])).values()].sort((left, right) => Number(right.favorite) - Number(left.favorite) || right.updatedAt - left.updatedAt).slice(0, visibleLimit);
   }, [collection, kind, language, query, selectedGroup, [...(selectedTopicIds || [])].join("|"), visibleLimit], []);
   const filteredTotal = useLiveQuery(async () => {
-    const terms = searchQueryTerms(query, language);
-    if (terms.length) return (await db.cards.where("searchTerms").anyOf(terms).distinct().toArray()).filter(matchesCurrent).length;
     return db.cards.orderBy("updatedAt").filter(matchesCurrent).count();
   }, [collection, kind, language, query, selectedGroup, [...(selectedTopicIds || [])].join("|")], 0);
   const counts = useLiveQuery(async () => {

@@ -108,6 +108,8 @@ try {
   await provider.locator(".provider-api-mode button").filter({ hasText: "Responses API" }).click();
   await provider.locator('.provider-form button[type="submit"]').click(); await provider.getByText("連線已安全儲存。").waitFor();
   await provider.getByRole("button", { name: "測試連線", exact: true }).click(); await provider.getByText("連線正常，找到 1 個模型。").waitFor();
+  await provider.getByRole("button", { name: "試送訊息", exact: true }).click(); await provider.getByText("模型已成功回答，可以開始對話。").waitFor();
+  const generationTestWorks = true;
   const providerSettings = await page.evaluate(() => window.chengjing.ai.providerSettings());
   const providerReply = await page.evaluate((profileId) => window.chengjing.ai.providerChat({ profileId, model: "qwen3:8b", messages: [{ role: "user", content: "測試" }] }), providerSettings.selectedProfileId);
   await page.getByRole("button", { name: "詢問 AI", exact: true }).click();
@@ -156,8 +158,8 @@ try {
   const result = {
     packagedApp: Boolean(packagedExecutable),
     anchorCount, anchorScrollWorks, anchorDisclosureWorks, anchorNaturalWidth, anchorNarrowScrollable, anchorGeometry, anchorFits: await jumpNav.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
-    engineChoiceCount: await engineChoices.count(), engineDisclosureWorks, engineSurfaceHierarchy, geminiPresetUpdated, providerSaved: providerFiles.includes("ai-provider-settings.json"), providerEncrypted: !providerPlaintextLeak, providerChatWorks: providerReply.text === "本機 Provider 回覆正常" && providerChatRequests === 3,
-    providerResponsesWorks: providerSettings.profiles[0]?.apiMode === "responses" && providerResponsesBodies.length === 3 && providerResponsesBodies[0].temperature !== undefined && providerResponsesBodies.slice(1).every((body) => body.temperature === undefined) && providerResponsesBodies.every((body) => body.max_output_tokens > 0 && body.max_tokens === undefined && body.store === undefined && Array.isArray(body.input)),
+    engineChoiceCount: await engineChoices.count(), engineDisclosureWorks, engineSurfaceHierarchy, geminiPresetUpdated, generationTestWorks, providerSaved: providerFiles.includes("ai-provider-settings.json"), providerEncrypted: !providerPlaintextLeak, providerChatWorks: providerReply.text === "本機 Provider 回覆正常" && providerChatRequests === 4,
+    providerResponsesWorks: providerSettings.profiles[0]?.apiMode === "responses" && providerResponsesBodies.length === 4 && providerResponsesBodies[0].temperature !== undefined && providerResponsesBodies.slice(1).every((body) => body.temperature === undefined) && providerResponsesBodies.every((body) => body.max_output_tokens > 0 && body.max_tokens === undefined && body.store === undefined && Array.isArray(body.input)),
     providerGeometry, mcpRunning: true, mcpGeometry, fiveLanguageFits, toolCount: tools.tools.length,
     coreTools: ["chengjing_search", "chengjing_create_note", "chengjing_create_whiteboard", "chengjing_create_kanban", "chengjing_connect_neurons"].every((name) => tools.tools.some((tool) => tool.name === name)),
     readOnlyBlocksWrites: deniedWrite.isError === true, rendererBridgeWrite: stored?.plainText?.includes("通過防衝突更新") === true, auditSuccesses: audit.filter((entry) => entry.outcome === "success").length,

@@ -31,6 +31,7 @@ const boardImeWorks = true;
 
 const pane = page.locator(".react-flow__pane");
 await pane.dblclick({ position: { x: 360, y: 260 } });
+await page.locator(".flow-card header").first().dblclick();
 await page.locator(".card-editor-panel").waitFor();
 const titleInput = page.locator(".card-title-input");
 await titleInput.dispatchEvent("compositionstart", { data: "" });
@@ -38,7 +39,7 @@ await titleInput.fill("wodexinxiangfa");
 await titleInput.fill("我的新想法");
 await titleInput.dispatchEvent("compositionend", { data: "我的新想法" });
 await titleInput.blur();
-await page.getByRole("button", { name: "返回卡片庫" }).click();
+await page.locator(".card-back-button").click();
 await page.locator(".flow-card h3").getByText("我的新想法", { exact: true }).waitFor();
 const cardImeWorks = true;
 await page.waitForTimeout(250);

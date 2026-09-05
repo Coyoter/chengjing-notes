@@ -975,6 +975,11 @@ html[data-quick-capture="true"], html[data-quick-capture="true"] body, html[data
 .settings-jump-track a { display: inline-flex; min-width: max-content; height: 32px; align-items: center; justify-content: center; padding: 0 10px; border-radius: 7px; background: var(--surface-2); color: var(--text-muted); font-size: calc(12px * var(--font-scale)); font-weight: 600; text-decoration: none; transition: background-color 120ms ease, color 120ms ease; }
 .settings-jump-track a:hover { background: var(--surface-3); color: var(--text-1); }
 .settings-jump-track a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; color: var(--text-1); }
+.provider-generation-check { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; padding: 12px 0; border-top: 1px solid var(--border); }
+.provider-generation-check > span { flex: 1 1 240px; color: var(--text-muted); font-size: calc(12px * var(--font-scale)); line-height: 1.55; }
+.provider-generation-check > button { flex: 0 0 auto; }
+.launch-error-details { max-width: min(480px, 85vw); color: var(--text-muted); font-size: calc(12px * var(--font-scale)); overflow-wrap: anywhere; }
+.launch-error-details p { text-align: left; }
 .settings-page :is(#language-settings, #ai-settings, #mcp-settings, #update-settings, #quick-capture-settings, #appearance-settings, #backup-settings, #support-author) { scroll-margin-top: 12px; }
 .settings-notice { position: sticky; z-index: 20; top: 8px; display: flex; min-height: 39px; align-items: center; gap: 7px; margin-bottom: 12px; padding: 0 9px; border: 1px solid color-mix(in oklch, var(--accent) 38%, var(--border)); border-radius: 7px; background: color-mix(in oklch, var(--accent-soft) 80%, var(--surface-1)); color: var(--accent-strong); font-size: calc(12.5px * var(--font-scale)); }
 .settings-notice span { flex: 1; }.settings-notice button { border: 0; background: transparent; color: inherit; font-size: calc(12px * var(--font-scale)); }

@@ -7,7 +7,7 @@ import { useI18n } from "../hooks/useI18n";
 import { primaryShortcut } from "../lib/platform";
 import { useAppStore } from "../store";
 import { localizedKindLabel, truncate } from "../lib/utils";
-import { searchQueryTerms } from "../lib/searchIndex";
+import { includesQuery, searchRecords } from "../lib/searchRecords";
 import { isMaterializedCard } from "../lib/journalVisibility";
 
 export function CommandPalette() {
@@ -24,23 +24,19 @@ export function CommandPalette() {
   const [active, setActive] = useState(0);
   const cards = useLiveQuery(async () => {
     if (!open) return [];
-    const terms = searchQueryTerms(query, language);
-    return terms.length
-      ? db.cards.where("searchTerms").anyOf(terms).distinct().limit(80).toArray()
-      : db.cards.orderBy("updatedAt").reverse().limit(12).toArray();
+    return searchRecords(db.cards, query, language, (card) => card.state !== "trash" && isMaterializedCard(card) && includesQuery(`${card.title} ${card.plainText}`, query, language), 6);
   }, [language, open, query], []);
-  const boards = useLiveQuery(() => open ? db.boards.orderBy("updatedAt").reverse().limit(query ? 80 : 8).toArray() : [], [open, query], []);
-  const kanbanBoards = useLiveQuery(() => open ? db.kanbanBoards.orderBy("updatedAt").reverse().limit(query ? 80 : 8).toArray() : [], [open, query], []);
+  const boards = useLiveQuery(() => open ? searchRecords(db.boards, query, language, (board) => includesQuery(`${board.title} ${board.description}`, query, language), 4) : [], [language, open, query], []);
+  const kanbanBoards = useLiveQuery(() => open ? searchRecords(db.kanbanBoards, query, language, (board) => includesQuery(`${board.title} ${board.description}`, query, language), 4) : [], [language, open, query], []);
 
   useEffect(() => {
     if (open) { setQuery(""); setActive(0); }
   }, [open]);
 
   const results = useMemo(() => {
-    const q = query.trim().toLocaleLowerCase(language);
-    const cardResults = cards.filter((card) => card.state !== "trash" && isMaterializedCard(card) && (!q || `${card.title} ${card.plainText}`.toLocaleLowerCase(language).includes(q))).slice(0, 6).map((card) => ({ id: card.id, type: "card" as const, title: card.title, detail: `${localizedKindLabel(card.kind, language)} · ${truncate(card.plainText, 70)}` }));
-    const boardResults = boards.filter((board) => !q || `${board.title} ${board.description}`.toLocaleLowerCase(language).includes(q)).slice(0, 4).map((board) => ({ id: board.id, type: "board" as const, title: board.title, detail: board.description || t("brain.typeBoard") }));
-    const kanbanResults = kanbanBoards.filter((board) => !q || `${board.title} ${board.description}`.toLocaleLowerCase(language).includes(q)).slice(0, 4).map((board) => ({ id: board.id, type: "kanban" as const, title: board.title, detail: t("nav.kanban") }));
+    const cardResults = cards.map((card) => ({ id: card.id, type: "card" as const, title: card.title, detail: `${localizedKindLabel(card.kind, language)} · ${truncate(card.plainText, 70)}` }));
+    const boardResults = boards.map((board) => ({ id: board.id, type: "board" as const, title: board.title, detail: board.description || t("brain.typeBoard") }));
+    const kanbanResults = kanbanBoards.map((board) => ({ id: board.id, type: "kanban" as const, title: board.title, detail: t("nav.kanban") }));
     return [...cardResults, ...boardResults, ...kanbanResults];
   }, [boards, cards, kanbanBoards, language, query, t]);
 

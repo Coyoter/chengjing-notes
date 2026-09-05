@@ -1,6 +1,7 @@
 import { db } from "../db";
 import type { AttachmentRecord } from "../types";
 import { blobToDataUrl, dataUrlToBlob } from "./utils";
+import { ignoreTransactionHistory } from "./historyTransactions";
 
 function base64FromDataUrl(value: string) {
   return value.slice(value.indexOf(",") + 1);
@@ -43,7 +44,10 @@ export async function migrateLegacyAttachment(attachment: AttachmentRecord) {
     createdAt: attachment.createdAt,
     data: base64FromDataUrl(await blobToDataUrl(attachment.blob)),
   });
-  await db.attachments.put(stored);
+  await db.transaction("rw", db.attachments, async (transaction) => {
+    ignoreTransactionHistory(transaction);
+    await db.attachments.put(stored);
+  });
   return stored;
 }
 

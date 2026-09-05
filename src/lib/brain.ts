@@ -328,6 +328,11 @@ export function buildBrainGraph(input: {
   const hierarchyCopy = getTaskHierarchyCopy(language);
   const tagMap = new Map(input.tags.map((tag) => [tag.id, tag.name]));
   const cardMap = new Map(input.cards.map((card) => [card.id, card]));
+  const boardText = new Map<string, string[]>();
+  for (const node of input.boardNodes) {
+    const text = !node.cardId && (node.title || node.text);
+    if (text) { const lines = boardText.get(node.boardId) || []; lines.push(text); boardText.set(node.boardId, lines); }
+  }
   const drafts: Array<Omit<BrainNodeView, "weight" | "radius" | "position">> = [];
 
   input.cards.filter((card) => card.state !== "trash" && isMaterializedCard(card)).forEach((card) => {
@@ -338,11 +343,7 @@ export function buildBrainGraph(input: {
   });
   input.boards.forEach((board) => {
     const tagText = board.tagIds.map((id) => tagMap.get(id)).filter(Boolean).join(" ");
-    const looseBoardText = input.boardNodes
-      .filter((node) => node.boardId === board.id && !node.cardId)
-      .map((node) => node.title || node.text || "")
-      .filter(Boolean)
-      .join("\n");
+    const looseBoardText = (boardText.get(board.id) || []).join("\n");
     const text = `${board.title}\n${board.description}\n${looseBoardText}\n${tagText}`.trim();
     drafts.push({ key: `board:${board.id}`, type: "board", id: board.id, title: board.title, text: [board.description, looseBoardText].filter(Boolean).join("\n"), sourceKind: "board", keywords: extractKeywords(text, 16, language), createdAt: board.createdAt, observedAt: board.createdAt, updatedAt: board.updatedAt });
   });

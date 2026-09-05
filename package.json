@@ -1,6 +1,6 @@
 {
   "name": "chengjing",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "private": true,
   "author": "Techtarian",
   "description": "澄境 ChengJing — 本機優先的繁體中文視覺筆記與 AI 研究桌面應用",
@@ -68,6 +68,8 @@
     "qa:highlight-theme": "node scripts/qa-highlight-theme.mjs",
     "qa:ai-conversation": "node scripts/qa-ai-conversation.mjs",
     "qa:advanced-integrations": "node scripts/qa-advanced-integrations.mjs",
+    "qa:health": "node scripts/qa-health-runtime.mjs",
+    "qa:health-suite": "node scripts/qa-health-suite.mjs",
     "smoke:electron": "electron scripts/electron-smoke.cjs",
     "smoke:electron-main": "node scripts/electron-main-smoke.mjs",
     "icons": "node scripts/build-icon.mjs",

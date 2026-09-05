@@ -65,7 +65,10 @@ export function AutoBackupManager() {
                 .then((result) => window.dispatchEvent(new CustomEvent("chengjing:cloud-backup-status", { detail: result })))
                 .catch(() => {});
             }
-          })().finally(() => { running = false; });
+          })().catch((error) => {
+            console.error("Automatic backup preparation failed", error);
+            retryLater();
+          }).finally(() => { running = false; });
         });
       } catch {
         // 設定讀取失敗時不打擾使用者；下一個低頻檢查週期會再嘗試。

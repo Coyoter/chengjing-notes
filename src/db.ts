@@ -1,4 +1,5 @@
-import Dexie, { type EntityTable } from "dexie";
+import Dexie, { type EntityTable, type Transaction } from "dexie";
+import { ignoreTransactionHistory, transactionHistoryIgnored } from "./lib/historyTransactions";
 import dayjs from "dayjs";
 import { intlLocale, translate } from "./i18n";
 import { useAppStore } from "./store";
@@ -149,7 +150,8 @@ class ChengJingDatabase extends Dexie {
     this.cards.hook("updating", (modifications, _key, oldCard) => {
       const language = useAppStore.getState().language || "zh-TW";
       const next = { ...oldCard, ...modifications } as CardRecord;
-      const patch: Partial<CardRecord> = { searchTerms: cardSearchTerms(next, language) };
+      const patch: Partial<CardRecord> = {};
+      if (["title", "plainText", "sourceUrl"].some((key) => Object.prototype.hasOwnProperty.call(modifications, key))) patch.searchTerms = cardSearchTerms(next, language);
       if (Object.prototype.hasOwnProperty.call(modifications, "contentHtml") && (modifications as Partial<CardRecord>).taskSyncState !== "synced") patch.taskSyncState = "pending";
       if (oldCard.kind === "journal" && oldCard.journalTouched !== true) {
         const changedTitle = Object.prototype.hasOwnProperty.call(modifications, "title") && next.title !== oldCard.title;
@@ -163,15 +165,37 @@ class ChengJingDatabase extends Dexie {
     this.tasks.hook("updating", (modifications, _key, oldTask) => { const task = { ...oldTask, ...modifications } as TaskRecord; return { searchTerms: taskSearchTerms(task, useAppStore.getState().language || "zh-TW"), doneKey: task.done ? "done" : "active", scheduleKey: task.dueAt || Number.MAX_SAFE_INTEGER }; });
     this.fragments.hook("creating", (_key, fragment) => { fragment.searchTerms = fragmentSearchTerms(fragment, useAppStore.getState().language || "zh-TW"); fragment.pinnedKey = fragment.pinned ? "pinned" : "normal"; });
     this.fragments.hook("updating", (modifications, _key, oldFragment) => { const fragment = { ...oldFragment, ...modifications } as FragmentRecord; return { searchTerms: fragmentSearchTerms(fragment, useAppStore.getState().language || "zh-TW"), pinnedKey: fragment.pinned ? "pinned" : "normal" }; });
+    const committedMutations = new WeakMap<Transaction, Array<Record<string, unknown>>>();
+    function recordCommitted(transaction: Transaction, mutation: Record<string, unknown>) {
+      if (transactionHistoryIgnored(transaction)) return;
+      const shared = globalThis as typeof globalThis & { __chengjingHistoryRecorder?: (mutation: Record<string, unknown>) => void };
+      if (!shared.__chengjingHistoryRecorder) return;
+      let root = transaction;
+      while (root.parent) root = root.parent;
+      let mutations = committedMutations.get(root);
+      if (!mutations) {
+        mutations = [];
+        committedMutations.set(root, mutations);
+        root.on("complete", () => {
+          for (const item of committedMutations.get(root) || []) shared.__chengjingHistoryRecorder?.(item);
+          committedMutations.delete(root);
+        });
+        root.on("abort", () => committedMutations.delete(root));
+      }
+      mutations.push(structuredClone(mutation));
+    }
     this.tables.forEach((table) => {
-      const recorder = () => (globalThis as typeof globalThis & { __chengjingHistoryRecorder?: (mutation: Record<string, unknown>) => void }).__chengjingHistoryRecorder;
-      table.hook("creating", (key, value) => {
+      table.hook("creating", function (key, value, transaction) {
         const keyPath = table.schema.primKey.keyPath;
         const primaryKey = typeof key === "string" ? key : typeof keyPath === "string" ? String((value as Record<string, unknown>)[keyPath] || "") : "";
-        if (primaryKey) recorder()?.({ type: "creating", table: table.name, key: primaryKey, value });
+        if (primaryKey) this.onsuccess = () => recordCommitted(transaction, { type: "creating", table: table.name, key: primaryKey, value });
       });
-      table.hook("updating", (modifications, key, oldValue) => recorder()?.({ type: "updating", table: table.name, key: String(key), modifications, oldValue }));
-      table.hook("deleting", (key, oldValue) => recorder()?.({ type: "deleting", table: table.name, key: String(key), oldValue }));
+      table.hook("updating", function (modifications, key, oldValue, transaction) {
+        this.onsuccess = () => recordCommitted(transaction, { type: "updating", table: table.name, key: String(key), modifications, oldValue });
+      });
+      table.hook("deleting", function (key, oldValue, transaction) {
+        this.onsuccess = () => recordCommitted(transaction, { type: "deleting", table: table.name, key: String(key), oldValue });
+      });
     });
   }
 }
@@ -526,6 +550,7 @@ export async function touchBoard(boardId: string) {
 }
 
 export async function updateCardWithHistory(cardId: string, patch: Partial<CardRecord>) {
+  return db.transaction("rw", [db.cards, db.cardVersions], async () => {
   const current = await db.cards.get(cardId);
   if (!current) return 0;
   const versions = await db.cardVersions.where("cardId").equals(cardId).toArray();
@@ -542,9 +567,10 @@ export async function updateCardWithHistory(cardId: string, patch: Partial<CardR
     });
     versionAdded = true;
   }
-  const result = await db.cards.update(cardId, { ...patch, updatedAt: Date.now() });
+  const result = await db.cards.update(cardId, { ...patch, updatedAt: Math.max(Date.now(), current.updatedAt + 1) });
   if (versionAdded) await pruneCardVersions(cardId);
   return result;
+  });
 }
 
 export async function pruneCardVersions(cardId: string, now = Date.now()) {
@@ -625,7 +651,12 @@ export async function pruneUntouchedJournalDrafts(exceptJournalDate?: string) {
 export async function pruneAllCardVersions() {
   const cardIds = await db.cardVersions.orderBy("cardId").uniqueKeys();
   let removed = 0;
-  for (const cardId of cardIds) removed += await pruneCardVersions(String(cardId));
+  for (const cardId of cardIds) {
+    removed += await db.transaction("rw", db.cardVersions, (transaction) => {
+      ignoreTransactionHistory(transaction);
+      return pruneCardVersions(String(cardId));
+    });
+  }
   return removed;
 }
 

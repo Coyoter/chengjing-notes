@@ -43,7 +43,10 @@ const nav: Array<{ view: AppView; label: MessageKey; icon: typeof Archive; badge
 
 export function Sidebar() {
   const boards = useLiveQuery(() => db.boards.orderBy("updatedAt").reverse().limit(5).toArray(), [], []);
-  const taskCount = useLiveQuery(() => db.tasks.where("done").equals(0).count(), [], 0);
+  const taskCount = useLiveQuery(async () => {
+    const trash = new Set(await db.cards.where("state").equals("trash").primaryKeys());
+    return db.tasks.where("doneKey").equals("active").filter((task) => !task.cardId || !trash.has(task.cardId)).count();
+  }, [], 0);
   const view = useAppStore((state) => state.view);
   const selectedBoardId = useAppStore((state) => state.selectedBoardId);
   const collapsed = useAppStore((state) => state.sidebarCollapsed);
@@ -87,6 +90,7 @@ export function Sidebar() {
               className={view === item.view ? "is-active" : ""}
               onClick={() => setView(item.view)}
               aria-current={view === item.view ? "page" : undefined}
+              aria-label={label}
               title={collapsed ? label : undefined}
             >
               <Icon size={17} />

@@ -30,7 +30,7 @@ import {
 } from "../lib/autoBackup";
 import { getAutoBackupCopy } from "../lib/autoBackupCopy";
 import { formatBytes, friendlyErrorMessage } from "../lib/utils";
-import { estimateNoteStorageBytes, restoreBackup, saveJsonBackup, saveMarkdownArchive } from "../lib/backup";
+import { estimateNoteStorageBytes, restoreBackup, restoreLocalBackup, saveJsonBackup, saveMarkdownArchive } from "../lib/backup";
 import { inspectLocalModel } from "../lib/localGemma";
 import { db } from "../db";
 import { useI18n } from "../hooks/useI18n";
@@ -277,7 +277,7 @@ export function AutoBackupSettingsPanel() {
     if (result.canceled || !result.files[0]) return;
     try {
       const raw = new TextDecoder().decode(Uint8Array.from(atob(result.files[0].data), (character) => character.charCodeAt(0)));
-      await restoreBackup(raw, result.files[0].path);
+      if (!await restoreLocalBackup(raw, result.files[0].path)) return;
       setNotice(t("settings.backupRestored"));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t("settings.backupFailed"));

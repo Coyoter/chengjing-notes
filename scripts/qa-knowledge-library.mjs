@@ -83,7 +83,10 @@ const unifiedModesVisible = await createModal.getByRole("button", { name: /筆�
 await createModal.getByRole("button", { name: /檔案/ }).click();
 const fileTypesVisible = (await Promise.all(["PDF / DOCX / MD", "PNG / JPG / WebP", "MP3 / WAV", "MP4 / MOV"].map((text) => createModal.getByText(text, { exact: true }).isVisible()))).every(Boolean);
 await createModal.getByRole("button", { name: "選擇檔案", exact: true }).click();
-await page.waitForFunction(() => document.querySelector(".card-editor-panel .card-title-input")?.value === "Private Source");
+await page.waitForFunction(() => document.querySelector(".card-editor-panel .card-title-input")?.value === "Private Source").catch(async (error) => {
+  console.error(JSON.stringify({ importState: await createModal.innerText().catch(() => "closed"), errors }));
+  throw error;
+});
 const importedPdfPreview = page.locator(".pdf-document-preview");
 await importedPdfPreview.waitFor();
 await page.waitForFunction(() => { const canvas = document.querySelector(".pdf-document-preview canvas"); return Boolean(canvas && canvas.width > 100 && canvas.height > 100); });

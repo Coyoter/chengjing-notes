@@ -497,8 +497,8 @@ function createGoogleDriveBackupService(options) {
     const files = await listFiles();
     const selected = selectCloudSnapshots(files);
     debug(`status-current-${selected.current ? "yes" : "no"}-previous-${selected.previous ? "yes" : "no"}`);
-    await pruneRemoteHistory(files, selected);
     const result = statusFrom(value, true, selected);
+    if (!result.needsDecision && !value.conflict) await pruneRemoteHistory(files, selected);
     if (result.needsDecision !== value.conflict || result.settings.enabled !== value.enabled) {
       result.settings = await saveSettings({ ...value, enabled: result.settings.enabled, conflict: result.needsDecision });
     }
@@ -557,6 +557,10 @@ function createGoogleDriveBackupService(options) {
       for (const required of hashes) if (!declared.has(required)) throw new Error("cloud-backup-asset-missing");
       const assetResult = await uploadMissingAssets(files, assets);
       debug(`write-assets-complete-${assetResult.uploaded}-${assetResult.reused}`);
+      // Uploading attachments can take minutes. Re-check the baseline before
+      // publishing a snapshot so a newer device backup is not silently replaced.
+      const beforePublish = selectCloudSnapshots(await listFiles());
+      if ((beforePublish.current?.id || "") !== (selected.current?.id || "")) throw new Error("cloud-backup-conflict");
       const snapshotAt = Date.now();
       const manifest = await createBufferFile({
         name: `${MANIFEST_PREFIX}${new Date(snapshotAt).toISOString().replaceAll(":", "-")}.json`,

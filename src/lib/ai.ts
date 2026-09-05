@@ -12,6 +12,12 @@ function currentLanguage(): AppLanguage {
   return useAppStore.getState().language || "zh-TW";
 }
 
+export function isUnsupportedResponseFormat(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /unsupported|not supported|does not support|不支援|不支持/i.test(message)
+    && /response[_ .-]?format|text\.format|json_schema|json_object|structured(?:\s+output)?/i.test(message);
+}
+
 export async function searchSpace(query: string, limit = 8, language = currentLanguage()) {
   const locale = intlLocale[language];
   const terms = searchQueryTerms(query, language);
@@ -101,13 +107,14 @@ export async function runAI(options: {
       responseFormat: options.responseFormat,
       routingMode: useAppStore.getState().openRouterRoutingMode,
   };
+  const profileId = useAppStore.getState().customProviderId;
   const send = options.engine === "custom-provider"
-    ? (payload: typeof request) => window.chengjing!.ai.providerChat({ ...payload, profileId: useAppStore.getState().customProviderId })
+    ? (payload: typeof request) => window.chengjing!.ai.providerChat({ ...payload, profileId })
     : (payload: typeof request) => window.chengjing!.ai.openRouterChat(payload);
   try {
     return await send(request);
   } catch (error) {
-    if (options.responseFormat) {
+    if (options.responseFormat && isUnsupportedResponseFormat(error)) {
       try {
         return await send({ ...request, responseFormat: undefined });
       } catch (fallbackError) {

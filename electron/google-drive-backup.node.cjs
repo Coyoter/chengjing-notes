@@ -248,6 +248,27 @@ test("雲端被另一台裝置更新時會停止覆寫", async () => {
   }
 });
 
+test("長時間上傳之後再次檢查雲端世代，衝突時保留兩邊的備份", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "chengjing-cloud-publish-conflict-"));
+  const attachments = path.join(root, "attachments"); const drive = fakeDrive();
+  try {
+    await fs.mkdir(attachments);
+    await writeCloudSettings(root, { enabled: true, deviceId: "device-12345678901234567890" });
+    await writeSecureToken(root, fakeSafeStorage, { accessToken: "access", refreshToken: "refresh", expiresAt: Date.now() + PREVIOUS_MAX_AGE_MS });
+    const service = createGoogleDriveBackupService({ net: drive, safeStorage: fakeSafeStorage, shell: { openExternal: async () => {} }, userDataDirectory: root, attachmentsDirectory: attachments, clientId: "id", clientSecret: "secret" });
+    const original = await service.write({ data: payload("原資料", new Date().toISOString()), assets: [] });
+    const fetch = drive.fetch; let lists = 0;
+    drive.fetch = async (url, init) => {
+      if (new URL(url).pathname === "/drive/v3/files" && ++lists === 2) drive.files.set("concurrent-device", { ...manifest("concurrent-device", "current", Date.now() + 1000), content: payload("其他裝置", new Date().toISOString()) });
+      return fetch(url, init);
+    };
+    await assert.rejects(service.write({ data: payload("新資料", new Date().toISOString()), assets: [] }), /cloud-backup-conflict/);
+    await service.getStatus();
+    assert.equal(drive.files.has(original.current.id), true);
+    assert.equal(drive.files.has("concurrent-device"), true);
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
+});
+
 test("附件以內容雜湊串流上傳且同一份不重複傳送", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "chengjing-cloud-asset-"));
   const attachments = path.join(root, "attachments");
