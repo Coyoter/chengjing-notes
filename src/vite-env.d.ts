@@ -28,6 +28,7 @@ interface Window {
       writeSafety: (request: { data: string; assets?: Array<{ relativePath: string; sha256: string; size: number }> }) => Promise<{ filePath: string; filename: string; bytes: number }>;
     };
     cloudBackups: {
+      onBeforeQuit?: (callback: () => Promise<void>) => () => void;
       getLocalStatus: () => Promise<import("./types").CloudBackupStatus>;
       getStatus: () => Promise<import("./types").CloudBackupStatus>;
       connect: () => Promise<import("./types").CloudBackupStatus>;

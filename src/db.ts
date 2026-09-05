@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable, type Transaction } from "dexie";
+import { markBackupChanged } from "./lib/backupChanges";
 import { ignoreTransactionHistory, transactionHistoryIgnored } from "./lib/historyTransactions";
 import dayjs from "dayjs";
 import { intlLocale, translate } from "./i18n";
@@ -166,7 +167,14 @@ class ChengJingDatabase extends Dexie {
     this.fragments.hook("creating", (_key, fragment) => { fragment.searchTerms = fragmentSearchTerms(fragment, useAppStore.getState().language || "zh-TW"); fragment.pinnedKey = fragment.pinned ? "pinned" : "normal"; });
     this.fragments.hook("updating", (modifications, _key, oldFragment) => { const fragment = { ...oldFragment, ...modifications } as FragmentRecord; return { searchTerms: fragmentSearchTerms(fragment, useAppStore.getState().language || "zh-TW"), pinnedKey: fragment.pinned ? "pinned" : "normal" }; });
     const committedMutations = new WeakMap<Transaction, Array<Record<string, unknown>>>();
+    const backupTransactions = new WeakSet<Transaction>();
     function recordCommitted(transaction: Transaction, mutation: Record<string, unknown>) {
+      let backupRoot = transaction;
+      while (backupRoot.parent) backupRoot = backupRoot.parent;
+      if (!backupTransactions.has(backupRoot)) {
+        backupTransactions.add(backupRoot);
+        backupRoot.on("complete", () => markBackupChanged());
+      }
       if (transactionHistoryIgnored(transaction)) return;
       const shared = globalThis as typeof globalThis & { __chengjingHistoryRecorder?: (mutation: Record<string, unknown>) => void };
       if (!shared.__chengjingHistoryRecorder) return;

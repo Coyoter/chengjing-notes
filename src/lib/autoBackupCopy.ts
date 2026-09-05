@@ -271,5 +271,12 @@ const completeCopyOverrides: Partial<Record<AppLanguage, Partial<AutoBackupCopy>
 
 export function getAutoBackupCopy(language: AppLanguage) {
   const base = copy[language] || copy.en;
-  return { ...base, ...(completeCopyOverrides[language] || {}) };
+  const schedule = {
+    "zh-TW": ["修改後停筆 30 秒自動備份；持續編輯時定期備份，退出前補存。", "持續編輯時的備份間隔"],
+    "zh-CN": ["修改后停笔 30 秒自动备份；持续编辑时定期备份，退出前补存。", "持续编辑时的备份间隔"],
+    en: ["Backs up 30 seconds after editing stops, periodically while writing, and before quitting.", "Backup interval while editing"],
+    ja: ["編集が止まって30秒後、編集中は定期的に、終了前にもバックアップします。", "編集中のバックアップ間隔"],
+    ko: ["편집을 멈춘 지 30초 후, 계속 편집하는 동안 주기적으로, 종료 전에도 백업합니다.", "편집 중 백업 간격"],
+  }[language] || ["Backs up after editing and before quitting.", "Backup interval while editing"];
+  return { ...base, ...(completeCopyOverrides[language] || {}), cloudEnabled: schedule[0], intervalLabel: schedule[1] };
 }

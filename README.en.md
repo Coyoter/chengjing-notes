@@ -1,4 +1,4 @@
-# ChengJing Notes v0.9.4
+# ChengJing Notes v0.9.5
 
 <p align="center">
   <a href="README.md">繁體中文</a>

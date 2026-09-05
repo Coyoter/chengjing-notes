@@ -32,6 +32,17 @@ contextBridge.exposeInMainWorld("chengjing", {
     writeSafety: (request) => ipcRenderer.invoke("backup:write-safety", request),
   },
   cloudBackups: {
+    onBeforeQuit: (callback) => {
+      const listener = async (_event, id) => {
+        try { await callback(); ipcRenderer.send("cloud-backup:quit-result", { id }); }
+        catch (error) { ipcRenderer.send("cloud-backup:quit-result", { id, error: String(error?.message || error) }); }
+      };
+      ipcRenderer.on("cloud-backup:before-quit", listener);
+      const cancel = () => window.dispatchEvent(new Event("chengjing:quit-backup-cancelled"));
+      ipcRenderer.on("cloud-backup:quit-cancelled", cancel);
+      ipcRenderer.send("cloud-backup:quit-ready");
+      return () => { ipcRenderer.removeListener("cloud-backup:before-quit", listener); ipcRenderer.removeListener("cloud-backup:quit-cancelled", cancel); };
+    },
     getLocalStatus: () => ipcRenderer.invoke("cloud-backup:get-local-status"),
     getStatus: () => ipcRenderer.invoke("cloud-backup:get-status"),
     connect: () => ipcRenderer.invoke("cloud-backup:connect"),

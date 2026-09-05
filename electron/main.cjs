@@ -1647,7 +1647,66 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on("before-quit", () => { isQuitting = true; });
+let backupQuitAllowed = false;
+let backupQuitRunning = false;
+let backupQuitRenderer = null;
+let pendingBackupQuit = null;
+ipcMain.on("cloud-backup:quit-ready", (event) => {
+  if (event.sender === mainWindow?.webContents) backupQuitRenderer = event.sender;
+});
+ipcMain.on("cloud-backup:quit-result", (event, result) => {
+  if (pendingBackupQuit && event.sender === pendingBackupQuit.sender && result?.id === pendingBackupQuit.id) {
+    const pending = pendingBackupQuit;
+    pendingBackupQuit = null;
+    clearTimeout(pending.timer);
+    result.error ? pending.reject(new Error(result.error)) : pending.resolve();
+  }
+});
+async function backupBeforeQuit() {
+  const status = await cloudBackupService().getLocalStatus();
+  if (!status.connected || (!status.settings.enabled && !status.settings.conflict)) return;
+  if (!mainWindow || mainWindow.isDestroyed()) await createWindow();
+  const started = Date.now();
+  while (backupQuitRenderer !== mainWindow?.webContents) {
+    if (Date.now() - started > 10_000) throw new Error("Backup window did not become ready.");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  await new Promise((resolve, reject) => {
+    const id = randomUUID();
+    const sender = backupQuitRenderer;
+    const timer = setTimeout(() => {
+      if (pendingBackupQuit?.id === id) pendingBackupQuit = null;
+      reject(new Error("Cloud backup did not finish within 30 seconds."));
+    }, 30_000);
+    pendingBackupQuit = { id, sender, timer, resolve, reject };
+    sender.send("cloud-backup:before-quit", id);
+  });
+}
+app.on("before-quit", (event) => {
+  if (backupQuitAllowed || isSmoke) { isQuitting = true; return; }
+  event.preventDefault();
+  if (backupQuitRunning) return;
+  backupQuitRunning = true;
+  void (async () => {
+    try {
+      await backupBeforeQuit();
+      backupQuitAllowed = true;
+      app.quit();
+    } catch {
+      const chinese = currentLanguage.startsWith("zh");
+      const result = await dialog.showMessageBox({
+        type: "warning", title: "澄境",
+        message: chinese ? "最新內容尚未完成雲端備份" : "Your latest changes have not finished backing up",
+        detail: chinese ? "資料仍保存在這台電腦。你可以重試、返回澄境，或仍然退出並於下次開啟補傳。若另一台裝置有更新，請先到備份設定處理衝突。" : "Your data remains on this computer. Retry, return to ChengJing, or quit and upload next time. If another device changed the backup, resolve the conflict in Settings first.",
+        buttons: chinese ? ["重試備份", "返回澄境", "仍然退出"] : ["Retry backup", "Return to ChengJing", "Quit anyway"],
+        defaultId: 0, cancelId: 1,
+      });
+      if (result.response === 2) { backupQuitAllowed = true; app.quit(); }
+      else if (result.response === 0) { backupQuitRunning = false; app.quit(); }
+      else backupQuitRenderer?.send("cloud-backup:quit-cancelled");
+    } finally { backupQuitRunning = false; }
+  })();
+});
 app.on("will-quit", () => { if (mcpStartupTimer) clearTimeout(mcpStartupTimer); stopQuickCaptureShortcut(); globalShortcut.unregisterAll(); void stopMcpServer(); });
 
 app.on("window-all-closed", () => {

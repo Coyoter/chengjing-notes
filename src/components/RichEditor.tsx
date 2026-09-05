@@ -49,6 +49,7 @@ export function RichEditor({ content, onChange, placeholder, autoFocus = false, 
   const { t } = useI18n();
   const resolvedPlaceholder = placeholder || t("editor.start");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSave = useRef<(() => void) | null>(null);
   const onChangeRef = useRef(onChange);
   const taskOwnerIdRef = useRef(taskOwnerId);
   const [saveState, setSaveState] = useState<"saved" | "saving">("saved");
@@ -71,7 +72,8 @@ export function RichEditor({ content, onChange, placeholder, autoFocus = false, 
     onUpdate: ({ editor: activeEditor }) => {
       setSaveState("saving");
       if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => {
+      pendingSave.current = () => {
+        pendingSave.current = null;
         const originalHtml = activeEditor.getHTML();
         const normalized = normalizeEditorTaskHtml(originalHtml);
         if (normalized.html !== originalHtml) {
@@ -83,7 +85,8 @@ export function RichEditor({ content, onChange, placeholder, autoFocus = false, 
         onChangeRef.current(normalized.html, plainText);
         if (taskOwnerIdRef.current) void syncCardTasksFromHtml(taskOwnerIdRef.current, normalized.html);
         setSaveState("saved");
-      }, 420);
+      };
+      timer.current = setTimeout(() => pendingSave.current?.(), 420);
     },
   }, [resolvedPlaceholder]);
 
@@ -110,6 +113,12 @@ export function RichEditor({ content, onChange, placeholder, autoFocus = false, 
 
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
+  }, []);
+
+  useEffect(() => {
+    const flush = () => { if (timer.current) clearTimeout(timer.current); pendingSave.current?.(); };
+    window.addEventListener("chengjing:flush-editors", flush);
+    return () => window.removeEventListener("chengjing:flush-editors", flush);
   }, []);
 
   if (!editor) return null;

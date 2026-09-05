@@ -1,4 +1,4 @@
-# 澄境筆記 ChengJing Notes v0.9.4
+# 澄境筆記 ChengJing Notes v0.9.5
 
 <p align="center">
   <a href="README.md"><strong>繁體中文</strong></a>

@@ -1,4 +1,10 @@
-# 澄境筆記 v0.9.4 驗收報告
+# 澄境筆記 v0.9.5 驗收報告
+
+## 0.9.5 備份排程
+
+- 新增八項排程與持久記號測試，涵蓋停筆30秒、持續編輯期限、閱讀不延後、退出失敗、重試、重新啟動補傳、上傳期間新修改保留與進行中請求失敗。
+- 真實 Electron 主程序＋preload＋編輯器測試使用隔離資料與模擬雲端服務；輸入最後文字後立即退出，備份內容包含最後編輯。模擬第一次上傳失敗後，原生退出流程選重試，第二次上傳成功後退出。
+- Google／本地雙軌、五語、緊急救援預設收合與窄視窗驗收通過。本次未變更 Drive 儲存格式與歷史快照保留規則。
 
 ## 0.9.4 第二大腦模型相容性
 
@@ -123,9 +129,9 @@
 
 ## 正式成品
 
-- Windows ARM64：`release/ChengJing-0.9.4-arm64-Installer.exe`
-- Windows Intel／AMD x64：`release/ChengJing-0.9.4-x64-Installer.exe`
-- Apple Silicon Mac：`release/ChengJing-0.9.4-arm64.dmg`
+- Windows ARM64：`release/ChengJing-0.9.5-arm64-Installer.exe`
+- Windows Intel／AMD x64：`release/ChengJing-0.9.5-x64-Installer.exe`
+- Apple Silicon Mac：`release/ChengJing-0.9.5-arm64.dmg`
 - 本機 `release` 只保留上述三個正式安裝檔。
 - `hdiutil verify`：通過。
 - 尚未使用 Apple Developer ID 簽章與公證，Windows 也尚未使用商業程式碼簽章。
