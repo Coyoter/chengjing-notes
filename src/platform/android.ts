@@ -1,4 +1,5 @@
-import type { AppLanguage } from "../types";
+import type { AppLanguage, ThemeMode } from "../types";
+import { useAppStore } from "../store";
 
 declare global {
   interface Window {
@@ -24,7 +25,15 @@ export async function initializeAndroid() {
     clearTimeout(request.timer); pending.delete(id);
     error ? request.reject(new Error(error)) : request.resolve(value);
   };
-  const info = await androidCall<{ version: string; language: AppLanguage }>("app.info");
+  const info = await androidCall<{ version: string; language: AppLanguage; systemDark: boolean; qaIsolated?: boolean; themeMode?: ThemeMode; uiLanguage?: AppLanguage; fontScale?: number }>("app.info");
+  if(info.themeMode&&["system","light","dark","ink"].includes(info.themeMode))useAppStore.getState().setTheme(info.themeMode);
+  if(info.uiLanguage&&["zh-TW","zh-CN","en","ja","ko"].includes(info.uiLanguage))useAppStore.getState().setLanguage(info.uiLanguage);
+  if(info.fontScale&&[.9,1,1.1,1.2].includes(info.fontScale))useAppStore.getState().setFontScale(info.fontScale);
+  document.documentElement.dataset.systemTheme=info.systemDark?"dark":"light";
+  window.addEventListener("chengjing:android-system-theme",event=>{
+    document.documentElement.dataset.systemTheme=(event as CustomEvent<{dark:boolean}>).detail.dark?"dark":"light";
+    window.dispatchEvent(new Event("chengjing:system-theme"));
+  });
   const subscribe = (name: string, callback: (value: any) => void) => {
     const listener = (event: Event) => callback((event as CustomEvent).detail);
     window.addEventListener(name, listener); return () => window.removeEventListener(name, listener);
@@ -91,11 +100,17 @@ export async function initializeAndroid() {
       adoptCurrentForOverwrite: () => androidCall("cloud.adopt"),
     },
   } as NonNullable<Window["chengjing"]>;
+  if(info.qaIsolated) {
+    document.documentElement.dataset.qaIsolated="true";
+    window.chengjing.sync=undefined;
+    window.chengjing.cloudBackups=undefined;
+  }
   document.documentElement.dataset.platform = "android";
   document.documentElement.dataset.mobile = "true";
   new MutationObserver(() => {
     const dark = document.documentElement.dataset.theme !== "light";
     const color = getComputedStyle(document.documentElement).getPropertyValue("--canvas").trim();
-    void androidCall("app.theme", { dark, color: /^#[0-9a-f]{6}$/i.test(color) ? color : dark ? "#111816" : "#f2f0e8" }).catch(() => {});
-  }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    const state=useAppStore.getState();
+    void androidCall("app.theme", { mode:state.theme, fontScale:state.fontScale, language:state.language, dark, color: /^#[0-9a-f]{6}$/i.test(color) ? color : dark ? "#111816" : "#f2f0e8" }).catch(() => {});
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme","data-language","style"] });
 }

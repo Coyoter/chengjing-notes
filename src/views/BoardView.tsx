@@ -839,6 +839,11 @@ function BoardCanvas({ boardId, focusNodeId, onFocusConsumed }: { boardId: strin
       {activeTool === "connect" && !status && <div className="board-connect-guide"><Link2 size={14} /><span>{pendingConnectionNodeId ? t("board.chooseTarget") : t("board.connectGuide")}</span></div>}
 
       <ReactFlow
+        ariaLabelConfig={{
+          "controls.zoomIn.ariaLabel":({"zh-TW":"放大","zh-CN":"放大",en:"Zoom in",ja:"拡大",ko:"확대"})[language],
+          "controls.zoomOut.ariaLabel":({"zh-TW":"縮小","zh-CN":"缩小",en:"Zoom out",ja:"縮小",ko:"축소"})[language],
+          "controls.fitView.ariaLabel":t("board.showAll"),
+        }}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -936,7 +941,7 @@ export function BoardView() {
   }, [cardPickerOpen, cardQuery, existingCardIds.join("|"), language], []);
   const cardMap = useMemo(() => new globalThis.Map(allCards.map((card) => [card.id, card])), [allCards]);
 
-  useEffect(() => { if (!selectedBoardId && boards[0]) openBoard(boards[0].id); }, [boards, openBoard, selectedBoardId]);
+  useEffect(() => { if (boards[0] && !boards.some(item=>item.id===selectedBoardId)) openBoard(boards[0].id); }, [boards, openBoard, selectedBoardId]);
   useEffect(() => {
     if (!renamingBoard) setBoardTitleDraft(board?.title || "");
   }, [board?.id, board?.title, renamingBoard]);

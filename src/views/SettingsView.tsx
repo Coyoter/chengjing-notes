@@ -40,6 +40,8 @@ import { AdvancedAIProviderSettings } from "../components/AdvancedAIProviderSett
 import { getAdvancedProviderCopy } from "../lib/advancedProviderCopy";
 import { McpSettingsPanel } from "../components/McpSettings";
 import { SyncSettings } from "../components/SyncSettings";
+import { CloudBackupImport } from "../components/CloudBackupImport";
+import { AndroidUpdateSettings } from "../components/AndroidUpdateSettings";
 import { SettingsJumpNav } from "../components/SettingsJumpNav";
 import { getSettingsDisclosureCopy } from "../lib/settingsAnchorCopy";
 
@@ -201,7 +203,7 @@ export function SettingsView() {
         {engine === "local-gemma" && <div className="active-engine-settings">
           <div className="settings-card local-model-card engine-runtime-card">
             <header><HardDrive size={18} /><div><h3>{t("settings.localModel")}</h3><p>{localStatus.message}</p></div><i className={localStatus.cached ? "status-dot is-ready" : "status-dot"} /></header>
-            <div className="model-storage"><span><b>{formatBytes(localStatus.size)}</b><small>q4f16・WebGPU</small></span>{localStatus.cached ? <button type="button" className="secondary-button" onClick={removeModel}><Trash2 size={15} />{t("settings.removeModel")}</button> : <button type="button" className="primary-button" disabled={busy || localStatus.state === "unsupported"} onClick={downloadModel}><Download size={15} />{busy ? t("settings.downloading") : t("settings.downloadModel")}</button>}</div>
+            <div className="model-storage"><span><b>{formatBytes(localStatus.size)}</b><small>{window.chengjing?.platform==="android"?(language.startsWith("zh")?"本機 AI":"On-device AI"):"q4f16・WebGPU"}</small></span>{localStatus.cached ? <button type="button" className="secondary-button" onClick={removeModel}><Trash2 size={15} />{t("settings.removeModel")}</button> : <button type="button" className="primary-button" disabled={busy || localStatus.state === "unsupported"} onClick={downloadModel}><Download size={15} />{busy ? t("settings.downloading") : t("settings.downloadModel")}</button>}</div>
             {busy && <div className="download-progress"><div><i style={{ width: `${downloadProgress}%` }} /></div><span>{downloadProgress.toFixed(1)}% · {downloadFile || t("local.preparing")}</span></div>}
             <footer><span><ShieldCheck size={13} />{t("settings.localPrivacy")}</span></footer>
           </div>
@@ -239,7 +241,7 @@ export function SettingsView() {
       {window.chengjing?.sync && <SyncSettings />}
       {window.chengjing?.platform !== "android" && <McpSettingsPanel />}
 
-      <UpdateSettingsSection />
+      {window.chengjing?.platform==="android"?<AndroidUpdateSettings />:<UpdateSettingsSection />}
 
       {window.chengjing?.platform !== "android" && <QuickCaptureSettingsPanel />}
 
@@ -254,6 +256,7 @@ export function SettingsView() {
 
       <section className="settings-section" id="backup-settings">
         <AutoBackupSettingsPanel />
+        {window.chengjing?.sync && <CloudBackupImport />}
       </section>
 
       <section className="settings-section support-author" id="support-author">

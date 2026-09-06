@@ -50,6 +50,7 @@ import type { TaskRecord } from "../types";
 import { duplicateCardFromId, readAppClipboard, writeAppClipboard } from "../lib/appClipboard";
 import { createUnscheduledContentTask } from "../lib/contentTask";
 import { getContentTaskCopy } from "../lib/contentTaskCopy";
+import { useMobileBack } from "../lib/mobileBack";
 
 type DateFilter = "all" | "overdue" | "today" | "upcoming" | "none";
 type SortMode = "manual" | "title" | "due";
@@ -104,6 +105,7 @@ export function KanbanView() {
   const [boardMenu, setBoardMenu] = useState<{ x: number; y: number } | null>(null);
   const [listMenu, setListMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [existingTargetListId, setExistingTargetListId] = useState<string | null>(null);
+  useMobileBack(Boolean(existingTargetListId||selectedPlacementId||boardMenu||listMenu),()=>{if(existingTargetListId)setExistingTargetListId(null);else if(boardMenu||listMenu){setBoardMenu(null);setListMenu(null);}else setSelectedPlacementId(null);});
   const [existingQuery, setExistingQuery] = useState("");
   const [inspectorTitleDraft, setInspectorTitleDraft] = useState("");
   const [dropTarget, setDropTarget] = useState<{ listId: string; index: number } | null>(null);

@@ -1,11 +1,13 @@
-import { lazy, Suspense, useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { mobileMotion } from "./lib/mobileMotion";
 import { db, pruneAllCardVersions, pruneLegacyDemoSourceCard, pruneUntouchedJournalDrafts, seedDatabase } from "./db";
 import { getHealthCopy } from "./lib/healthCopy";
 import { hasPersistedLanguagePreference, useAppStore } from "./store";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
-import { Workspace } from "./components/Workspace";
+import { Workspace, preloadWorkspaceView } from "./components/Workspace";
+import { androidCall } from "./platform/android";
 import { CommandPalette } from "./components/CommandPalette";
 import { GlobalContextMenu } from "./components/GlobalContextMenu";
 import { UpdateManager } from "./components/UpdateManager";
@@ -61,16 +63,20 @@ function scheduleWorkspaceMaintenance() {
 }
 
 function applyTheme(theme: ThemeMode) {
+  document.documentElement.dataset.themeMode = theme;
   const resolved = theme === "system"
-    ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+    ? (window.chengjing?.platform==="android" && document.documentElement.dataset.systemTheme ? document.documentElement.dataset.systemTheme : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
     : theme;
   document.documentElement.dataset.theme = resolved;
   document.documentElement.style.colorScheme = resolved === "light" ? "light" : "dark";
 }
 
 export function App() {
+  const android=window.chengjing?.platform==="android";
+  const reducedMotion=useReducedMotion();
   const [ready, setReady] = useState(false);
   const [startupError, setStartupError] = useState("");
+  const nativeReadySent=useRef(false);
   const theme = useAppStore((state) => state.theme);
   const language = useAppStore((state) => state.language);
   const fontScale = useAppStore((state) => state.fontScale);
@@ -87,6 +93,14 @@ export function App() {
   const setLanguage = useAppStore((state) => state.setLanguage);
   const { t } = useI18n();
   const healthCopy = getHealthCopy(language);
+  useEffect(()=>{
+    if(!android||nativeReadySent.current||(!ready&&!startupError))return;
+    let active=true;
+    void (ready?preloadWorkspaceView(view):Promise.resolve()).catch(()=>{}).then(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      if(!active)return;nativeReadySent.current=true;void androidCall("app.ready").catch(()=>{});
+    })));
+    return()=>{active=false;};
+  },[android,ready,startupError,view]);
 
   useEffect(() => {
     prepareWorkspace().then(initializeGlobalHistory).then(() => {
@@ -120,7 +134,8 @@ export function App() {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const listener = () => theme === "system" && applyTheme(theme);
     media.addEventListener("change", listener);
-    return () => media.removeEventListener("change", listener);
+    window.addEventListener("chengjing:system-theme",listener);
+    return () => {media.removeEventListener("change", listener);window.removeEventListener("chengjing:system-theme",listener);};
   }, [theme]);
 
   useEffect(() => {
@@ -190,6 +205,7 @@ export function App() {
   useEffect(() => { if (importOpen) setImportLoaded(true); }, [importOpen]);
 
   if (!ready) {
+    if(android&&!startupError)return <main className="android-launch-placeholder" aria-label={t("app.launchAria")} aria-busy="true"/>;
     return (
       <main className="launch-screen" aria-label={t("app.launchAria")}>
         <img src={markUrl} alt="" />
@@ -213,10 +229,10 @@ export function App() {
           {selectedCardId && (
             <motion.section
               className="card-focus-layer"
-              initial={window.chengjing?.platform === "android" ? { opacity: 1, x: "100%" } : { opacity: 0, y: 5 }}
+              initial={android && reducedMotion ? false : android ? { opacity: 1, x: "100%" } : { opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0, x: 0 }}
               exit={window.chengjing?.platform === "android" ? { opacity: 1, x: "100%" } : { opacity: 0, y: 4 }}
-              transition={{ duration: 0.16, ease: [0.2, 0.8, 0.2, 1] }}
+              transition={android ? reducedMotion ? mobileMotion.reduced : mobileMotion.sheet : { duration: 0.16, ease: [0.2, 0.8, 0.2, 1] }}
             >
               <Suspense fallback={null}><CardEditorPanel /></Suspense>
             </motion.section>
@@ -227,10 +243,10 @@ export function App() {
         {rightPanel !== "none" && (
           <motion.aside
             className="right-panel"
-            initial={{ x: 24, opacity: 0 }}
+            initial={android && reducedMotion ? false : { x: android ? 36 : 24, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 20, opacity: 0 }}
-            transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
+            transition={android ? reducedMotion ? mobileMotion.reduced : mobileMotion.sheet : { duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
           >
             <Suspense fallback={null}>{rightPanel === "ai" ? <AIPanel /> : <WishPoolPanel />}</Suspense>
           </motion.aside>

@@ -11,12 +11,16 @@ import { getKnowledgeCopy } from "../lib/knowledgeCopy";
 import type { CardKind, CardRecord, KnowledgeGroupKind } from "../types";
 import { includesQuery, searchRecords } from "../lib/searchRecords";
 import { isMaterializedCard } from "../lib/journalVisibility";
+import { useMobileBack } from "../lib/mobileBack";
+import { ChevronDown } from "lucide-react";
 
 const cardKinds: CardKind[] = ["note", "journal", "web", "pdf", "image", "audio", "video", "ai"];
 type SelectedGroup = "all" | "pinned" | "unassigned" | string;
 type GroupForm = { mode: "create" | "rename"; kind: KnowledgeGroupKind; parentId?: string; id?: string; value: string };
 
 export function LibraryView() {
+  const [organizerOpen,setOrganizerOpen]=useState(false);
+  useMobileBack(organizerOpen,()=>setOrganizerOpen(false));
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
   const [layout, setLayout] = useState<"grid" | "list">("grid");
@@ -115,7 +119,10 @@ export function LibraryView() {
   const currentGroup = selectedGroup === "all" ? copy.allCards : selectedGroup === "pinned" ? t("library.pinned") : selectedGroup === "unassigned" ? copy.unassigned : groupById.get(selectedGroup)?.name || copy.allCards;
 
   return <div className="library-layout">
-    <aside className="library-organizer">
+    <button type="button" className="mobile-section-picker" onClick={()=>setOrganizerOpen(true)} aria-expanded={organizerOpen}><FolderTree size={18}/><span>{currentGroup}</span><ChevronDown size={17}/></button>
+    {organizerOpen&&<button type="button" className="mobile-organizer-backdrop" aria-label={t("common.close")} onClick={()=>setOrganizerOpen(false)}/>}
+    <aside className={`library-organizer ${organizerOpen?"is-open":""}`} onClick={event=>{if((event.target as HTMLElement).closest(".library-organizer > button,.knowledge-area,.knowledge-topic"))setOrganizerOpen(false)}}>
+      <button type="button" className="mobile-organizer-close" onClick={()=>setOrganizerOpen(false)} aria-label={t("common.close")}><X size={20}/></button>
       <header><div><span>{copy.organizer}</span><b>{copy.areas}</b></div><button type="button" aria-label={copy.addArea} onClick={() => setGroupForm({ mode: "create", kind: "area", value: "" })}><Plus size={15} /></button></header>
       <button type="button" className={selectedGroup === "all" ? "is-active" : ""} onClick={() => setSelectedGroup("all")}><FileStack size={15} /><span>{copy.allCards}</span><b>{counts.all}</b></button>
       <button type="button" className={selectedGroup === "pinned" ? "is-active" : ""} onClick={() => setSelectedGroup("pinned")}><Pin size={15} /><span>{t("library.pinned")}</span><b>{counts.pinned}</b></button>

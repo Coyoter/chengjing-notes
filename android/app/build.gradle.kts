@@ -8,8 +8,8 @@ android {
         applicationId = "tw.techtarian.chengjing"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.10.0-dev.1"
+        versionCode = 2
+        versionName = "0.10.0-dev.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { buildConfig = true }

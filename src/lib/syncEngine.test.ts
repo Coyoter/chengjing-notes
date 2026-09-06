@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { beforeAll, beforeEach, afterEach, expect, it } from "vitest";
 import { webcrypto } from "node:crypto";
 import { db } from "../db";
-import { applySyncPacket, pendingSyncPackets, synchronize } from "./syncEngine";
+import { applySyncPacket, pendingSyncPackets, synchronize, reconcileMetadataOnlyConflicts } from "./syncEngine";
 beforeAll(() => { Object.defineProperty(crypto, "subtle", { value: webcrypto.subtle }); return db.open(); });
 beforeEach(async () => { localStorage.removeItem("chengjing-sync-enabled"); await db.transaction("rw",db.tables,async()=>{for(const table of db.tables)await table.clear();});localStorage.setItem("chengjing-sync-enabled","true"); });
 afterEach(() => localStorage.removeItem("chengjing-sync-enabled"));
@@ -56,4 +56,14 @@ it("兩台裝置同一天的 AI 反思都保留，不阻塞其他資料同步", 
   await applySyncPacket({protocol:"chengjing-sync-v1",id:"reports",operations:[{id:"remote-report",table:"brainReports",key:"other-report",clock:{other:1},value:{id:"other-report",...report,content:"remote"}},{id:"remote-fragment",table:"fragments",key:"two",clock:{other:2},value:fragment("two")}]});
   expect(await db.brainReports.where("date").equals(report.date).count()).toBe(2);
   expect(await db.fragments.get("two")).toBeDefined();
+});
+it("升級後修復舊的時間差異衝突，不改變內容，且產生可同步的合併",async()=>{
+  await db.fragments.put(fragment("one","same content"));
+  const record=await db.table("syncRecords").get("fragments:one");
+  record.heads.push({...record.heads[0],id:"other",clock:{other:1},value:{...record.heads[0].value,createdAt:2,updatedAt:3}});
+  await db.table("syncRecords").put(record);
+  await reconcileMetadataOnlyConflicts();
+  expect((await db.table("syncRecords").get(record.id)).heads).toHaveLength(1);
+  expect((await db.fragments.get("one"))?.text).toBe("same content");
+  expect(await db.table("syncOutbox").count()).toBe(2);
 });

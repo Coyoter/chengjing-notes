@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useState, useTransition, type ComponentType, type LazyExoticComponent } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useAppStore } from "../store";
 import type { AppView } from "../types";
+import { mobileMotion } from "../lib/mobileMotion";
 
 type WorkspaceViewModule = { default: ComponentType };
 type WorkspaceViewLoader = () => Promise<WorkspaceViewModule>;
@@ -51,6 +52,8 @@ const views: Record<AppView, LazyExoticComponent<ComponentType>> = {
 };
 
 export function Workspace() {
+  const android=window.chengjing?.platform==="android";
+  const reduced=useReducedMotion();
   const requestedView = useAppStore((state) => state.view);
   const [view, setView] = useState(requestedView);
   const [, startViewTransition] = useTransition();
@@ -68,9 +71,9 @@ export function Workspace() {
     <motion.main
       key={view}
       className={`workspace view-${view}`}
-      initial={{ opacity: 0, y: 4 }}
+      initial={android && reduced ? false : { opacity: 0, y: android ? 7 : 4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.16 }}
+      transition={android ? reduced ? mobileMotion.reduced : mobileMotion.page : { duration: 0.16 }}
     >
       <Suspense fallback={<div className="workspace-lazy-placeholder" aria-hidden="true"><i /><i /><i /></div>}>
         <View />

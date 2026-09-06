@@ -215,7 +215,7 @@ function BrainNeuron({
         <meshStandardMaterial color={color} roughness={0.82} metalness={0.04} emissive={selected || linking ? "#263b32" : "#111713"} emissiveIntensity={selected || linking ? 0.32 : 0.08} />
       </mesh>
       {(showAllLabels || hovered || selected || linking || (window.chengjing?.platform !== "android" && !dense && node.weight >= 1.9)) && (
-        <Html center distanceFactor={12} position={[0, node.radius + 0.42, 0]} zIndexRange={[8, 1]} className="brain-node-label-wrap" pointerEvents="none">
+        <Html center distanceFactor={window.chengjing?.platform === "android" ? undefined : 12} position={[0, node.radius + 0.42, 0]} zIndexRange={[8, 1]} className="brain-node-label-wrap" pointerEvents="none">
           <span className={`brain-node-label type-${node.type} ${shared ? "is-own-shared" : ""}`}>{node.title}</span>
         </Html>
       )}
@@ -253,7 +253,7 @@ function SharedRemoteNeuron({ node, selected, showAllLabels, onSelect }: { node:
       <sphereGeometry args={[node.radius, 30, 22]} />
       <meshStandardMaterial color="#7e8278" roughness={0.95} metalness={0.03} emissive={node.seal} emissiveIntensity={selected ? 0.34 : 0.13} />
     </mesh>
-    {(showAllLabels || hovered || selected) && <Html center distanceFactor={15} position={[0, node.radius + 0.48, 0]} zIndexRange={[8, 1]} className="brain-node-label-wrap" pointerEvents="none"><span className="brain-node-label is-remote-shared"><IdentitySeal color={node.seal} pattern={node.authorPattern} size="tiny" />{node.title}<small>{node.authorName}</small></span></Html>}
+    {(showAllLabels || hovered || selected) && <Html center distanceFactor={window.chengjing?.platform === "android" ? undefined : 15} position={[0, node.radius + 0.48, 0]} zIndexRange={[8, 1]} className="brain-node-label-wrap" pointerEvents="none"><span className="brain-node-label is-remote-shared"><IdentitySeal color={node.seal} pattern={node.authorPattern} size="tiny" />{node.title}<small>{node.authorName}</small></span></Html>}
   </group>;
 }
 
@@ -334,7 +334,7 @@ function BrainScene({
     <directionalLight position={[7, 12, 9]} intensity={2.1} color="#eee7d8" />
     <directionalLight position={[-10, -5, -7]} intensity={0.8} color="#71877a" />
     {edges.map((edge) => <BrainEdgeLine key={edge.id} edge={edge} nodes={nodeMap} onContext={onEdgeContext} />)}
-    {nodes.map((node) => <BrainNeuron key={node.key} node={node} selected={selectedKey === node.key} linking={linkSource === node.key} shared={ownSharedKeys.has(node.key)} densityScale={densityScale} dense={dense} showAllLabels={showAllLabels && (!dense || denseLabelKeys.has(node.key)) || (android && denseLabelKeys.has(node.key))} onSelect={onSelect} onOpen={onOpen} onContext={onNodeContext} />)}
+    {nodes.map((node) => <BrainNeuron key={node.key} node={node} selected={selectedKey === node.key} linking={linkSource === node.key} shared={ownSharedKeys.has(node.key)} densityScale={densityScale} dense={dense} showAllLabels={showAllLabels && (android || !dense || denseLabelKeys.has(node.key))} onSelect={onSelect} onOpen={onOpen} onContext={onNodeContext} />)}
     {remoteNodes.map((node) => <SharedRemoteNeuron key={node.id} node={node} selected={selectedRemoteId === node.id} showAllLabels={showAllLabels} onSelect={onRemoteSelect} />)}
     <CameraControls onViewportFocus={onViewportFocus} focusRequest={focusRequest} />
   </>;
@@ -363,7 +363,7 @@ export function SecondBrainView() {
   const [linkSource, setLinkSource] = useState<string | null>(null);
   const [edgeMenu, setEdgeMenu] = useState<{ edge: BrainEdgeView; x: number; y: number } | null>(null);
   const [query, setQuery] = useState("");
-  const [showAllLabels, setShowAllLabels] = useState(!android);
+  const [showAllLabels, setShowAllLabels] = useState(true);
   const [viewportFocus, setViewportFocus] = useState<[number, number, number]>([0, 0, 0]);
   const [busy, setBusy] = useState<"links" | "report" | null>(null);
   const [notice, setNotice] = useState("");

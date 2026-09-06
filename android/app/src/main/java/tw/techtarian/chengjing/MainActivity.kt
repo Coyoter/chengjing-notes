@@ -24,7 +24,10 @@ import java.util.concurrent.Executors
 
 class MainActivity : ComponentActivity() {
     private lateinit var web: WebView
-    private lateinit var services: NativeServices
+    private val services by lazy { NativeServices(serviceContext) }
+    private var qaIsolation = false
+    private lateinit var serviceContext: android.content.Context
+    private var launchSurface: LaunchSurface? = null
     private val executor = Executors.newFixedThreadPool(3)
     private var fileReply: ((Any?, String?) -> Unit)? = null
     private val googleWaiters = mutableListOf<(Any?, String?) -> Unit>()
@@ -68,10 +71,29 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        qaIsolation=BuildConfig.DEBUG&&intent.getBooleanExtra("qa-isolated",false)
+        if(qaIsolation)WebView.setDataDirectorySuffix("isolated-ui-qa")
         super.onCreate(savedInstanceState)
-        services = NativeServices(this)
+        serviceContext=if(qaIsolation)IsolatedQaContext(this)else this
+        if(android.os.Build.VERSION.SDK_INT>=31)splashScreen.setOnExitAnimationListener{it.remove()}
+        val launchPreferences=serviceContext.getSharedPreferences("settings",MODE_PRIVATE)
+        val followSystem=launchPreferences.getString("launch-mode","system")=="system"
+        val launchColor=if(followSystem)getColor(R.color.launch_background)else launchPreferences.getInt("launch-color",getColor(R.color.launch_background))
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(launchColor))
+        val root=FrameLayout(this).apply{setBackgroundColor(launchColor)}
+        launchSurface=LaunchSurface(this,launchColor,launchPreferences.getString("ui-language","zh-TW")?:"zh-TW")
+        root.addView(launchSurface,FrameLayout.LayoutParams(-1,-1))
+        setContentView(root)
+        var scheduled=false
+        val firstDraw=object:android.view.ViewTreeObserver.OnDrawListener{
+            override fun onDraw(){if(scheduled)return;scheduled=true;root.post{root.viewTreeObserver.removeOnDrawListener(this);if(!isFinishing&&!isDestroyed)initializeWorkspace(root,launchColor,followSystem,launchPreferences)}}
+        }
+        root.viewTreeObserver.addOnDrawListener(firstDraw)
+    }
+
+    private fun initializeWorkspace(root:FrameLayout,launchColor:Int,followSystem:Boolean,launchPreferences:android.content.SharedPreferences) {
         web = WebView(this)
-        web.setBackgroundColor(Color.rgb(17,24,22))
+        web.setBackgroundColor(launchColor)
         web.settings.apply { javaScriptEnabled = true; domStorageEnabled = true; allowFileAccess = false; allowContentAccess = false; mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW; mediaPlaybackRequiresUserGesture = true }
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
         val assets = WebViewAssetLoader.Builder().addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this)).build()
@@ -107,7 +129,20 @@ class MainActivity : ComponentActivity() {
                     val envelope = JSONObject().put("id", id).put("value", value ?: JSONObject.NULL).put("error", error ?: JSONObject.NULL)
                     runOnUiThread { web.evaluateJavascript("window.__chengjingNativeReply?.($envelope)", null) }
                 }
+                if(qaIsolation&&request.getString("method").substringBefore('.') in listOf("google","cloud","sync")) {
+                    reply(null,"Cloud access is disabled in the isolated UI test workspace")
+                    return@addWebMessageListener
+                }
                 when (request.getString("method")) {
+                    "app.ready" -> runOnUiThread {
+                        val cover=launchSurface;launchSurface=null
+                        if(cover!=null)cover.animate().alpha(0f).setDuration(if(android.animation.ValueAnimator.areAnimatorsEnabled())120 else 0).withEndAction{(cover.parent as? android.view.ViewGroup)?.removeView(cover)}.start()
+                        reply(JSONObject(),null)
+                    }
+                    "app.info" -> executor.execute {
+                        val preferences=serviceContext.getSharedPreferences("settings",MODE_PRIVATE)
+                        reply((services.call("app.info",args) as JSONObject).put("qaIsolated",qaIsolation).put("themeMode",preferences.getString("launch-mode",null)?:JSONObject.NULL).put("uiLanguage",preferences.getString("ui-language",null)?:JSONObject.NULL).put("fontScale",preferences.getInt("ui-font-percent",0)/100.0),null)
+                    }
                     "backup.chooseFolder" -> runOnUiThread {
                         if(fileReply!=null)reply(null,"Another file chooser is open")else{
                             fileReply=reply;pickingBackupFolder=true
@@ -116,6 +151,15 @@ class MainActivity : ComponentActivity() {
                     }
                     "app.theme" -> runOnUiThread {
                         val color=Color.parseColor(args.getString("color"));(web.parent as? FrameLayout)?.setBackgroundColor(color);web.setBackgroundColor(color)
+                        val preferences=serviceContext.getSharedPreferences("settings",MODE_PRIVATE)
+                        val dark=args.optBoolean("dark")
+                        val mode=args.optString("mode","system")
+                        // App-local AUTO clears the night override (AOSP maps it to
+                        // UI_MODE_NIGHT_UNDEFINED), so System follows OS even on cold start.
+                        val night=if(mode=="system")android.app.UiModeManager.MODE_NIGHT_AUTO else if(dark)android.app.UiModeManager.MODE_NIGHT_YES else android.app.UiModeManager.MODE_NIGHT_NO
+                        val changed=preferences.getInt("launch-night",-1)!=night
+                        preferences.edit().putString("ui-language",args.optString("language","en")).putInt("ui-font-percent",Math.round(args.optDouble("fontScale",1.0)*100).toInt()).putString("launch-mode",mode).putInt("launch-color",color).putBoolean("launch-dark",dark).putInt("launch-night",night).apply()
+                        if(changed&&android.os.Build.VERSION.SDK_INT>=31)getSystemService(android.app.UiModeManager::class.java).setApplicationNightMode(night)
                         val controller=androidx.core.view.WindowInsetsControllerCompat(window,web)
                         controller.isAppearanceLightStatusBars=!args.optBoolean("dark");controller.isAppearanceLightNavigationBars=!args.optBoolean("dark")
                         reply(JSONObject(),null)
@@ -140,15 +184,14 @@ class MainActivity : ComponentActivity() {
                 }
             } catch (_: Exception) { /* Malformed messages have no native authority. */ }
         }
-        val root=FrameLayout(this)
-        root.addView(web,FrameLayout.LayoutParams(-1,-1))
-        setContentView(root)
+        root.addView(web,0,FrameLayout.LayoutParams(-1,-1))
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
             val system = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.ime())
             web.layoutParams=(web.layoutParams as FrameLayout.LayoutParams).apply{setMargins(system.left,system.top,system.right,system.bottom)}
             insets
         }
-        androidx.core.view.WindowInsetsControllerCompat(window,web).isAppearanceLightStatusBars=true
+        ViewCompat.requestApplyInsets(root)
+        androidx.core.view.WindowInsetsControllerCompat(window,web).isAppearanceLightStatusBars=if(followSystem)resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK!=android.content.res.Configuration.UI_MODE_NIGHT_YES else !launchPreferences.getBoolean("launch-dark",false)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) { override fun handleOnBackPressed() { emit("back", JSONObject()) } })
         receiveShare(intent)
         web.loadUrl("https://appassets.androidplatform.net/assets/public/index.html")
@@ -180,4 +223,8 @@ class MainActivity : ComponentActivity() {
     fun emit(name: String, data: JSONObject) { runOnUiThread { if (::web.isInitialized) web.evaluateJavascript("window.dispatchEvent(new CustomEvent('chengjing:android-$name',{detail:$data}))", null) } }
     override fun onPause() { if (::web.isInitialized) emit("pause", JSONObject()); super.onPause() }
     override fun onResume() { super.onResume(); if (::web.isInitialized) emit("resume", JSONObject()) }
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        emit("system-theme",JSONObject().put("dark",android.content.res.Resources.getSystem().configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK==android.content.res.Configuration.UI_MODE_NIGHT_YES))
+    }
 }

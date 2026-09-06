@@ -2,14 +2,18 @@
 html[data-platform="android"] { -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
 html[data-platform="android"] body { min-width: 0; }
 html[data-platform="android"] button { touch-action: manipulation; }
+html[data-platform="android"] .settings-section button { transition:background-color 160ms ease,color 160ms ease,scale 160ms cubic-bezier(.2,.8,.2,1); }
+html[data-platform="android"] .settings-section button:active:not(:disabled) { scale:.985; }
+html[data-platform="android"] :is(button,summary,a):focus-visible { outline:2px solid var(--accent-strong); outline-offset:3px; }
 html[data-platform="android"] .window-drag-region { display: none; }
 .mobile-header, .mobile-nav { display: none; }
-.brain-report-versions { display:flex; align-items:center; gap:10px; padding:8px 14px; color:var(--text-muted); font-size:12px; }
+.mobile-section-picker,.mobile-organizer-backdrop,.library-organizer > .mobile-organizer-close,.database-sidebar > .mobile-organizer-close { display:none; }
+.brain-report-versions { display:flex; align-items:center; gap:10px; padding:8px 14px; color:var(--text-muted); font-size:calc(12px * var(--font-scale)); }
 .brain-report-versions select { min-width:0; max-width:100%; flex:1; padding:8px; color:var(--text-1); background:var(--surface-2); border:0; border-radius:8px; }
 .mobile-sheet-backdrop { position: fixed; inset: 0; z-index: 500; display: flex; align-items: flex-end; background: #0008; }
 .mobile-sheet { width: 100%; max-height: 86dvh; overflow-y: auto; background: var(--surface-1); border-radius: 24px 24px 0 0; padding: 12px 20px 24px; }
 .mobile-sheet header { display:flex; align-items:center; justify-content:space-between; padding:8px 0 16px; }
-.mobile-sheet header strong { font-size:22px; }
+.mobile-sheet header strong { font-size:calc(22px * var(--font-scale)); }
 .mobile-sheet button { border:0; background:var(--surface-2); color:var(--text-1); min-height:48px; border-radius:12px; padding:12px; font:inherit; text-align:left; }
 .mobile-sheet header button { display:grid; place-items:center; padding:8px; width:48px; background:transparent; }
 .mobile-sheet > div { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
@@ -19,53 +23,53 @@ html[data-platform="android"] .window-drag-region { display: none; }
 .mobile-directory > header { position:relative; margin:0; padding:28px 22px 20px; flex:none; touch-action:none; }
 .mobile-sheet-handle { position:absolute; top:10px; left:calc(50% - 16px); width:32px; height:3px; border-radius:2px; background:color-mix(in srgb,var(--text-muted) 30%,transparent); }
 .mobile-directory header > div { display:grid; gap:5px; }
-.mobile-directory header small { font-size:9px; letter-spacing:0.17em; color:var(--accent-strong); font-weight:600; }
-.mobile-directory header strong { font-size:24px; font-weight:600; letter-spacing:-0.035em; }
+.mobile-directory header small { font-size:calc(9px * var(--font-scale)); letter-spacing:0.17em; color:var(--accent-strong); font-weight:600; }
+.mobile-directory header strong { font-size:calc(24px * var(--font-scale)); font-weight:600; letter-spacing:-0.035em; }
 .mobile-sheet.mobile-directory > .mobile-directory-scroll { display:block; overflow:auto; padding:0 22px 20px; }
 .mobile-directory section { margin:0 0 24px; }
-.mobile-directory h3 { margin:0 0 10px; font-size:10px; letter-spacing:0.12em; font-weight:650; color:var(--text-muted); }
+.mobile-directory h3 { margin:0 0 10px; font-size:calc(10px * var(--font-scale)); letter-spacing:0.12em; font-weight:650; color:var(--text-muted); }
 .mobile-directory-grid { display:grid; grid-template-columns:1fr 1fr; column-gap:12px; row-gap:0; }
 .mobile-directory button.mobile-directory-item { min-height:72px; display:flex; align-items:center; gap:11px; padding:12px 0; background:transparent; border-radius:0; }
 .mobile-directory-item > svg { color:var(--accent-strong); flex:none; stroke-width:1.65; }
 .mobile-directory-item > span { min-width:0; display:grid; gap:5px; }
-.mobile-directory-item b { font-size:14px; font-weight:600; color:var(--text-1); }
-.mobile-directory-item small { font-size:12px; line-height:1.4; color:var(--text-muted); }
+.mobile-directory-item b { font-size:calc(14px * var(--font-scale)); font-weight:600; color:var(--text-1); }
+.mobile-directory-item small { font-size:calc(12px * var(--font-scale)); line-height:1.4; color:var(--text-muted); }
 .mobile-directory-item.is-current b { color:var(--accent-strong); }
 .mobile-directory-explore { padding-top:20px; border-top:1px solid color-mix(in srgb,var(--text-muted) 15%,transparent); }
 .mobile-directory button.mobile-directory-brain { display:flex; align-items:center; gap:15px; width:100%; padding:10px 0 20px; margin:0 0 2px; background:transparent; }
 .directory-brain-symbol { color:var(--accent-strong); width:40px; display:grid; place-items:center; flex:none; }
 .mobile-directory-brain > span:nth-child(2) { display:grid;gap:6px;flex:1; }
-.mobile-directory-brain b { font-size:17px; font-weight:600; }
-.mobile-directory-brain small { color:var(--text-muted);font-size:12px;line-height:1.5; }
+.mobile-directory-brain b { font-size:calc(17px * var(--font-scale)); font-weight:600; }
+.mobile-directory-brain small { color:var(--text-muted);font-size:calc(12px * var(--font-scale));line-height:1.5; }
 .mobile-directory-brain > svg { color:var(--text-muted); }
 .mobile-directory footer { display:flex; flex-wrap:wrap; border-top:1px solid color-mix(in srgb,var(--text-muted) 15%,transparent); gap:14px; padding-top:14px; }
-.mobile-directory footer button { display:flex; align-items:center; justify-content:flex-start; gap:8px; flex:none; background:transparent; padding:8px 0; font-size:12px; color:var(--text-2); }
+.mobile-directory footer button { display:flex; align-items:center; justify-content:flex-start; gap:8px; flex:none; background:transparent; padding:8px 0; font-size:calc(12px * var(--font-scale)); color:var(--text-2); }
 .mobile-capture-page { height:100%; overflow-y:auto; padding:24px 20px 28px; -webkit-overflow-scrolling:touch; }
-.mobile-capture-intro > span { display:block; color:var(--accent-strong); font-size:12px; font-weight:650; letter-spacing:0.07em; }
-.mobile-capture-intro h1 { margin:10px 0 8px; color:var(--text-1); font-size:27px; font-weight:620; letter-spacing:-0.035em; line-height:1.32; }
-.mobile-capture-intro p { margin:0; color:var(--text-muted); font-size:13px; line-height:1.6; }
+.mobile-capture-intro > span { display:block; color:var(--accent-strong); font-size:calc(12px * var(--font-scale)); font-weight:650; letter-spacing:0.07em; }
+.mobile-capture-intro h1 { margin:10px 0 8px; color:var(--text-1); font-size:calc(27px * var(--font-scale)); font-weight:620; letter-spacing:-0.035em; line-height:1.32; }
+.mobile-capture-intro p { margin:0; color:var(--text-muted); font-size:calc(13px * var(--font-scale)); line-height:1.6; }
 .mobile-capture-composer { margin:25px 0 32px; padding:8px 16px 12px; background:color-mix(in srgb,var(--surface-1) 55%,var(--canvas)); border-radius:19px; transition:background 200ms; }
 .mobile-capture-composer:focus-within { background:var(--surface-1); }
 .capture-kind-switch { display:flex; gap:4px; padding:4px 0 10px; }
-.capture-kind-switch button { position:relative; display:flex; align-items:center; gap:7px; min-height:42px; border:0; background:none; color:var(--text-muted); padding:8px 12px; font:inherit; font-size:13px; }
+.capture-kind-switch button { position:relative; display:flex; align-items:center; gap:7px; min-height:42px; border:0; background:none; color:var(--text-muted); padding:8px 12px; font:inherit; font-size:calc(13px * var(--font-scale)); }
 .capture-kind-switch button[aria-selected="true"] { color:var(--accent-strong); }
 .capture-kind-switch button i { position:absolute; inset:3px 0; background:var(--accent-soft); border-radius:10px; }
 .capture-kind-switch svg,.capture-kind-switch span { position:relative; }
-.mobile-capture-composer textarea { display:block; width:100%; min-height:108px; padding:8px 2px; resize:none; outline:none; border:0; background:none; color:var(--text-1); font:inherit; font-size:17px; line-height:1.65; }
+.mobile-capture-composer textarea { display:block; width:100%; min-height:108px; padding:8px 2px; resize:none; outline:none; border:0; background:none; color:var(--text-1); font:inherit; font-size:calc(17px * var(--font-scale)); line-height:1.65; }
 .mobile-capture-composer textarea::placeholder { color:var(--text-muted); }
 .mobile-capture-composer footer { display:flex; align-items:center; justify-content:space-between; margin-top:6px; gap:10px; }
-.mobile-capture-composer footer span { color:var(--text-muted); font-size:12px; }
+.mobile-capture-composer footer span { color:var(--text-muted); font-size:calc(12px * var(--font-scale)); }
 .mobile-capture-composer footer button { display:grid; place-items:center; width:48px; height:48px; padding:0; border:0; border-radius:50%; background:var(--accent-button); color:var(--accent-button-text); transition:opacity 180ms; }
 .mobile-capture-composer footer button:disabled { opacity:0.35; }
 .mobile-stream-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
-.mobile-stream-heading h2 { margin:0; font-size:15px; font-weight:620; letter-spacing:0.02em; }
-.mobile-stream-heading > span { font-size:12px; color:var(--text-muted); }
+.mobile-stream-heading h2 { margin:0; font-size:calc(15px * var(--font-scale)); font-weight:620; letter-spacing:0.02em; }
+.mobile-stream-heading > span { font-size:calc(12px * var(--font-scale)); color:var(--text-muted); }
 .mobile-thought-stream article { padding:14px 0 20px; border-bottom:1px solid color-mix(in srgb,var(--text-muted) 16%,transparent); }
 .mobile-thought-stream article > div { display:flex; align-items:center; gap:8px; min-height:28px; }
-.mobile-thought-stream time { font-size:11px; color:var(--text-muted); }
+.mobile-thought-stream time { font-size:calc(11px * var(--font-scale)); color:var(--text-muted); }
 .mobile-thought-stream article button { margin-left:auto; width:44px; height:36px; display:grid; place-items:center; color:var(--text-muted); background:none; border:0; }
-.mobile-thought-stream article p { margin:4px 0 0; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--text-1); font-size:16px; line-height:1.7; }
-.mobile-capture-empty { display:flex; align-items:center; gap:12px; padding:24px 0; color:var(--text-muted); font-size:14px; }
+.mobile-thought-stream article p { margin:4px 0 0; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--text-1); font-size:calc(16px * var(--font-scale)); line-height:1.7; }
+.mobile-capture-empty { display:flex; align-items:center; gap:12px; padding:24px 0; color:var(--text-muted); font-size:calc(14px * var(--font-scale)); }
 @media (max-width: 799px) {
   html[data-platform="android"] .app-shell { display:block; height:100dvh; }
   html[data-platform="android"] .sidebar { display:none; }
@@ -77,24 +81,24 @@ html[data-platform="android"] .window-drag-region { display: none; }
   html[data-platform="android"] .topbar .engine-status { max-width:150px; }
   html[data-platform="android"] .workspace { min-width:0; }
   html[data-platform="android"] .mobile-header { display:flex; position:absolute; inset:0 0 auto; height:56px; align-items:center; justify-content:space-between; padding:0 16px; background:var(--canvas); }
-  .mobile-header > span { font-size:22px; font-weight:650; letter-spacing:0.1em; }
+  .mobile-header > span { font-size:calc(22px * var(--font-scale)); font-weight:650; letter-spacing:0.1em; }
   .mobile-header > div { display:flex; }
   .mobile-header button { display:grid; place-items:center; width:48px; height:48px; color:var(--text-1); border:0; background:transparent; }
   html[data-platform="android"] .mobile-nav { position:absolute; inset:auto 0 0; height:72px; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); align-items:stretch; padding:4px 8px 8px; background:var(--canvas); z-index:90; }
   .mobile-nav::before { content:""; pointer-events:none; position:absolute; left:0; right:0; top:-22px; height:22px; background:linear-gradient(to bottom,transparent,var(--canvas)); }
   .mobile-header::after { content:""; pointer-events:none; position:absolute; left:0; right:0; bottom:-14px; height:14px; background:linear-gradient(to bottom,var(--canvas),transparent); z-index:1; }
-  .mobile-nav button { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; border:0; background:transparent; color:var(--text-muted); font:inherit; font-size:11px; padding:4px 0; }
+  .mobile-nav button { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; border:0; background:transparent; color:var(--text-muted); font:inherit; font-size:calc(11px * var(--font-scale)); padding:4px 0; }
   .mobile-nav svg { width:22px; height:22px; }
   .mobile-nav button.active { color:var(--accent-strong); }
   .mobile-nav button { position:relative; transition:color 180ms,transform 180ms; }
   .mobile-nav button:active { transform:scale(0.94); }
   .mobile-nav button.active::after { content:""; position:absolute; bottom:0; height:3px; width:18px; border-radius:2px; background:var(--accent); }
   .mobile-header > span { display:flex; align-items:center; gap:12px; }
-  .mobile-header small { font-size:9px; letter-spacing:0.16em; color:var(--text-muted); font-weight:500; }
+  .mobile-header small { font-size:calc(9px * var(--font-scale)); letter-spacing:0.16em; color:var(--text-muted); font-weight:500; }
   html[data-platform="android"] .app-main:has(.mobile-capture-page) .topbar { display:none; }
   html[data-platform="android"] .library-card-menu { opacity:1; width:44px; height:44px; }
   html[data-platform="android"] .today-page, html[data-platform="android"] .fragments-page, html[data-platform="android"] .tasks-page, html[data-platform="android"] .highlights-page, html[data-platform="android"] .settings-page { padding:20px 16px 32px; }
-  html[data-platform="android"] .page-intro h2, html[data-platform="android"] .today-hero h2 { font-size:26px; }
+  html[data-platform="android"] .page-intro h2, html[data-platform="android"] .today-hero h2 { font-size:calc(26px * var(--font-scale)); }
   html[data-platform="android"] .today-hero { display:block; margin-bottom:24px; }
   html[data-platform="android"] .today-hero > div { width:100%; max-width:none; }
   html[data-platform="android"] .today-hero h2 { max-width:100%; }
@@ -110,25 +114,106 @@ html[data-platform="android"] .window-drag-region { display: none; }
   html[data-platform="android"] .knowledge-layout, html[data-platform="android"] .library-layout { display:flex; flex-direction:column; }
   html[data-platform="android"] .knowledge-sidebar { width:100%; max-height:148px; flex:none; overflow:auto; padding:12px 16px; }
   html[data-platform="android"] .knowledge-main { min-width:0; padding:16px; }
+  html[data-platform="android"] .mobile-section-picker { display:flex; align-items:center; gap:10px; width:calc(100% - 32px); min-height:48px; flex:none; margin:4px 16px 8px; padding:10px 12px; border:0; border-radius:10px; background:var(--surface-2); color:var(--text-1); font-size:calc(14px * var(--font-scale)); }
+  .mobile-section-picker > span { min-width:0; flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  html[data-platform="android"] .mobile-organizer-backdrop { display:block; position:fixed; inset:0; z-index:210; border:0; background:#0007; }
+  html[data-platform="android"] :is(.library-organizer,.database-sidebar) { position:fixed; inset:auto 0 0; width:100%; max-height:80dvh; padding:52px 20px 24px; overflow:auto; z-index:211; background:var(--canvas); border:0; border-radius:24px 24px 0 0; visibility:hidden; transform:translateY(100%); transition:transform 240ms cubic-bezier(.2,.8,.2,1),visibility 240ms; }
+  html[data-platform="android"] :is(.library-organizer,.database-sidebar).is-open { visibility:visible; transform:translateY(0); }
+  html[data-platform="android"] :is(.library-organizer,.database-sidebar) > .mobile-organizer-close { display:grid; position:absolute; top:8px; right:12px; width:44px; height:44px; place-items:center; padding:0; border:0; background:none; }
+  html[data-platform="android"] :is(.library-organizer,.database-sidebar) button { min-height:44px; }
+  html[data-platform="android"] .library-content { flex:1; min-height:0; padding:16px 16px 28px; }
+  html[data-platform="android"] .library-content .page-intro { margin-bottom:16px; }
+  html[data-platform="android"] .library-grid.is-list .library-card { display:flex; min-height:160px; gap:10px; }
+  html[data-platform="android"] .library-grid.is-list .library-card-menu { top:35px; transform:none; }
+  html[data-platform="android"] .url-capture-bar { flex-wrap:wrap; height:auto; padding:10px; gap:8px; }
+  html[data-platform="android"] .url-capture-bar input { width:100%; min-width:0; flex:1; min-height:36px; }
+  html[data-platform="android"] .url-capture-bar button { min-height:44px; margin-left:auto; }
+  html[data-platform="android"] .database-page { display:flex; flex-direction:column; }
+  html[data-platform="android"] .database-content { flex:1; min-height:0; height:auto; padding:16px 16px 28px; }
+  html[data-platform="android"] .database-header { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:16px; }
+  html[data-platform="android"] .database-tools { display:flex; flex-wrap:wrap; align-items:center; }
+  html[data-platform="android"] .database-tools .inline-search { width:100%; flex-basis:100%; min-width:0; }
+  html[data-platform="android"] .database-bulk-bar { flex-wrap:wrap; position:relative; top:0; }
+  html[data-platform="android"] .database-page .kanban-board { display:flex; overflow:auto; }
+  html[data-platform="android"] .database-page .kanban-board > section { flex:0 0 82%; }
+  html[data-platform="android"] .journal-main { padding:12px 16px 28px; }
+  html[data-platform="android"] .journal-calendar-strip { display:grid; grid-template-columns:36px minmax(0,1fr) 36px; gap:6px; }
+  html[data-platform="android"] .journal-week-days { display:flex; overflow-x:auto; scrollbar-width:none; }
+  html[data-platform="android"] .journal-week-days button { display:flex; flex-direction:column; gap:4px; padding:8px 4px; flex:0 0 48px; min-height:56px; }
+  html[data-platform="android"] .journal-date-navigation-actions { grid-column:1 / -1; justify-content:flex-end; }
+  html[data-platform="android"] .journal-date-navigation-actions button { min-height:44px; }
+  html[data-platform="android"] .journal-paper { padding:22px 18px; min-height:calc(100dvh - 320px); }
+  html[data-platform="android"] .journal-paper > header { flex-wrap:wrap; gap:12px; }
+  html[data-platform="android"] .journal-heading-copy { flex-basis:100%; }
+  html[data-platform="android"] .journal-heading-copy h2 { font-size:calc(23px * var(--font-scale)); line-height:1.45; }
+  html[data-platform="android"] .journal-header-actions { margin-left:auto; }
+  html[data-platform="android"] .board-meta-bar > * { flex-shrink:0; }
+  html[data-platform="android"] .board-meta-bar .tag-strip { flex-wrap:nowrap; }
+  html[data-platform="android"] .board-meta-bar .tag-strip > button { white-space:nowrap; flex-shrink:0; }
+  html[data-platform="android"] .react-flow__controls { bottom:82px!important; }
+  html[data-platform="android"] .react-flow__controls-button { width:44px!important; height:44px!important; }
   html[data-platform="android"] .filter-bar { flex-wrap:wrap; gap:8px; }
   html[data-platform="android"] .filter-bar input { min-width:100px; width:100%; }
   html[data-platform="android"] .card-focus-layer { position:fixed; inset:0; z-index:120; padding:0; }
   html[data-platform="android"] .card-editor-panel { width:100%; min-width:0; }
   html[data-platform="android"] .card-editor-main { padding:16px; }
-  html[data-platform="android"] .card-title-input { font-size:26px; }
+  html[data-platform="android"] .card-title-input { font-size:calc(26px * var(--font-scale)); }
   html[data-platform="android"] .editor-toolbar { flex-wrap:nowrap; overflow-x:auto; justify-content:flex-start; min-height:48px; }
   html[data-platform="android"] .editor-toolbar button { min-width:44px; min-height:44px; }
-  html[data-platform="android"] .prose-editor { font-size:16px; line-height:1.7; }
+  html[data-platform="android"] .prose-editor { font-size:calc(16px * var(--font-scale)); line-height:1.7; }
   html[data-platform="android"] .right-panel { position:fixed; inset:0; width:100%; min-width:0; z-index:150; }
   html[data-platform="android"] .settings-section { padding:20px 16px; }
+  html[data-platform="android"] .settings-section,html[data-platform="android"] .settings-section > * { min-width:0; }
+  html[data-platform="android"] .settings-section :is(p,small,b,span) { overflow-wrap:break-word; }
+  html[data-platform="android"] .settings-section :is(button,summary) { letter-spacing:normal; }
+  html[data-platform="android"] .settings-section :is(button,summary) > svg { flex-shrink:0; }
+  html[data-platform="android"] .settings-section button { height:auto; min-height:48px; line-height:1.45; }
+  html[data-platform="android"] .settings-section :is(input:not([type="checkbox"]):not([type="range"]),select) { min-height:44px; }
+  html[data-platform="android"] .theme-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  html[data-platform="android"] .theme-grid button { position:relative; display:grid; grid-template-columns:minmax(0,1fr); justify-items:center; align-content:center; gap:8px; min-height:82px; padding:12px 10px; }
+  html[data-platform="android"] .theme-grid button span { width:100%; min-width:0; text-align:center; white-space:nowrap; font-size:calc(13px * var(--font-scale)); }
+  html[data-platform="android"] .theme-grid button > svg:last-child:not(:first-child) { position:absolute; right:10px; top:10px; }
+  html[data-platform="android"] .font-scale-setting { grid-template-columns:minmax(0,1fr); gap:14px; }
+  html[data-platform="android"] .font-scale-setting > div:last-child { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  html[data-platform="android"] .font-scale-setting button { min-height:66px; padding:10px; }
+  html[data-platform="android"] .language-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  html[data-platform="android"] .language-grid button { min-width:0; min-height:62px; }
+  html[data-platform="android"] .featured-models { grid-template-columns:minmax(0,1fr); }
+  html[data-platform="android"] .featured-models > button { min-width:0; min-height:88px; }
+  html[data-platform="android"] .settings-range { grid-template-columns:minmax(0,1fr); gap:12px; }
+  html[data-platform="android"] .settings-range input { width:100%; }
+  html[data-platform="android"] .api-key-form { flex-wrap:wrap; }
+  html[data-platform="android"] .api-key-form label { min-width:0; flex:1 1 100%; height:48px; }
+  html[data-platform="android"] .api-key-form > button { width:100%; }
+  html[data-platform="android"] .settings-card > header > div { min-width:0; }
+  html[data-platform="android"] .settings-card > footer span { align-items:flex-start; line-height:1.6; }
+  html[data-platform="android"] .settings-card > footer svg { flex:none; }
+  html[data-platform="android"] .model-storage { flex-direction:column; align-items:stretch; }
+  html[data-platform="android"] .key-connection-row { align-items:stretch; flex-direction:column; }
+  html[data-platform="android"] .provider-type-choice,html[data-platform="android"] .provider-api-mode > div { grid-template-columns:minmax(0,1fr); }
+  html[data-platform="android"] .provider-profile-main { flex-wrap:wrap; }
+  html[data-platform="android"] .provider-profile-main code { max-width:100%; overflow-wrap:anywhere; white-space:normal; }
+  html[data-platform="android"] .engine-config-section { padding:0; }
+  html[data-platform="android"] .engine-config-body { padding:14px; }
+  html[data-platform="android"] .backup-folder-row > button { width:100%; margin-left:0; }
+  html[data-platform="android"] .backup-account-row { flex-wrap:wrap; }
+  html[data-platform="android"] .backup-account-row > span { flex-basis:100%; }
+  html[data-platform="android"] .backup-frequency-row { align-items:stretch; flex-direction:column; gap:8px; }
+  html[data-platform="android"] .backup-frequency-row select { width:100%; }
+  html[data-platform="android"] .backup-method-card > header { flex-wrap:wrap; }
+  html[data-platform="android"] .backup-method-card > header > span { min-width:0; }
+  html[data-platform="android"] .local-frequency button { padding:8px 4px; }
+  html[data-platform="android"] .sync-actions { display:grid; grid-template-columns:minmax(0,1fr); gap:4px; }
+  html[data-platform="android"] .sync-state { padding:14px 12px; gap:10px; }
+  html[data-platform="android"] .backup-import-tools > div { padding-left:0; }
   html[data-platform="android"] .engine-choice-grid, html[data-platform="android"] .backup-method-grid { grid-template-columns:minmax(0,1fr); }
   html[data-platform="android"] .settings-page { overflow-x:hidden; }
   html[data-platform="android"] .settings-page input, html[data-platform="android"] .settings-page select { max-width:100%; min-width:0; }
   html[data-platform="android"] .settings-jump-nav { max-width:100%; }
   html[data-platform="android"] .database-layout { grid-template-columns:minmax(0,1fr); }
-  html[data-platform="android"] .database-sidebar { width:100%; max-height:120px; overflow:auto; }
   html[data-platform="android"] .database-main { min-width:0; padding:16px; overflow:auto; }
   html[data-platform="android"] .data-table { min-width:620px; }
+  html[data-platform="android"] .data-table :is(th,td) { white-space:nowrap; }
   html[data-platform="android"] .project-kanban-layout { display:flex; flex-direction:column; }
   html[data-platform="android"] .project-kanban-sidebar { width:100%; max-height:100px; flex:none; padding:8px 16px; }
   html[data-platform="android"] .project-kanban-sidebar > div { display:flex; overflow:auto; }
@@ -138,15 +223,18 @@ html[data-platform="android"] .window-drag-region { display: none; }
   html[data-platform="android"] .project-kanban-scroll { scroll-snap-type:x proximity; }
   html[data-platform="android"] .project-kanban-board > section { scroll-snap-align:start; }
   html[data-platform="android"] .project-kanban-inspector { position:fixed; inset:0; width:100%; z-index:130; }
-  html[data-platform="android"] .board-meta-bar { padding:6px 8px; gap:4px; overflow-x:auto; }
+  html[data-platform="android"] .board-meta-bar { height:auto; min-height:50px; flex-basis:auto; flex-wrap:wrap; padding:6px 8px; gap:4px; overflow:visible; }
+  html[data-platform="android"] .board-meta-bar > .board-tags { order:10; flex:1 1 100%; }
+  html[data-platform="android"] .board-meta-actions > .bare-button { width:44px; height:44px; }
+  html[data-platform="android"] .board-meta-bar > span { display:none; }
   html[data-platform="android"] .board-switcher-trigger { min-width:128px; }
   html[data-platform="android"] .board-toolbar { max-width:calc(100% - 16px); overflow-x:auto; }
   html[data-platform="android"] .board-toolbar button { min-width:44px; min-height:44px; }
   html[data-platform="android"] .react-flow__handle { min-width:24px; min-height:24px; }
   html[data-platform="android"] .brain-toolbar { max-width:calc(100% - 16px); flex-wrap:wrap; gap:6px; }
   html[data-platform="android"] .brain-heading { top:12px; left:16px; right:16px; pointer-events:none; }
-  html[data-platform="android"] .brain-heading h2 { font-size:13px; margin:6px 0; font-weight:500; }
-  html[data-platform="android"] .brain-node-label { max-width:160px; overflow:hidden; text-overflow:ellipsis; background:color-mix(in srgb,var(--canvas) 88%,transparent); color:var(--text-1); border:0; padding:5px 8px; border-radius:7px; box-shadow:none; }
+  html[data-platform="android"] .brain-heading h2 { font-size:calc(13px * var(--font-scale)); margin:6px 0; font-weight:500; }
+  html[data-platform="android"] .brain-node-label { max-width:148px; overflow:hidden; text-overflow:ellipsis; background:color-mix(in srgb,var(--canvas) 92%,transparent); color:var(--text-1); border:0; padding:5px 8px; border-radius:7px; box-shadow:none; font-size:calc(13px * var(--font-scale)); line-height:1.4; }
   html[data-platform="android"] .brain-heading > p,html[data-platform="android"] .brain-help,html[data-platform="android"] .brain-viewport-status { display:none; }
   .brain-mobile-bar { position:absolute; left:50%; bottom:18px; transform:translateX(-50%); display:flex; gap:8px; z-index:18; }
   .brain-mobile-bar button { display:grid;place-items:center;min-width:48px;height:48px;border:0;border-radius:50%;color:var(--text-1);background:color-mix(in srgb,var(--canvas) 88%,transparent); }
@@ -158,7 +246,7 @@ html[data-platform="android"] .window-drag-region { display: none; }
   html[data-platform="android"] .brain-toolbar.brain-mobile-tool-sheet { top:auto;bottom:0;left:0;right:0;transform:none;max-width:none;border-radius:24px 24px 0 0;padding:12px 16px 24px;display:flex;flex-direction:column;align-items:stretch;z-index:31;animation:brainToolsIn 220ms ease-out; }
   html[data-platform="android"] .brain-mobile-tool-sheet > button { min-height:48px; }
   html[data-platform="android"] .brain-mobile-tool-sheet > button:first-child { align-self:flex-end; }
-  html[data-platform="android"] .brain-notice { bottom:76px;left:12px;right:12px;max-width:none;font-size:12px; }
+  html[data-platform="android"] .brain-notice { bottom:76px;left:12px;right:12px;max-width:none;font-size:calc(12px * var(--font-scale)); }
   @keyframes brainToolsIn { from { transform:translateY(24px);opacity:0; } to{transform:translateY(0);opacity:1;} }
   html[data-platform="android"] .brain-summary { max-width:calc(100% - 24px); }
   html[data-platform="android"] .brain-report { width:calc(100% - 24px); max-height:40%; right:12px; bottom:12px; }
@@ -167,14 +255,25 @@ html[data-platform="android"] .window-drag-region { display: none; }
   html[data-platform="android"] .brain-report.is-expanded { inset:12px; width:auto; max-height:none; }
   html[data-platform="android"] .brain-inspector { position:fixed; inset:30% 0 0; width:100%; z-index:110; }
   html[data-platform="android"] .modal, html[data-platform="android"] .command-palette { width:calc(100% - 24px); max-width:100%; max-height:88dvh; overflow:auto; }
+  html[data-platform="android"] .create-source-tabs { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  html[data-platform="android"] .create-source-tabs button { display:flex; flex-direction:column; align-items:center; gap:7px; padding:12px 6px; min-height:68px; }
+  html[data-platform="android"] .create-source-tabs small { display:none; }
+  html[data-platform="android"] .destination-choice { grid-template-columns:minmax(0,1fr); }
+  html[data-platform="android"] .destination-choice button { min-height:64px; }
+  html[data-platform="android"] .modal-actions { flex-wrap:wrap; gap:12px; }
+  html[data-platform="android"] .modal-actions > button { min-height:48px; }
+  html[data-platform="android"] .content-edit-dialog { width:calc(100vw - 32px); max-height:85dvh; overflow:auto; padding:22px 18px; }
+  html[data-platform="android"] .content-edit-dialog > header h2 { font-size:calc(22px * var(--font-scale)); }
+  html[data-platform="android"] .content-edit-dialog footer button { min-height:48px; }
   html[data-platform="android"] .global-context-menu { max-width:calc(100vw - 24px); max-height:75dvh; overflow:auto; }
+  html[data-platform="android"] .global-context-menu button { min-height:44px; }
   html[data-platform="android"] .app-main:has(.tasks-page) .topbar { display:none; }
   html[data-platform="android"] .tasks-page { padding:24px 20px 32px; }
   html[data-platform="android"] .tasks-page .page-intro { margin-bottom:22px; }
-  html[data-platform="android"] .tasks-page .page-intro p { max-width:30em; font-size:13px; line-height:1.6; }
+  html[data-platform="android"] .tasks-page .page-intro p { max-width:30em; font-size:calc(13px * var(--font-scale)); line-height:1.6; }
   html[data-platform="android"] .task-add { display:flex; flex-direction:column; align-items:stretch; gap:8px; padding:10px 14px; border-radius:18px; background:color-mix(in srgb,var(--surface-1) 65%,var(--canvas)); margin-bottom:28px; }
   html[data-platform="android"] .task-add-main { min-height:48px; }
-  html[data-platform="android"] .task-add-main input { width:100%; font-size:17px; }
+  html[data-platform="android"] .task-add-main input { width:100%; font-size:calc(17px * var(--font-scale)); }
   html[data-platform="android"] .task-add-actions { justify-content:space-between; }
   html[data-platform="android"] .task-add-actions > button,html[data-platform="android"] .task-date-trigger { min-height:48px; }
   html[data-platform="android"] .task-date-trigger { background:none; padding:0 4px; }
@@ -183,15 +282,15 @@ html[data-platform="android"] .window-drag-region { display: none; }
   html[data-platform="android"] .task-section > header { padding-bottom:12px; border-bottom:1px solid color-mix(in srgb,var(--text-muted) 16%,transparent); }
   html[data-platform="android"] .task-today-segment > header { grid-template-columns:44px minmax(0,1fr) auto; gap:12px; }
   html[data-platform="android"] .task-today-date { width:44px; height:auto; color:var(--accent-strong); background:none; }
-  html[data-platform="android"] .task-today-date b { font-size:28px; font-weight:500; }
-  html[data-platform="android"] .task-today-date span { font-size:10px; }
-  html[data-platform="android"] .task-section-copy h3 { font-size:16px; line-height:1.45; }
+  html[data-platform="android"] .task-today-date b { font-size:calc(28px * var(--font-scale)); font-weight:500; }
+  html[data-platform="android"] .task-today-date span { font-size:calc(10px * var(--font-scale)); }
+  html[data-platform="android"] .task-section-copy h3 { font-size:calc(16px * var(--font-scale)); line-height:1.45; }
   html[data-platform="android"] .task-section-heading { grid-template-columns:24px minmax(0,1fr) auto; gap:10px; }
   html[data-platform="android"] .task-section-heading > span { width:24px; background:none; }
   html[data-platform="android"] .task-section-heading p { line-height:1.5; }
   html[data-platform="android"] .task-section-empty { background:none; padding:4px 0; }
   html[data-platform="android"] .task-groups article { min-height:64px; gap:6px; padding:6px 0; background:none; }
-  html[data-platform="android"] .task-groups article > span > b { white-space:normal; overflow-wrap:anywhere; font-size:16px; line-height:1.5; }
+  html[data-platform="android"] .task-groups article > span > b { white-space:normal; overflow-wrap:anywhere; font-size:calc(16px * var(--font-scale)); line-height:1.5; }
   html[data-platform="android"] .task-groups .task-check { width:48px; height:48px; flex-basis:48px; }
   html[data-platform="android"] .task-more { width:48px; height:48px; flex:none; display:grid; place-items:center; border:0; background:none; color:var(--text-muted); }
   html[data-platform="android"] .task-groups article.is-subtask { margin-left:calc(var(--task-depth,1) * 12px); width:calc(100% - var(--task-depth,1) * 12px); }
@@ -200,4 +299,9 @@ html[data-platform="android"] .window-drag-region { display: none; }
 @media(prefers-reduced-motion:reduce) {
   html[data-platform="android"] .brain-mobile-tool-sheet { animation:none!important; }
   html[data-platform="android"] .mobile-nav button { transition:none; }
+  html[data-platform="android"] .settings-section button { transition:none; scale:1; }
+  html[data-platform="android"] :is(.library-organizer,.database-sidebar) { transition:none; }
 }
+.android-launch-placeholder { position:fixed; inset:0; background:var(--canvas); }
+html[data-platform="android"] .command-palette > footer { display:none; }
+html[data-platform="android"] .mobile-command-close { display:grid; place-items:center; width:44px; height:44px; flex:none; border:0; background:none; color:var(--text-muted); }

@@ -48,6 +48,25 @@ export async function initializeSyncBaseline() {
     }
   }
 }
+export async function reconcileMetadataOnlyConflicts() {
+  if (await db.table("syncState").get("metadata-conflicts-v2")) return;
+  const records: SyncRecord[] = await db.table("syncRecords").filter((record: SyncRecord) => record.heads.length > 1).toArray();
+  for (const candidate of records) {
+    const table = candidate.heads[0].table;
+    if (table === "attachments") continue; // Device-local file paths require separate handling.
+    await db.transaction("rw", db.table(table), db.table("syncRecords"), async () => {
+      const current: SyncRecord | undefined = await db.table("syncRecords").get(candidate.id);
+      if (!current || current.heads.length < 2) return;
+      const heads = mergeHeads(current.heads, []);
+      if (heads.length !== 1) return;
+      const resolved = heads[0];
+      // A normal journaled write joins all clocks and preserves history/undo.
+      if (resolved.value) await db.table(table).put(resolved.value);
+      else await db.table(table).delete(resolved.key);
+    });
+  }
+  await db.table("syncState").put({ id:"metadata-conflicts-v2", complete:true });
+}
 export async function applySyncPacket(input: unknown, transport?: SyncTransport) {
   const packet = validateSyncPacket(input);
   if (await db.table("syncInbox").get(packet.id)) return;
@@ -85,6 +104,7 @@ export function synchronize(transport: SyncTransport): Promise<void> {
   if (active) return active;
   active = (async () => {
     if (!syncEnabled()) return;
+    await reconcileMetadataOnlyConflicts();
     const listed = await transport.list();
     for (const file of listed) {
       if (!syncEnabled()) return;

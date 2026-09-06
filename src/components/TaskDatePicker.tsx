@@ -3,6 +3,7 @@ import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-rea
 import { useI18n } from "../hooks/useI18n";
 import { getTaskEnhancementCopy } from "../lib/taskEnhancementCopy";
 import { localDateKey, timestampForLocalDateKey } from "../lib/taskTimeline";
+import { useMobileBack } from "../lib/mobileBack";
 
 interface TaskDatePickerProps {
   value: string;
@@ -33,6 +34,7 @@ export function TaskDatePicker({ value, onChange, label, buttonText, calendarLab
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+  useMobileBack(open,()=>setOpen(false));
   const today = new Date(timestampForLocalDateKey(localDateKey(Date.now())));
   const selectedDate = dateFromKey(value);
   const [viewMonth, setViewMonth] = useState(() => new Date((selectedDate || today).getFullYear(), (selectedDate || today).getMonth(), 1, 12));

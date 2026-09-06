@@ -20,10 +20,15 @@ export function mergeHeads(existing: SyncOperation[], incoming: SyncOperation[])
     if (value && typeof value === "object") return `{${Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>`${JSON.stringify(key)}:${canonical(item)}`).join(",")}}`;
     return JSON.stringify(value) ?? "null";
   };
-  const comparable = (value: SyncOperation["value"]) => canonical(value && Object.fromEntries(Object.entries(value).filter(([key]) => !["searchTerms","taskSyncState","relativePath","storage","updatedAt"].includes(key))));
+  const comparable = (value: SyncOperation["value"]) => canonical(value && Object.fromEntries(Object.entries(value).filter(([key]) => !["searchTerms","taskSyncState","relativePath","storage","createdAt","updatedAt"].includes(key))));
   if (heads.length > 1 && heads.every((head) => comparable(head.value) === comparable(heads[0].value))) {
     const clock=joinedClock(heads);
-    return [{ ...heads[0], id: `merged:${JSON.stringify(Object.entries(clock).sort())}`, clock }];
+    const value = heads[0].value && { ...heads[0].value };
+    if (value) for (const key of ["createdAt","updatedAt"] as const) {
+      const times=heads.map(head=>head.value?.[key]).filter((time): time is number=>typeof time==="number"&&Number.isFinite(time));
+      if(times.length)value[key]=key==="createdAt"?Math.min(...times):Math.max(...times);
+    }
+    return [{ ...heads[0], value, id: `merged:${JSON.stringify(Object.entries(clock).sort())}`, clock }];
   }
   return heads;
 }

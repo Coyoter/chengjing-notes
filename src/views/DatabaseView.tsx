@@ -12,12 +12,16 @@ import { setTaskDone } from "../lib/taskSync";
 import { getTaskIntegrationCopy, taskCopyFormat } from "../lib/taskIntegrationCopy";
 import { includesQuery, searchRecords } from "../lib/searchRecords";
 import { isMaterializedCard } from "../lib/journalVisibility";
+import { useMobileBack } from "../lib/mobileBack";
+import { ChevronDown } from "lucide-react";
 
 const stages = ["待整理", "研究中", "進行中", "已驗證", "已整理", "完成"];
 const stageKeys: Record<string, MessageKey> = { 待整理: "stage.unsorted", 研究中: "stage.research", 進行中: "stage.progress", 已驗證: "stage.verified", 已整理: "stage.organized", 完成: "stage.done" };
 type ContentScope = "all" | "cards" | "tasks" | "pinned";
 
 export function DatabaseView() {
+  const [organizerOpen,setOrganizerOpen]=useState(false);
+  useMobileBack(organizerOpen,()=>setOrganizerOpen(false));
   const [layout, setLayout] = useState<"table" | "kanban">("table");
   const [scope, setScope] = useState<ContentScope>("all");
   const [query, setQuery] = useState("");
@@ -130,7 +134,10 @@ export function DatabaseView() {
   function scopeTitle() { if (selectedTag) return selectedTag.name; return scope === "tasks" ? copy.tasksOnly : scope === "cards" ? copy.cardsOnly : scope === "pinned" ? t("database.pinned") : copy.allContent; }
 
   return <div className="database-page">
-    <div className="database-sidebar">
+    <button type="button" className="mobile-section-picker" onClick={()=>setOrganizerOpen(true)} aria-expanded={organizerOpen}><Table2 size={18}/><span>{selectedTag?.name || t("nav.database")}</span><ChevronDown size={17}/></button>
+    {organizerOpen&&<button type="button" className="mobile-organizer-backdrop" aria-label={t("common.close")} onClick={()=>setOrganizerOpen(false)}/>}
+    <div className={`database-sidebar ${organizerOpen?"is-open":""}`} onClick={event=>{if((event.target as HTMLElement).closest(".database-sidebar > button"))setOrganizerOpen(false)}}>
+      <button type="button" className="mobile-organizer-close" onClick={()=>setOrganizerOpen(false)} aria-label={t("common.close")}><X size={20}/></button>
       <header><span>{t("nav.database")}</span><button type="button" className="bare-button" aria-label={t("database.addTag")} onClick={() => setShowAddTag(!showAddTag)}><Plus size={15} /></button></header>
       {showAddTag && <form className="sidebar-tag-form" onSubmit={(event) => { event.preventDefault(); if (!tagComposing.current) void saveNewTag(); }}><input autoFocus value={newTag} onChange={(event) => setNewTag(event.target.value)} onCompositionStart={() => { tagComposing.current = true; }} onCompositionEnd={(event) => { tagComposing.current = false; setNewTag(event.currentTarget.value); }} onBlur={() => { if (!tagComposing.current) void saveNewTag(); }} onKeyDown={(event) => { if (event.key === "Enter" && ((event.nativeEvent as KeyboardEvent).isComposing || tagComposing.current)) event.preventDefault(); }} placeholder={t("database.newTag")} /><button type="submit">{t("common.add")}</button></form>}
       <button type="button" className={scope === "all" && selectedTagId === null ? "is-active" : ""} aria-pressed={scope === "all" && selectedTagId === null} onClick={() => chooseScope("all")}><LayoutGrid size={15} /><span>{copy.allContent}</span><b>{databaseCounts.allCards + databaseCounts.allTasks}</b></button>

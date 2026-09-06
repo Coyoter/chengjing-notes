@@ -47,6 +47,7 @@ import { getContentEditCopy } from "../lib/contentEditCopy";
 import { createUnscheduledContentTask } from "../lib/contentTask";
 import { getContentTaskCopy } from "../lib/contentTaskCopy";
 import { getTaskHierarchyCopy } from "../lib/taskHierarchyCopy";
+import { useMobileBack } from "../lib/mobileBack";
 
 type ContentEditDialog =
   | { kind: "task"; id: string; draft: string }
@@ -74,6 +75,7 @@ export function GlobalContextMenu() {
   const [dueDialog, setDueDialog] = useState<{ id: string; title: string; hadDue: boolean } | null>(null);
   const [editDialog, setEditDialog] = useState<ContentEditDialog | null>(null);
   const [childDialog, setChildDialog] = useState<{ parentId: string; parentTitle: string; draft: string; inheritsDue: boolean } | null>(null);
+  useMobileBack(Boolean(request||renameDialog||dueDialog||editDialog||childDialog),()=>{setRequest(null);setRenameDialog(null);setDueDialog(null);setEditDialog(null);setChildDialog(null);});
   const [notice, setNotice] = useState("");
   const [dueDraft, setDueDraft] = useState("");
   const [task, setTask] = useState<TaskRecord | undefined>();
@@ -111,19 +113,24 @@ export function GlobalContextMenu() {
       setRequest(detail);
     };
     const close = () => setRequest(null);
-    const closeAfterInitialPositioning = () => { if (Date.now() - openedAt.current > 180) close(); };
+    const closeAfterInitialPositioning = (event: Event) => { if (ref.current?.contains(event.target as Node)) return; if (Date.now() - openedAt.current > 180) close(); };
+    const resize = () => {
+      if(window.chengjing?.platform!=="android"){close();return;}
+      const rect=ref.current?.getBoundingClientRect();if(!rect)return;
+      setPosition(current=>({x:Math.max(8,Math.min(current.x,innerWidth-rect.width-8)),y:Math.max(8,Math.min(current.y,innerHeight-rect.height-8))}));
+    };
     const keydown = (event: KeyboardEvent) => event.key === "Escape" && close();
     window.addEventListener("chengjing:context-menu", open);
     window.addEventListener("pointerdown", close);
     window.addEventListener("blur", close);
-    window.addEventListener("resize", close);
+    window.addEventListener("resize", resize);
     window.addEventListener("keydown", keydown);
     document.addEventListener("scroll", closeAfterInitialPositioning, true);
     return () => {
       window.removeEventListener("chengjing:context-menu", open);
       window.removeEventListener("pointerdown", close);
       window.removeEventListener("blur", close);
-      window.removeEventListener("resize", close);
+      window.removeEventListener("resize", resize);
       window.removeEventListener("keydown", keydown);
       document.removeEventListener("scroll", closeAfterInitialPositioning, true);
     };

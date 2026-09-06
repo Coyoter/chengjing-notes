@@ -24,10 +24,10 @@ import androidx.documentfile.provider.DocumentFile
 class NativeServices(private val context: Context, private val backupApp: String = "chengjing-cloud-backup-v1", stateName: String = "settings", private val clock: () -> Long = { System.currentTimeMillis() }) {
     companion object { private val syncUploadLock = Any() }
     val store = SecureStore(context)
-    private val inference = LocalInference(context)
+    private val inference by lazy { LocalInference(context) }
     private val prefs = context.getSharedPreferences(stateName, Context.MODE_PRIVATE)
     private val files = File(context.filesDir, "attachments").apply { mkdirs() }
-    private val http = OkHttpClient.Builder().callTimeout(180, TimeUnit.SECONDS).followRedirects(false).build()
+    private val http by lazy { OkHttpClient.Builder().callTimeout(180, TimeUnit.SECONDS).followRedirects(false).build() }
     private fun objectValue(key: String, fallback: String = "{}") = JSONObject(prefs.getString(key, fallback)!!)
     private fun save(key: String, value: JSONObject): JSONObject { check(prefs.edit().putString(key, value.toString()).commit()); return value }
     fun safeFile(name: String): File { val file = File(files, name).canonicalFile; require(file.parentFile == files.canonicalFile) { "Invalid attachment path" }; return file }
@@ -78,7 +78,7 @@ class NativeServices(private val context: Context, private val backupApp: String
         "local.download" -> inference.download()
         "local.generate" -> inference.generate(args)
         "local.remove" -> inference.remove()
-        "app.info" -> JSONObject().put("platform","android").put("version",BuildConfig.VERSION_NAME).put("language",when { java.util.Locale.getDefault().language=="zh" -> "zh-TW"; java.util.Locale.getDefault().language in listOf("ja","ko") -> java.util.Locale.getDefault().language; else -> "en" })
+        "app.info" -> JSONObject().put("platform","android").put("version",BuildConfig.VERSION_NAME).put("systemDark",android.content.res.Resources.getSystem().configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK==android.content.res.Configuration.UI_MODE_NIGHT_YES).put("language",when { java.util.Locale.getDefault().language=="zh" -> "zh-TW"; java.util.Locale.getDefault().language in listOf("ja","ko") -> java.util.Locale.getDefault().language; else -> "en" })
         "share.pending" -> JSONArray(prefs.getString("share-queue", "[]")!!)
         "share.ack" -> { val queue=JSONArray(prefs.getString("share-queue","[]")!!); val keep=JSONArray(); for(i in 0 until queue.length()) if(queue.getJSONObject(i).getString("id")!=args.getString("id")) keep.put(queue.get(i)); prefs.edit().putString("share-queue",keep.toString()).commit(); JSONObject() }
         "clipboard.write" -> { val manager=context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager; manager.setPrimaryClip(ClipData.newPlainText("澄境",args.getString("text"))); save("clipboard",args); JSONObject().put("written",true) }

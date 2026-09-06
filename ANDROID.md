@@ -39,6 +39,8 @@ visual-variance: 3 / motion-intensity: 2 / information-density: 5 / asset-depend
 
 正式發布前需完成真機、Google Android OAuth 與跨裝置同步驗收。模擬器或單元測試通過不等同真機完整驗收。
 
+2026-09-07 的介面與操作修正、已測範圍及未完成項目，詳見 [Android 驗收記錄](ANDROID_QA.md)。
+
 ## 2026-09-06 開發檢查點（非正式發布）
 
 - 已建立 Android 正式簽章與開發簽章對應的 Google OAuth Client；模擬器完成本人登入，原生 AuthorizationClient 可取得 `drive.appdata`。
