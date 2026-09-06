@@ -1,6 +1,8 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
 val signingFile = rootProject.file("signing/credentials.json")
 val signingValues = if (signingFile.exists()) groovy.json.JsonSlurper().parse(signingFile) as Map<*, *> else emptyMap<String,String>()
+val distributionChannel = providers.gradleProperty("distributionChannel").orElse("direct").get()
+require(distributionChannel in listOf("direct", "play")) { "Unknown distribution channel" }
 android {
     namespace = "tw.techtarian.chengjing"
     compileSdk = 36
@@ -8,8 +10,9 @@ android {
         applicationId = "tw.techtarian.chengjing"
         minSdk = 28
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.10.0-dev.2"
+        versionCode = 3
+        versionName = "0.10.0-dev.3"
+        buildConfigField("String", "DISTRIBUTION_CHANNEL", "\"$distributionChannel\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { buildConfig = true }

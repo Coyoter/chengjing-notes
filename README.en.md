@@ -24,6 +24,8 @@ This is source-available software rather than OSI-approved “Open Source” sof
 
 ## Install
 
+Cross-platform development prerelease: [0.10.0-dev.3 for Android, Mac and Windows](https://github.com/Coyoter/chengjing-notes/releases/tag/v0.10.0-dev.3). Install over the previous build without uninstalling. This is not a Google Play release and full physical-device acceptance is incomplete. Bidirectional Google sync requires the compatible clients in this release; older desktop v0.9.5 still provides snapshot backups only. See [Android details](ANDROID.md).
+
 Official installers are currently available for Apple Silicon Macs and Windows ARM64, Intel, and AMD x64 systems:
 
 - [Download the latest release from GitHub Releases](https://github.com/Coyoter/chengjing-notes/releases/latest)

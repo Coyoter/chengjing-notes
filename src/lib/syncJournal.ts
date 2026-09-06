@@ -1,8 +1,9 @@
 import type Dexie from "dexie";
 import { type DBCoreTransaction } from "dexie";
-import { SYNC_TABLES, joinedClock, type SyncOperation, type SyncRecord, type SyncTable } from "./syncProtocol";
+import { SYNC_TABLES, joinedClock, mergeSyncRecord, operationTime, type SyncOperation, type SyncRecord, type SyncTable } from "./syncProtocol";
 
 export const remoteSyncTransactions = new WeakSet<object>();
+export const baselineSyncTransactions = new WeakSet<object>();
 export function syncEnabled() { return typeof localStorage !== "undefined" && localStorage.getItem("chengjing-sync-enabled") === "true"; }
 function tracking() { return syncEnabled() || (typeof localStorage !== "undefined" && localStorage.getItem("chengjing-sync-tracking") === "true"); }
 export function syncDeviceId() {
@@ -47,7 +48,10 @@ export function installSyncJournal(db: Dexie) {
               const value = values[index] ? { ...values[index] } : null;
               if (value) { delete value.blob; delete value.searchTerms; }
               const operation: SyncOperation = { id: crypto.randomUUID(), table: name as SyncTable, key, clock, value };
-              const result = await records.mutate({ trans, type: "put", values: [{ id, heads: [operation] }] });
+              // Publishing existing local data is not a new edit. Preserve its original date.
+              operation.changedAt = baselineSyncTransactions.has(trans) ? operationTime(operation) : Date.now();
+              const recovery = prior?.heads.length ? mergeSyncRecord(prior, []).recovery : prior?.recovery;
+              const result = await records.mutate({ trans, type: "put", values: [{ id, heads: [operation], recovery }] });
               const queued = await outbox.mutate({ trans, type: "put", values: [operation] });
               if (result.numFailures || queued.numFailures) { trans.abort(); throw new Error("sync-journal-write-failed"); }
             }

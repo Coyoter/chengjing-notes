@@ -1,7 +1,7 @@
 import { db } from "../db";
 import { ignoreTransactionHistory } from "./historyTransactions";
-import { syncEnabled, remoteSyncTransactions } from "./syncJournal";
-import { SYNC_TABLES, validateSyncPacket, mergeHeads, materializedHead, type SyncPacket, type SyncRecord, type SyncOperation } from "./syncProtocol";
+import { syncEnabled, remoteSyncTransactions, baselineSyncTransactions } from "./syncJournal";
+import { SYNC_TABLES, validateSyncPacket, mergeSyncRecord, materializedHead, type SyncPacket, type SyncRecord, type SyncOperation } from "./syncProtocol";
 
 export interface SyncTransport {
   stage?: (packet: SyncPacket) => Promise<unknown>;
@@ -12,6 +12,9 @@ export interface SyncTransport {
   put: (id: string, data: string) => Promise<unknown>;
 }
 let active: Promise<void> | null = null;
+function withLocalAsset(value: Record<string, unknown>, asset?: Record<string, unknown>) {
+  return asset ? { ...value, storage: asset.storage, relativePath: asset.relativePath } : value;
+}
 export async function* pendingSyncPackets(): AsyncGenerator<SyncPacket> {
   // Freeze IDs, not the entire database. Changes made during upload stay queued.
   const keys = await db.table("syncOutbox").toCollection().primaryKeys();
@@ -42,30 +45,47 @@ export async function initializeSyncBaseline() {
   for (const table of SYNC_TABLES) {
     const rows = await db.table(table).toArray();
     for (let index = 0; index < rows.length; index += 100) {
-      const missing = [];
+      const missing: Array<{ id: string }> = [];
       for (const row of rows.slice(index, index + 100)) if (!await db.table("syncRecords").get(`${table}:${row.id}`)) missing.push(row);
-      if (missing.length) await db.table(table).bulkPut(missing);
+      if (missing.length) await db.transaction("rw", db.table(table), db.table("syncRecords"), async transaction => {
+        baselineSyncTransactions.add(transaction.idbtrans);
+        // Recheck inside the transaction: an editor may have saved while baseline was scanning.
+        for (const row of missing) if (!await db.table("syncRecords").get(`${table}:${row.id}`)) {
+          const current = await db.table(table).get(row.id);
+          if (current) await db.table(table).put(current);
+        }
+      });
     }
   }
 }
-export async function reconcileMetadataOnlyConflicts() {
-  if (await db.table("syncState").get("metadata-conflicts-v2")) return;
+export async function reconcileLatestRecords(transport?: SyncTransport) {
+  if (await db.table("syncState").get("latest-wins-v1")) return;
   const records: SyncRecord[] = await db.table("syncRecords").filter((record: SyncRecord) => record.heads.length > 1).toArray();
   for (const candidate of records) {
     const table = candidate.heads[0].table;
-    if (table === "attachments") continue; // Device-local file paths require separate handling.
-    await db.transaction("rw", db.table(table), db.table("syncRecords"), async () => {
+    const candidateWinner = materializedHead(mergeSyncRecord(candidate, []).heads);
+    let asset: Record<string, unknown> | undefined;
+    if (table === "attachments" && candidateWinner.value) {
+      const existing = await db.attachments.get(candidateWinner.key);
+      if (existing?.sha256 !== candidateWinner.value.sha256 || existing?.storage !== "file") {
+        if (!transport?.downloadAsset) throw new Error("sync-attachment-transport-required");
+        asset = await transport.downloadAsset(candidateWinner.value);
+      } else asset = existing as unknown as Record<string, unknown>;
+    }
+    await db.transaction("rw", db.table(table), db.table("syncRecords"), async (transaction) => {
       const current: SyncRecord | undefined = await db.table("syncRecords").get(candidate.id);
       if (!current || current.heads.length < 2) return;
-      const heads = mergeHeads(current.heads, []);
-      if (heads.length !== 1) return;
-      const resolved = heads[0];
-      // A normal journaled write joins all clocks and preserves history/undo.
-      if (resolved.value) await db.table(table).put(resolved.value);
+      const record = mergeSyncRecord(current, []);
+      const resolved = materializedHead(record.heads);
+      if (table === "attachments" && resolved.id !== candidateWinner.id) throw new Error("sync-content-changed-retry");
+      ignoreTransactionHistory(transaction);
+      remoteSyncTransactions.add(transaction.idbtrans);
+      await db.table("syncRecords").put(record);
+      if (resolved.value) await db.table(table).put(withLocalAsset(resolved.value, asset));
       else await db.table(table).delete(resolved.key);
     });
   }
-  await db.table("syncState").put({ id:"metadata-conflicts-v2", complete:true });
+  await db.table("syncState").put({ id:"latest-wins-v1", complete:true });
 }
 export async function applySyncPacket(input: unknown, transport?: SyncTransport) {
   const packet = validateSyncPacket(input);
@@ -86,12 +106,19 @@ export async function applySyncPacket(input: unknown, transport?: SyncTransport)
     for (const operation of packet.operations) {
       const id = `${operation.table}:${operation.key}`;
       const previous: SyncRecord | undefined = await db.table("syncRecords").get(id);
-      const heads = mergeHeads(previous?.heads || [], [operation]);
-      await db.table("syncRecords").put({ id, heads });
-      const visible = materializedHead(heads);
+      const record = mergeSyncRecord(previous, [operation]);
+      await db.table("syncRecords").put(record);
+      const visible = materializedHead(record.heads);
       if (visible.value) {
-        if (operation.table === "attachments" && visible.id !== operation.id) continue;
-        await db.table(operation.table).put(assets.get(visible.id) || visible.value);
+        if (operation.table === "attachments") {
+          // Synthetic equivalent heads and a previously selected winner still need
+          // the winning metadata, but must never import another device's file path.
+          const local = await db.attachments.get(operation.key);
+          const asset = assets.get(visible.id) || (local?.sha256 === visible.value.sha256 ? local as unknown as Record<string, unknown> : undefined)
+            || [...assets.values()].find(asset => asset.sha256 === visible.value?.sha256);
+          if (!asset) throw new Error("sync-attachment-transport-required");
+          await db.attachments.put(withLocalAsset(visible.value, asset) as unknown as import("../types").AttachmentRecord);
+        } else await db.table(operation.table).put(visible.value);
       }
       else await db.table(operation.table).delete(operation.key);
     }
@@ -104,7 +131,7 @@ export function synchronize(transport: SyncTransport): Promise<void> {
   if (active) return active;
   active = (async () => {
     if (!syncEnabled()) return;
-    await reconcileMetadataOnlyConflicts();
+    await reconcileLatestRecords(transport);
     const listed = await transport.list();
     for (const file of listed) {
       if (!syncEnabled()) return;

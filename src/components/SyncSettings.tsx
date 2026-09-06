@@ -47,7 +47,7 @@ export function SyncSettings() {
   const [enabled, setEnabled] = useState(syncEnabled); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const activity = useSyncExternalStore(subscribeSyncActivity, getSyncActivity);
   const pending = useLiveQuery(() => db.table("syncOutbox").count(), [], 0);
-  const conflicts = useLiveQuery(() => db.table("syncRecords").filter((row: SyncRecord) => row.heads.length > 1).toArray() as Promise<SyncRecord[]>, [], []);
+  const conflicts = useLiveQuery(() => db.table("syncRecords").filter((row: SyncRecord) => Boolean(row.recovery?.length)).toArray() as Promise<SyncRecord[]>, [], []);
   const working = busy || activity.phase === "syncing";
   const message = error || (activity.phase === "error" ? activity.error : "");
   const kind = syncStatusKind(enabled, working, message, pending, activity.lastSuccessAt);
@@ -77,7 +77,7 @@ export function SyncSettings() {
     catch(error) { setError(error instanceof Error?error.message:String(error)); }
   }
   return <section className="settings-section sync-settings" id="sync-settings">
-    <header><span><Cloud size={17} /> Google</span><h2>{zh?"跨裝置同步":"Cross-device sync"}</h2><p>{zh?"登入同一個 Google 帳號，在支援同步的裝置上接續編輯。離線修改也會保留。":"Sign in to the same Google account on sync-enabled devices to pick up where you left off. Offline edits are kept."}</p></header>
+    <header><span><Cloud size={17} /> Google</span><h2>{zh?"跨裝置同步":"Cross-device sync"}</h2><p>{zh?"登入同一個 Google 帳號，接續各裝置的內容。首次同步會合併資料；同一筆內容自動採用最新修改。":"Sign in to the same Google account to continue across devices. First sync combines your data; the latest edit is used for each item."}</p></header>
     <div className={`sync-state is-${kind}`} role="status" aria-live="polite" aria-busy={working}>
       <StatusIcon size={21} className={working?"spin":""}/><div><b>{labels[kind][0]}</b>{labels[kind][1]&&<p>{labels[kind][1]}</p>}{activity.lastSuccessAt>0&&<small>{zh?"上次完成":"Last completed"} · {new Intl.DateTimeFormat(language,{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}).format(activity.lastSuccessAt)}</small>}</div>
     </div>

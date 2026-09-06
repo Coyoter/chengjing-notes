@@ -1,5 +1,5 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-  <!-- Reuse the desktop emblem. Its visible bounds (including strokes) are
+  <!-- Shared desktop emblem. Its visible bounds (including strokes) are
        x=74..576, y=49..611; this transform centers them exactly at (54,54). -->
   <group android:scaleX="0.1" android:scaleY="0.1" android:translateX="21.5" android:translateY="21">
     <path android:fillColor="@android:color/transparent" android:strokeColor="#35c7a2" android:strokeWidth="42" android:strokeLineCap="round" android:pathData="M325,70 C198,70 95,173 95,300 C95,427 198,530 325,530 C452,530 555,427 555,300" />

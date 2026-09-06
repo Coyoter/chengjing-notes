@@ -47,3 +47,4 @@
 .android-update-settings > header > span { display:flex; align-items:center; gap:8px; }
 .android-update-settings > a { min-height:48px; text-decoration:none; }
 @media(prefers-reduced-motion:reduce) { .sync-settings .spin { animation:none; } }
+.sync-recovery-hint { margin: 16px 0; color: var(--text-muted); font-size: calc(13px * var(--font-scale, 1)); line-height: 1.65; }

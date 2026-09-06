@@ -22,6 +22,7 @@ import {
   useInternalNode,
   useNodesState,
   useStore,
+  useStoreApi,
   type Connection,
   type Edge,
   type EdgeProps,
@@ -61,6 +62,7 @@ import {
   X,
 } from "lucide-react";
 import { createCard, db, touchBoard } from "../db";
+import { useBoardPinch } from "../hooks/useBoardPinch";
 import { useI18n } from "../hooks/useI18n";
 import { TagPicker } from "../components/TagPicker";
 import { useAppStore } from "../store";
@@ -239,6 +241,8 @@ function BoardCanvas({ boardId, focusNodeId, onFocusConsumed }: { boardId: strin
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const connectionCreatedRef = useRef(false);
   const boardRef = useRef<HTMLDivElement>(null);
+  const flowStore=useStoreApi();
+  const pinching=useBoardPinch(boardRef,flow,()=>{flowStore.getState().cancelConnection();setPendingConnectionNodeId(null);setStatus(null);});
   const historyRef = useRef<BoardHistoryState>({ entries: [], index: -1 });
   const historyBoardRef = useRef("");
   const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -850,10 +854,10 @@ function BoardCanvas({ boardId, focusNodeId, onFocusConsumed }: { boardId: strin
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onConnect={(connection) => { connectionCreatedRef.current = true; createConnection(connection); }}
+        onConnect={(connection) => { if(pinching.current)return;connectionCreatedRef.current = true; createConnection(connection); }}
         onConnectStart={() => { connectionCreatedRef.current = false; showStatus("info", t("board.dragToHandle"), 5000); }}
-        onConnectEnd={(_event, connectionState) => { if (!connectionCreatedRef.current && !connectionState.isValid) showStatus("error", t("board.connectFailed"), 4800); connectionCreatedRef.current = false; }}
-        onReconnect={async (oldEdge, connection) => { setEdges((current) => reconnectEdge(oldEdge, connection, current)); await db.boardEdges.update(oldEdge.id, { source: connection.source, target: connection.target, sourceHandle: connection.sourceHandle, targetHandle: connection.targetHandle }); showStatus("success", t("board.reconnected")); }}
+        onConnectEnd={(_event, connectionState) => { if (!pinching.current && !connectionCreatedRef.current && !connectionState.isValid) showStatus("error", t("board.connectFailed"), 4800); connectionCreatedRef.current = false; }}
+        onReconnect={async (oldEdge, connection) => { if(pinching.current)return;setEdges((current) => reconnectEdge(oldEdge, connection, current)); await db.boardEdges.update(oldEdge.id, { source: connection.source, target: connection.target, sourceHandle: connection.sourceHandle, targetHandle: connection.targetHandle }); showStatus("success", t("board.reconnected")); }}
         onInit={setFlow}
         onNodeClick={(_event, node) => handleNodeClick(node.id)}
         onNodeDoubleClick={(_event, node) => { const record = recordMap.get(node.id); if (record?.cardId) openCard(record.cardId); }}
@@ -896,6 +900,8 @@ function BoardCanvas({ boardId, focusNodeId, onFocusConsumed }: { boardId: strin
         deleteKeyCode={["Backspace", "Delete"]}
         selectionOnDrag
         panOnScroll
+        zoomOnPinch
+        style={{touchAction:"none"}}
         zoomOnDoubleClick={false}
         proOptions={{ hideAttribution: true }}
       >

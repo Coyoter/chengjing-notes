@@ -19,7 +19,33 @@ visual-variance: 3 / motion-intensity: 2 / information-density: 5 / asset-depend
 - 保留 Dexie 為內容唯一主庫。原生分享入口保存獨立待匯入佇列，成功匯入後才確認移除。原生層不另行修改筆記副本。
 - 型別橋接取代 Electron；附件、Android Keystore、Google AuthorizationClient、背景工作與本機推論由原生提供。
 - MCP 只保留桌面；Android 不註冊伺服器、不顯示相關設定。
-- Google 同步使用獨立命名空間與協定。每筆資料有因果版本，合併不依賴装置時鐘；同項衝突保留雙方。舊備份不改名為同步。
+- Google 同步使用獨立命名空間與協定。不同筆資料合併；同一筆先判斷修改先後關係，離線並發才依修改時間自動採用較新者。較早內容保留在本機救援入口，日常不要求選版本。舊備份不改名為同步。
+
+## Android 0.10.0-dev.3：自動同步規則
+
+- 首次啟用會合併本機與雲端，不整份覆蓋。原有本機資料保留原修改時間，不把「今天啟用同步」誤判成「今天修改所有資料」。
+- 同一筆資料已有明確先後關係時，後續修改優先。兩台裝置各自離線修改同一筆時，以修改時間決定；相同時間使用固定排序，避免抵達順序造成不同結果。待辦截止時間不參與判斷。
+- 刪除也有修改時間。較新的刪除可以同步生效，較新的編輯可以保留內容；旧版沒有時間的刪除採保全內容的退路。較早的並發版本保留在本機「復原同步前的內容」，收起且需確認才可復原。
+- 「最新」不是多人即時逐字合寫；同一張卡片的兩個離線正文不會硬接成一篇。裝置時間明顯錯誤仍可能影響並發排序，建議開啟系統自動日期時間。救援記錄目前是各裝置遇到並發時保留的本機記錄，不是完整跨裝置版本歷史。
+- 本機存檔後停筆 5 秒嘗試同步；開啟後約 3 秒、回到 App、恢復網路時補同步；前景每 60 秒檢查雲端。持續輸入不必等到閒置 30 分鐘。
+- 送到背景時會要求編輯器補存並暫存待上傳資料。Android 背景工作在有網路時嘗試上傳，另有 15 分鐘週期補送；省電、強制停止及系統調度可能延後，不保證關閉後立即完成。下次開啟會接續。
+- 備份與同步是兩件事：備份保留快照供救援；同步交換每筆內容。舊桌面 v0.9.5 只有備份，**不會自動變成雙向同步版**；跨裝置測試請一併安裝本次 0.10.0-dev.3 的相容桌面測試版。
+
+### GitHub 與 Google Play 更新管道
+
+本次 APK 是 GitHub 開發測試版（versionCode 3），不是 Play 商店正式發布。可以直接覆蓋安裝相同簽章的舊測試版，不要先解除安裝。
+
+Gradle 預設 `distributionChannel=direct`，更新入口連到 GitHub。未來建置 Play 版必須指定 `-PdistributionChannel=play`；介面只提供 Google Play 更新入口，不引導外部 APK、不要求安裝套件權限。本次新增管道區分不代表已完成 Play 上架、政策審核或其餘發布關卡。
+
+依據：[Google Play Device and Network Abuse](https://support.google.com/googleplay/android-developer/answer/16559646?hl=en)。Play 發行的 App 不得使用 Play 以外的機制更新自身。同步參考 [Joplin 同步架構](https://joplinapp.org/help/dev/spec/sync/)的修改後快速上傳及週期下載；各產品衝突策略並不相同，澄境依本次產品決策採最新修改加救援，而非宣稱所有筆記產品都相同。
+
+### English — sync and distribution
+
+First sync combines independent local and cloud items. Causal successors take precedence; concurrent edits to the same item use modification time with a deterministic tie-breaker. Initial publication preserves the original timestamp. Deadlines are never used as modification times. Earlier concurrent values are kept in a collapsed local recovery section; restoring requires confirmation. This is item-level sync, not collaborative text merging. Incorrect device clocks can affect concurrent ordering; recovery history is local to the device that observed the competing edits.
+
+While open, sync runs after five seconds without edits, shortly after launch, on resume/reconnection, and every minute. Android stages pending uploads for network-constrained background work, with periodic recovery. OS scheduling or force-stop can delay it; the next launch resumes pending work. Desktop v0.9.5 supports snapshot backups only; bidirectional testing needs the compatible 0.10.0-dev.3 desktop build included in this release.
+
+This GitHub APK is a development prerelease, not a Google Play release. Direct builds link to GitHub; future Play builds must use `-PdistributionChannel=play` and Google Play updates only. Channel separation is not a claim of full Play policy compliance or review approval.
 
 ## 必須逐項驗收的功能
 

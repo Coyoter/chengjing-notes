@@ -141,7 +141,7 @@ class MainActivity : ComponentActivity() {
                     }
                     "app.info" -> executor.execute {
                         val preferences=serviceContext.getSharedPreferences("settings",MODE_PRIVATE)
-                        reply((services.call("app.info",args) as JSONObject).put("qaIsolated",qaIsolation).put("themeMode",preferences.getString("launch-mode",null)?:JSONObject.NULL).put("uiLanguage",preferences.getString("ui-language",null)?:JSONObject.NULL).put("fontScale",preferences.getInt("ui-font-percent",0)/100.0),null)
+                        reply((services.call("app.info",args) as JSONObject).put("distributionChannel",BuildConfig.DISTRIBUTION_CHANNEL).put("qaIsolated",qaIsolation).put("themeMode",preferences.getString("launch-mode",null)?:JSONObject.NULL).put("uiLanguage",preferences.getString("ui-language",null)?:JSONObject.NULL).put("fontScale",preferences.getInt("ui-font-percent",0)/100.0),null)
                     }
                     "backup.chooseFolder" -> runOnUiThread {
                         if(fileReply!=null)reply(null,"Another file chooser is open")else{

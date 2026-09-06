@@ -25,7 +25,8 @@ export async function initializeAndroid() {
     clearTimeout(request.timer); pending.delete(id);
     error ? request.reject(new Error(error)) : request.resolve(value);
   };
-  const info = await androidCall<{ version: string; language: AppLanguage; systemDark: boolean; qaIsolated?: boolean; themeMode?: ThemeMode; uiLanguage?: AppLanguage; fontScale?: number }>("app.info");
+  const info = await androidCall<{ version: string; language: AppLanguage; systemDark: boolean; distributionChannel?: string; qaIsolated?: boolean; themeMode?: ThemeMode; uiLanguage?: AppLanguage; fontScale?: number }>("app.info");
+  document.documentElement.dataset.distributionChannel=info.distributionChannel || "play";
   if(info.themeMode&&["system","light","dark","ink"].includes(info.themeMode))useAppStore.getState().setTheme(info.themeMode);
   if(info.uiLanguage&&["zh-TW","zh-CN","en","ja","ko"].includes(info.uiLanguage))useAppStore.getState().setLanguage(info.uiLanguage);
   if(info.fontScale&&[.9,1,1.1,1.2].includes(info.fontScale))useAppStore.getState().setFontScale(info.fontScale);

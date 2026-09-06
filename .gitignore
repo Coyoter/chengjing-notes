@@ -20,6 +20,7 @@ build/ChengJingQuickCapture.app/
 electron/google-oauth-runtime.cjs
 tools/windows-installer/installer/payload.zip
 android/.gradle/
+android/.kotlin/
 android/local.properties
 android/**/build/
 android/app/src/main/assets/public/
