@@ -135,7 +135,7 @@ export async function restoreBackup(raw: string, backupFilePath = "") {
       blob: dataUrlToBlob(String(item.blob || "")),
     }));
   await runWithoutGlobalHistory(async () => {
-    for (const table of db.tables) await table.clear();
+    for (const table of db.tables.filter((table) => !table.name.startsWith("sync"))) await table.clear();
     for (const name of TABLES) {
       const values = parsed.data[name];
       if (Array.isArray(values) && values.length) await db.table(name).bulkAdd(values);

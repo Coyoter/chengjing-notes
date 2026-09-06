@@ -1,0 +1,20 @@
+import "fake-indexeddb/auto";
+import { beforeAll, beforeEach, afterEach, expect, it, vi } from "vitest";
+import { db } from "../db";
+import { importBackupForSync } from "./syncBootstrap";
+vi.mock("./autoBackup",()=>({prepareCompleteBackup:async()=>({}),writeRestoreSafetyBackup:vi.fn(async()=>({}))}));
+vi.mock("./attachments",()=>({migrateLegacyAttachments:async()=>{},restoreFileAttachment:async(value:unknown)=>value}));
+beforeAll(()=>db.open());
+beforeEach(async()=>{localStorage.clear();await db.transaction("rw",db.tables,async()=>{for(const table of db.tables)await table.clear();});});
+afterEach(()=>{localStorage.clear();delete window.chengjing;});
+it("首次從桌面備份帶入內容，不覆寫啟用同步之前的手機修改",async()=>{
+  const local={id:"same",text:"phone version",pinned:false,tagIds:[],createdAt:1,updatedAt:2};
+  await db.fragments.put(local);
+  const data={cards:[],boards:[],boardNodes:[],boardEdges:[],tags:[],tasks:[],attachments:[],fragments:[{...local,text:"desktop version"},{...local,id:"desktop-only"}]};
+  window.chengjing={cloudBackups:{download:async()=>({data:JSON.stringify({format:"chengjing-backup",version:2,data}),baselineManifestId:"fixture",backupFilePath:"fixture"})}} as unknown as typeof window.chengjing;
+  expect(await importBackupForSync()).toBe(2);
+  const record=await db.table("syncRecords").get("fragments:same");
+  expect(record.heads.map((head:any)=>head.value.text).sort()).toEqual(["desktop version","phone version"]);
+  expect(await db.fragments.get("desktop-only")).toBeDefined();
+  expect(localStorage.getItem("chengjing-sync-enabled")).not.toBe("true");
+});

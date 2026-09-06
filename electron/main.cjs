@@ -1328,6 +1328,11 @@ ipcMain.handle("cloud-backup:get-local-status", async () => {
   try { return await cloudBackupService().getLocalStatus(); }
   catch (error) { throw new Error(friendlyCloudBackupError(error)); }
 });
+ipcMain.handle("sync:list", () => serializeCloudBackup(() => cloudBackupService().syncList()));
+ipcMain.handle("sync:get", (_event, id) => serializeCloudBackup(() => cloudBackupService().syncGet(id)));
+ipcMain.handle("sync:put", (_event, { id, data }) => serializeCloudBackup(() => cloudBackupService().syncPut(id, data)));
+ipcMain.handle("sync:upload-asset", (_event, asset) => serializeCloudBackup(() => cloudBackupService().syncUploadAsset(asset)));
+ipcMain.handle("sync:download-asset", (_event, asset) => serializeCloudBackup(() => cloudBackupService().syncDownloadAsset(asset)));
 
 ipcMain.handle("cloud-backup:get-status", async () => serializeCloudBackup(async () => {
   try { return await cloudBackupService().getStatus(); }

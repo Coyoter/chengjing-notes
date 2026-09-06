@@ -24,6 +24,13 @@ contextBridge.exposeInMainWorld("chengjing", {
       return () => ipcRenderer.removeListener("update:progress", listener);
     },
   },
+  sync: {
+    uploadAsset: (asset) => ipcRenderer.invoke("sync:upload-asset", asset),
+    downloadAsset: (asset) => ipcRenderer.invoke("sync:download-asset", asset),
+    list: () => ipcRenderer.invoke("sync:list"),
+    get: (id) => ipcRenderer.invoke("sync:get", id),
+    put: (id, data) => ipcRenderer.invoke("sync:put", { id, data }),
+  },
   backups: {
     getSettings: () => ipcRenderer.invoke("backup:get-settings"),
     chooseFolder: () => ipcRenderer.invoke("backup:choose-folder"),

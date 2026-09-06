@@ -37,7 +37,7 @@ const SyncedTaskItem = TaskItem.extend({
 
 interface RichEditorProps {
   content: string;
-  onChange: (html: string, text: string) => void;
+  onChange: (html: string, text: string) => unknown;
   placeholder?: string;
   autoFocus?: boolean;
   compact?: boolean;
@@ -46,13 +46,14 @@ interface RichEditorProps {
 }
 
 export function RichEditor({ content, onChange, placeholder, autoFocus = false, compact = false, onHighlight, taskOwnerId }: RichEditorProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const resolvedPlaceholder = placeholder || t("editor.start");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSave = useRef<(() => void) | null>(null);
   const onChangeRef = useRef(onChange);
   const taskOwnerIdRef = useRef(taskOwnerId);
-  const [saveState, setSaveState] = useState<"saved" | "saving">("saved");
+  const saveRevision = useRef(0);
+  const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -72,19 +73,23 @@ export function RichEditor({ content, onChange, placeholder, autoFocus = false, 
     onUpdate: ({ editor: activeEditor }) => {
       setSaveState("saving");
       if (timer.current) clearTimeout(timer.current);
+      const originalHtml = activeEditor.getHTML();
+      const normalized = normalizeEditorTaskHtml(originalHtml);
+      const plainText = activeEditor.getText({ blockSeparator: "\n" });
+      const save = onChangeRef.current;
+      const owner = taskOwnerIdRef.current;
+      const revision = ++saveRevision.current;
       pendingSave.current = () => {
         pendingSave.current = null;
-        const originalHtml = activeEditor.getHTML();
-        const normalized = normalizeEditorTaskHtml(originalHtml);
-        if (normalized.html !== originalHtml) {
+        if (!activeEditor.isDestroyed && activeEditor.getHTML() === originalHtml && normalized.html !== originalHtml) {
           const selection = activeEditor.state.selection;
           activeEditor.commands.setContent(normalized.html, { emitUpdate: false });
           activeEditor.commands.setTextSelection({ from: selection.from, to: selection.to });
         }
-        const plainText = activeEditor.getText({ blockSeparator: "\n" });
-        onChangeRef.current(normalized.html, plainText);
-        if (taskOwnerIdRef.current) void syncCardTasksFromHtml(taskOwnerIdRef.current, normalized.html);
-        setSaveState("saved");
+        void Promise.resolve().then(() => save(normalized.html, plainText)).then(async () => {
+          if (owner) await syncCardTasksFromHtml(owner, normalized.html);
+          if (revision === saveRevision.current) setSaveState("saved");
+        }).catch(() => { if (revision === saveRevision.current) setSaveState("error"); });
       };
       timer.current = setTimeout(() => pendingSave.current?.(), 420);
     },
@@ -113,7 +118,9 @@ export function RichEditor({ content, onChange, placeholder, autoFocus = false, 
 
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
-  }, []);
+    // The captured HTML and owner remain valid after the editor view is destroyed.
+    pendingSave.current?.();
+  }, [taskOwnerId]);
 
   useEffect(() => {
     const flush = () => { if (timer.current) clearTimeout(timer.current); pendingSave.current?.(); };
@@ -160,7 +167,7 @@ export function RichEditor({ content, onChange, placeholder, autoFocus = false, 
           {tool(t("editor.code"), editor.isActive("codeBlock"), () => editor.chain().focus().toggleCodeBlock().run(), <Braces size={15} />)}
         </div>
         <div>
-          <span className={`save-state ${saveState}`}>{saveState === "saving" ? t("common.saving") : t("common.saved")}</span>
+          <span role={saveState === "error" ? "alert" : "status"} className={`save-state ${saveState}`}>{saveState === "error" ? ({"zh-TW":"儲存失敗，請勿關閉","zh-CN":"保存失败，请勿关闭",en:"Save failed. Keep this open.",ja:"保存できません。閉じないでください。",ko:"저장 실패. 닫지 마세요."})[language] : saveState === "saving" ? t("common.saving") : t("common.saved")}</span>
           {tool(t("editor.undo"), false, () => editor.chain().focus().undo().run(), <Undo2 size={15} />)}
           {tool(t("editor.redo"), false, () => editor.chain().focus().redo().run(), <Redo2 size={15} />)}
         </div>

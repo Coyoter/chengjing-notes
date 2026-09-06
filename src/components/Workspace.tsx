@@ -7,7 +7,7 @@ type WorkspaceViewModule = { default: ComponentType };
 type WorkspaceViewLoader = () => Promise<WorkspaceViewModule>;
 
 const viewLoaders: Record<AppView, WorkspaceViewLoader> = {
-  today: () => import("../views/TodayView").then((module) => ({ default: module.TodayView })),
+  today: () => window.chengjing?.platform === "android" ? import("./MobileCapture").then((module) => ({ default: module.MobileCapture })) : import("../views/TodayView").then((module) => ({ default: module.TodayView })),
   journal: () => import("../views/JournalView").then((module) => ({ default: module.JournalView })),
   boards: () => import("../views/BoardView").then((module) => ({ default: module.BoardView })),
   kanban: () => import("../views/KanbanView").then((module) => ({ default: module.KanbanView })),
@@ -15,7 +15,7 @@ const viewLoaders: Record<AppView, WorkspaceViewLoader> = {
   database: () => import("../views/DatabaseView").then((module) => ({ default: module.DatabaseView })),
   tasks: () => import("../views/TasksView").then((module) => ({ default: module.TasksView })),
   highlights: () => import("../views/HighlightsView").then((module) => ({ default: module.HighlightsView })),
-  fragments: () => import("../views/FragmentsView").then((module) => ({ default: module.FragmentsView })),
+  fragments: () => window.chengjing?.platform === "android" ? import("./MobileCapture").then((module) => ({ default: module.MobileCapture })) : import("../views/FragmentsView").then((module) => ({ default: module.FragmentsView })),
   brain: () => import("../views/SecondBrainView").then((module) => ({ default: module.SecondBrainView })),
   settings: () => import("../views/SettingsView").then((module) => ({ default: module.SettingsView })),
 };

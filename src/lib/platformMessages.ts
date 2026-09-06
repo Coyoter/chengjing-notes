@@ -1,5 +1,5 @@
 import type { AppLanguage } from "../types";
-import { isWindows } from "./platform";
+import { isAndroid, isWindows } from "./platform";
 
 const windowsMessages: Record<AppLanguage, Record<string, string>> = {
   "zh-TW": {
@@ -40,5 +40,16 @@ const windowsMessages: Record<AppLanguage, Record<string, string>> = {
 };
 
 export function platformMessageOverride(language: AppLanguage, key: string) {
+  if (isAndroid()) {
+    const zh = language.startsWith("zh");
+    const copy:Record<string,string>={
+      "settings.keySaved":zh?"已安全保存在此手機":"Securely saved on this device",
+      "settings.keyMissing":zh?"尚未設定":"Not configured",
+      "settings.keyBoundary":zh?"金鑰由 Android 安全儲存機制保護，不會進入筆記備份或跨裝置同步。":"Keys are protected by Android secure storage and excluded from note backups and sync.",
+      "settings.keyFooter":zh?"本機加密・僅此裝置使用":"Encrypted locally · device only",
+      "settings.gemmaNote":zh?"本機推論・內容留在手機":"On-device AI · content stays here",
+    };
+    return copy[key];
+  }
   return isWindows() ? windowsMessages[language]?.[key] : undefined;
 }

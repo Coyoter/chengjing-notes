@@ -24,6 +24,8 @@ import { useUpdateStore } from "./updateStore";
 import { initializeGlobalHistory, redoGlobalAction, runWithoutGlobalHistory, undoGlobalAction } from "./lib/globalHistory";
 import { migrateLegacyAttachments } from "./lib/attachments";
 import { scrollIntoViewWhenReady } from "./lib/utils";
+import { MobileChrome } from "./components/MobileChrome";
+import { SyncManager } from "./components/SyncSettings";
 
 let workspaceBootstrap: Promise<void> | null = null;
 const CardEditorPanel = lazy(() => import("./components/CardEditorPanel").then((module) => ({ default: module.CardEditorPanel })));
@@ -99,12 +101,12 @@ export function App() {
       try {
         const { handleMcpWorkspaceRequest } = await import("./lib/mcpWorkspace");
         const result = await handleMcpWorkspaceRequest(request);
-        await window.chengjing?.mcp.respond({ requestId: request.requestId, result });
+        await window.chengjing?.mcp?.respond({ requestId: request.requestId, result });
       } catch (error) {
-        await window.chengjing?.mcp.respond({ requestId: request.requestId, error: error instanceof Error ? error.message : "mcp-workspace-failed" });
+        await window.chengjing?.mcp?.respond({ requestId: request.requestId, error: error instanceof Error ? error.message : "mcp-workspace-failed" });
       }
     });
-    const readyTimer = window.setTimeout(() => void window.chengjing?.mcp.rendererReady(), 650);
+    const readyTimer = window.setTimeout(() => void window.chengjing?.mcp?.rendererReady(), 650);
     return () => { window.clearTimeout(readyTimer); dispose(); };
   }, [ready]);
 
@@ -202,6 +204,7 @@ export function App() {
 
   return (
     <div className="app-shell">
+      {window.chengjing?.platform === "android" && <MobileChrome />}
       <Sidebar />
       <div className="app-main">
         <TopBar />
@@ -210,9 +213,9 @@ export function App() {
           {selectedCardId && (
             <motion.section
               className="card-focus-layer"
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 4 }}
+              initial={window.chengjing?.platform === "android" ? { opacity: 1, x: "100%" } : { opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0, x: 0 }}
+              exit={window.chengjing?.platform === "android" ? { opacity: 1, x: "100%" } : { opacity: 0, y: 4 }}
               transition={{ duration: 0.16, ease: [0.2, 0.8, 0.2, 1] }}
             >
               <Suspense fallback={null}><CardEditorPanel /></Suspense>
@@ -239,6 +242,7 @@ export function App() {
       <GlobalContextMenu />
       <UpdateManager />
       <AutoBackupManager />
+      <SyncManager />
       <CommunityNotificationManager />
       <SharedBrainSyncManager />
     </div>

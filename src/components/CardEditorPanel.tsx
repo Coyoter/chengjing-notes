@@ -87,6 +87,7 @@ export function CardEditorPanel() {
   const selectedTextRef = useRef("");
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingTitle = useRef<(() => void) | null>(null);
   const titleComposing = useRef(false);
   const propertyCopy = getCardPropertyCopy(language);
 
@@ -111,7 +112,13 @@ export function CardEditorPanel() {
   useEffect(() => () => {
     if (highlightTimer.current) clearTimeout(highlightTimer.current);
     if (titleTimer.current) clearTimeout(titleTimer.current);
+    pendingTitle.current?.();
   }, []);
+  useEffect(() => {
+    const flush = () => { if(titleTimer.current)clearTimeout(titleTimer.current);pendingTitle.current?.(); };
+    window.addEventListener("chengjing:flush-editors",flush);
+    return () => {flush();window.removeEventListener("chengjing:flush-editors",flush);};
+  }, [cardId]);
 
   if (!card) return <div className="panel-loading">{t("card.loading")}</div>;
   const activeCard = card;
@@ -129,8 +136,9 @@ export function CardEditorPanel() {
   function saveTitle(value: string, immediate = false) {
     const nextTitle = value || t("common.untitledCard");
     if (titleTimer.current) clearTimeout(titleTimer.current);
-    if (immediate) void updateCardWithHistory(activeCard.id, { title: nextTitle });
-    else titleTimer.current = setTimeout(() => updateCardWithHistory(activeCard.id, { title: nextTitle }), 280);
+    pendingTitle.current = () => {pendingTitle.current=null;void updateCardWithHistory(activeCard.id, { title: nextTitle });};
+    if (immediate) pendingTitle.current();
+    else titleTimer.current = setTimeout(() => pendingTitle.current?.(), 280);
   }
 
   function showHighlightNotice(message: string) {

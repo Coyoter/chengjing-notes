@@ -9,6 +9,7 @@ function base64FromDataUrl(value: string) {
 
 export function attachmentUrl(attachment: AttachmentRecord) {
   if (attachment.storage === "file" && attachment.relativePath) {
+    if (window.chengjing?.platform === "android") return `https://appassets.androidplatform.net/attachments/${encodeURIComponent(attachment.relativePath)}`;
     return `chengjing-attachment://local/${encodeURIComponent(attachment.relativePath)}`;
   }
   return attachment.blob ? URL.createObjectURL(attachment.blob) : "";

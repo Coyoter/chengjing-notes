@@ -5,6 +5,14 @@ type AIReasoning = { effort?: "low" | "medium" | "high"; max_tokens?: number; ex
 
 interface Window {
   chengjing?: {
+    sync?: {
+      stage?: (packet: import("./lib/syncProtocol").SyncPacket) => Promise<unknown>;
+      uploadAsset: (asset: Record<string, unknown>) => Promise<unknown>;
+      downloadAsset: (asset: Record<string, unknown>) => Promise<Record<string, unknown>>;
+      list: () => Promise<{ files: Array<{ id: string; name: string }> }>;
+      get: (id: string) => Promise<string>;
+      put: (id: string, data: string) => Promise<unknown>;
+    };
     app: {
       getPreferredLanguage?: () => Promise<{ language: import("./types").AppLanguage; preferredLanguages: string[] }>;
       setLanguage: (language: import("./types").AppLanguage) => Promise<{ language: import("./types").AppLanguage }>;
@@ -15,7 +23,7 @@ interface Window {
       onWindowState?: (callback: (value: { fullscreen: boolean; maximized: boolean }) => void) => () => void;
       quit: () => Promise<{ quitting: boolean }>;
     };
-    updates: {
+    updates?: {
       check: (force?: boolean) => Promise<import("./types").UpdateInfo>;
       download: () => Promise<import("./types").UpdateDownloadResult>;
       onProgress: (callback: (value: import("./types").UpdateProgress) => void) => () => void;
@@ -27,7 +35,7 @@ interface Window {
       write: (request: { data: string; reason: "scheduled" | "manual"; assets?: Array<{ relativePath: string; sha256: string; size: number }> }) => Promise<import("./types").AutoBackupWriteResult>;
       writeSafety: (request: { data: string; assets?: Array<{ relativePath: string; sha256: string; size: number }> }) => Promise<{ filePath: string; filename: string; bytes: number }>;
     };
-    cloudBackups: {
+    cloudBackups?: {
       onBeforeQuit?: (callback: () => Promise<void>) => () => void;
       getLocalStatus: () => Promise<import("./types").CloudBackupStatus>;
       getStatus: () => Promise<import("./types").CloudBackupStatus>;
@@ -41,7 +49,7 @@ interface Window {
       adoptCurrentForOverwrite: () => Promise<import("./types").CloudBackupSettings>;
       qaCleanup?: () => Promise<{ removedManifests: number; removedAssets: number; settings: import("./types").CloudBackupSettings }>;
     };
-    mcp: {
+    mcp?: {
       getSettings: () => Promise<import("./types").McpSettings>;
       updateSettings: (patch: Partial<Pick<import("./types").McpSettings, "enabled" | "accessMode" | "port">>) => Promise<import("./types").McpSettings>;
       regenerateToken: () => Promise<import("./types").McpSettings>;

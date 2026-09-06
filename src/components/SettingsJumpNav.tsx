@@ -29,7 +29,7 @@ export function SettingsJumpNav() {
     <nav className="settings-jump-nav" aria-label={copy.label}>
       <span><Navigation2 size={14} /><b>{copy.label}</b></span>
       <div className="settings-jump-track">
-        {destinations.map(([id, label]) => <a key={id} href={`#${id}`} onClick={(event) => jump(event, id)}>{label}</a>)}
+        {destinations.filter(([id]) => window.chengjing?.platform !== "android" || !["mcp-settings", "quick-capture-settings"].includes(id)).map(([id, label]) => <a key={id} href={`#${id}`} onClick={(event) => jump(event, id)}>{label}</a>)}
       </div>
     </nav>
   );

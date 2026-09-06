@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable, type Transaction } from "dexie";
 import { markBackupChanged } from "./lib/backupChanges";
+import { installSyncJournal } from "./lib/syncJournal";
 import { ignoreTransactionHistory, transactionHistoryIgnored } from "./lib/historyTransactions";
 import dayjs from "dayjs";
 import { intlLocale, translate } from "./i18n";
@@ -142,6 +143,11 @@ class ChengJingDatabase extends Dexie {
     this.version(13).stores({
       tasks: "id, cardId, parentTaskId, done, dueAt, updatedAt, doneKey, scheduleKey, conversionKey, [doneKey+scheduleKey], *searchTerms",
     });
+    this.version(14).stores({ syncRecords: "id", syncOutbox: "id, table", syncState: "id", syncInbox: "id" });
+    // Two offline devices can independently create a reflection for the same day.
+    // Preserve both reports instead of rejecting the entire incoming sync batch.
+    this.version(15).stores({ brainReports: "id, date, updatedAt" });
+    installSyncJournal(this);
 
     this.cards.hook("creating", (_key, card) => {
       const language = useAppStore.getState().language || "zh-TW";
@@ -306,6 +312,7 @@ export async function deleteTag(tagId: string) {
 
 export async function seedDatabase() {
   if ((await db.cards.count()) > 0) return;
+  if (typeof window !== "undefined" && window.chengjing?.platform === "android") return;
 
   const tagProduct = "tag-product";
   const tagResearch = "tag-research";

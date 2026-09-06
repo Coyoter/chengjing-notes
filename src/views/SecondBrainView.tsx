@@ -13,6 +13,8 @@ import {
   Minimize2,
   Minus,
   MousePointer2,
+  MoreHorizontal,
+  BookOpenText,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -212,7 +214,7 @@ function BrainNeuron({
         <sphereGeometry args={[node.radius, 28, 20]} />
         <meshStandardMaterial color={color} roughness={0.82} metalness={0.04} emissive={selected || linking ? "#263b32" : "#111713"} emissiveIntensity={selected || linking ? 0.32 : 0.08} />
       </mesh>
-      {(showAllLabels || hovered || selected || linking || (!dense && node.weight >= 1.9)) && (
+      {(showAllLabels || hovered || selected || linking || (window.chengjing?.platform !== "android" && !dense && node.weight >= 1.9)) && (
         <Html center distanceFactor={12} position={[0, node.radius + 0.42, 0]} zIndexRange={[8, 1]} className="brain-node-label-wrap" pointerEvents="none">
           <span className={`brain-node-label type-${node.type} ${shared ? "is-own-shared" : ""}`}>{node.title}</span>
         </Html>
@@ -323,21 +325,26 @@ function BrainScene({
   const nodeMap = useMemo(() => new Map(nodes.map((node) => [node.key, node])), [nodes]);
   const densityScale = nodes.length > 150 ? 0.72 : nodes.length > 80 ? 0.86 : 1;
   const dense = nodes.length > 80;
-  const denseLabelKeys = useMemo(() => new Set([...nodes].sort((left, right) => right.weight - left.weight || right.updatedAt - left.updatedAt).slice(0, 40).map((node) => node.key)), [nodes]);
+  const android = window.chengjing?.platform === "android";
+  const denseLabelKeys = useMemo(() => new Set([...nodes].sort((left, right) => right.weight - left.weight || right.updatedAt - left.updatedAt).slice(0, android ? 3 : 40).map((node) => node.key)), [nodes, android]);
   return <>
     <color attach="background" args={[canvasColor]} />
-    <fog attach="fog" args={[canvasColor, 18, 54]} />
+    <fog attach="fog" args={[canvasColor, window.chengjing?.platform === "android" ? 26 : 18, window.chengjing?.platform === "android" ? 72 : 54]} />
     <ambientLight intensity={1.4} />
     <directionalLight position={[7, 12, 9]} intensity={2.1} color="#eee7d8" />
     <directionalLight position={[-10, -5, -7]} intensity={0.8} color="#71877a" />
     {edges.map((edge) => <BrainEdgeLine key={edge.id} edge={edge} nodes={nodeMap} onContext={onEdgeContext} />)}
-    {nodes.map((node) => <BrainNeuron key={node.key} node={node} selected={selectedKey === node.key} linking={linkSource === node.key} shared={ownSharedKeys.has(node.key)} densityScale={densityScale} dense={dense} showAllLabels={showAllLabels && (!dense || denseLabelKeys.has(node.key))} onSelect={onSelect} onOpen={onOpen} onContext={onNodeContext} />)}
+    {nodes.map((node) => <BrainNeuron key={node.key} node={node} selected={selectedKey === node.key} linking={linkSource === node.key} shared={ownSharedKeys.has(node.key)} densityScale={densityScale} dense={dense} showAllLabels={showAllLabels && (!dense || denseLabelKeys.has(node.key)) || (android && denseLabelKeys.has(node.key))} onSelect={onSelect} onOpen={onOpen} onContext={onNodeContext} />)}
     {remoteNodes.map((node) => <SharedRemoteNeuron key={node.id} node={node} selected={selectedRemoteId === node.id} showAllLabels={showAllLabels} onSelect={onRemoteSelect} />)}
     <CameraControls onViewportFocus={onViewportFocus} focusRequest={focusRequest} />
   </>;
 }
 
 export function SecondBrainView() {
+  const android = window.chengjing?.platform === "android";
+  const [mobileTools, setMobileTools] = useState(false);
+  const [mobileSearch, setMobileSearch] = useState(false);
+  const [recenter, setRecenter] = useState(0);
   const { language, t } = useI18n();
   const cards = useLiveQuery(() => db.cards.toArray(), [], []);
   const boards = useLiveQuery(() => db.boards.toArray(), [], []);
@@ -348,18 +355,20 @@ export function SecondBrainView() {
   const storedEdges = useLiveQuery(() => db.brainEdges.toArray(), [], []);
   const brainShares = useLiveQuery(() => db.brainShares.toArray(), [], []);
   const today = dayjs().format("YYYY-MM-DD");
-  const report = useLiveQuery(() => db.brainReports.where("date").equals(today).first(), [today]);
+  const reports = useLiveQuery(() => db.brainReports.where("date").equals(today).reverse().sortBy("updatedAt"), [today], []);
+  const [selectedReportId, setSelectedReportId] = useState("");
+  const report = reports.find(item => item.id === selectedReportId) || reports[0];
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [linkMode, setLinkMode] = useState(false);
   const [linkSource, setLinkSource] = useState<string | null>(null);
   const [edgeMenu, setEdgeMenu] = useState<{ edge: BrainEdgeView; x: number; y: number } | null>(null);
   const [query, setQuery] = useState("");
-  const [showAllLabels, setShowAllLabels] = useState(true);
+  const [showAllLabels, setShowAllLabels] = useState(!android);
   const [viewportFocus, setViewportFocus] = useState<[number, number, number]>([0, 0, 0]);
   const [busy, setBusy] = useState<"links" | "report" | null>(null);
   const [notice, setNotice] = useState("");
   const [reportExpanded, setReportExpanded] = useState(false);
-  const [reportMinimized, setReportMinimized] = useState(false);
+  const [reportMinimized, setReportMinimized] = useState(android);
   const [reportOverflowing, setReportOverflowing] = useState(false);
   const [reportAtEnd, setReportAtEnd] = useState(false);
   const reportPanelRef = useRef<HTMLElement>(null);
@@ -413,7 +422,7 @@ export function SecondBrainView() {
     if (!normalized) return remoteSceneNodes;
     return remoteSceneNodes.filter((node) => `${node.title} ${node.authorName}`.toLocaleLowerCase(language).includes(normalized));
   }, [language, query, remoteSceneNodes]);
-  const searchFocusRequest = query.trim() && filteredNodes[0] ? { key: filteredNodes[0].key, position: filteredNodes[0].position } : null;
+  const searchFocusRequest = query.trim() && filteredNodes[0] ? { key: filteredNodes[0].key, position: filteredNodes[0].position } : recenter ? { key: `home-${recenter}`, position: [0,0,0] as [number,number,number] } : null;
   const sceneNodes = useMemo(
     () => selectBrainViewportNodes(filteredNodes, viewportFocus, PRIVATE_BRAIN_VIEWPORT_LIMIT, [selectedKey, linkSource].filter(Boolean) as string[]),
     [filteredNodes, linkSource, selectedKey, viewportFocus],
@@ -425,9 +434,9 @@ export function SecondBrainView() {
   const selectedEdges = selected ? graph.edges.filter((edge) => edge.persisted && (edge.source === selected.key || edge.target === selected.key)) : [];
   const model = engine === "custom-provider" ? customProviderModel : customModel.trim() || openRouterModel;
   const canvasColor = useMemo(() => {
-    const css = getComputedStyle(document.documentElement).getPropertyValue("--brain-canvas").trim();
+    const css = getComputedStyle(document.documentElement).getPropertyValue(android ? "--canvas" : "--brain-canvas").trim();
     return css || (theme === "light" ? "#e8e5dc" : "#0d1311");
-  }, [theme]);
+  }, [theme, android]);
 
   useEffect(() => {
     brainSharesRef.current = brainShares;
@@ -829,7 +838,7 @@ export function SecondBrainView() {
 
   return (
     <div className="second-brain-page" data-brain-nodes={graph.nodes.length} data-brain-rendered-nodes={sceneNodes.length} data-brain-viewport-focus={viewportFocus.map((value) => value.toFixed(2)).join(",")} data-brain-persisted-links={graph.edges.filter((edge) => edge.persisted).length} data-brain-editable-edge-hit-targets={graph.edges.filter((edge) => edge.persisted).length}>
-      <Canvas frameloop="demand" camera={{ position: [0, 1.5, 19], fov: 54, near: 0.1, far: 120 }} dpr={[1, 1.75]} gl={{ antialias: true, alpha: false }} onPointerMissed={() => { setSelectedKey(null); setSelectedRemoteId(null); setRemoteDetail(null); }}>
+      <Canvas frameloop="demand" camera={{ position: [0, 1.5, android ? 29 : 19], fov: 54, near: 0.1, far: 120 }} dpr={[1, android ? 1.25 : 1.75]} gl={{ antialias: true, alpha: false }} onPointerMissed={() => { setSelectedKey(null); setSelectedRemoteId(null); setRemoteDetail(null); }}>
         <BrainScene nodes={sceneNodes} edges={filteredEdges} remoteNodes={filteredRemoteNodes} ownSharedKeys={ownSharedKeys} selectedKey={selectedKey} selectedRemoteId={selectedRemoteId} linkSource={linkSource} showAllLabels={showAllLabels} canvasColor={canvasColor} onSelect={selectNode} onOpen={openNode} onNodeContext={nodeContext} onEdgeContext={edgeContext} onRemoteSelect={(node) => void openRemoteNeuron(node.id)} onViewportFocus={setViewportFocus} focusRequest={searchFocusRequest} />
       </Canvas>
 
@@ -848,14 +857,17 @@ export function SecondBrainView() {
         <small className="brain-viewport-status">{semanticCopy.viewportStatus(sceneNodes.length, graph.nodes.length)}</small>
       </header>
 
-      <div className="brain-toolbar">
-        <label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("brain.search")} />{query && <button type="button" aria-label={t("brain.clearSearch")} onClick={() => setQuery("")}><X size={13} /></button>}</label>
+      {android && <div className="brain-mobile-bar"><button aria-label={t("brain.search")} className={query?"is-active":""} onClick={()=>setMobileSearch(!mobileSearch)}><Search size={20}/></button><button aria-label={language.startsWith("zh")?"回到中心":"Recenter"} onClick={()=>{setQuery("");setRecenter(value=>value+1)}}><Maximize2 size={20}/></button><button aria-label={language.startsWith("zh")?"今日反思":"Today's reflection"} onClick={()=>setReportMinimized(value=>!value)}><BookOpenText size={20}/></button><button aria-label={language.startsWith("zh")?"大腦工具":"Brain tools"} onClick={()=>setMobileTools(true)}><MoreHorizontal size={22}/></button></div>}
+      {android&&mobileSearch&&<label className="brain-mobile-search"><Search size={18}/><input autoFocus value={query} onChange={event=>setQuery(event.target.value)} placeholder={t("brain.search")}/><button aria-label={t("brain.clearSearch")} onClick={()=>{setQuery("");setMobileSearch(false)}}><X size={18}/></button></label>}
+      {android&&mobileTools&&<div className="brain-mobile-backdrop" onClick={()=>setMobileTools(false)}/>}
+      {(!android||mobileTools)&&<div className={`brain-toolbar ${android?"brain-mobile-tool-sheet":""}`}>
+        {android?<button aria-label={t("brain.closeInfo")} onClick={()=>setMobileTools(false)}><X size={20}/></button>:<label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("brain.search")} />{query && <button type="button" aria-label={t("brain.clearSearch")} onClick={() => setQuery("")}><X size={13} /></button>}</label>}
         <button type="button" className={showAllLabels ? "is-active" : ""} onClick={() => setShowAllLabels(!showAllLabels)} title={showAllLabels ? t("brain.labelsAllTitle") : t("brain.labelsShowTitle")}><Tags size={15} />{showAllLabels ? t("brain.labelsAll") : t("brain.labelsFocus")}</button>
-        <button type="button" className={linkMode ? "is-active" : ""} onClick={() => { setLinkMode(!linkMode); setLinkSource(null); setNotice(!linkMode ? t("brain.linkEnter") : t("brain.linkExit")); }}><Link2 size={15} />{linkMode ? t("brain.linkActive") : t("brain.linkManual")}</button>
+        <button type="button" className={linkMode ? "is-active" : ""} onClick={() => { setMobileTools(false);setLinkMode(!linkMode); setLinkSource(null); setNotice(!linkMode ? t("brain.linkEnter") : t("brain.linkExit")); }}><Link2 size={15} />{linkMode ? t("brain.linkActive") : t("brain.linkManual")}</button>
         <button type="button" disabled={busy !== null} onClick={organizeWithAI} title={engine === "local-gemma" ? semanticCopy.localButtonHint : undefined}>{busy === "links" ? <LoaderCircle size={15} className="spin" /> : <Sparkles size={15} />}{t("brain.organize")}</button>
         <button type="button" className={exploreShared ? "is-active is-shared-discovery" : ""} disabled={sharedLoading} onClick={() => setExploreShared((value) => { if (value) { setSelectedRemoteId(null); setRemoteDetail(null); } return !value; })}>{sharedLoading ? <LoaderCircle size={15} className="spin" /> : <Waves size={15} />}{sharedCopy.explore}</button>
         <button type="button" className={adminToken ? "is-admin" : ""} onClick={() => setModerationOpen(true)} title={sharedCopy.adminTools}><ShieldCheck size={15} /></button>
-      </div>
+      </div>}
 
       <aside className="brain-help">
         <span><MousePointer2 size={14} />{t("brain.rotate")}</span><span><Maximize2 size={14} />{t("brain.zoom")}</span><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>{t("brain.move")}</span>
@@ -879,6 +891,7 @@ export function SecondBrainView() {
       {reportExpanded && <button type="button" className="brain-report-backdrop" aria-label={semanticCopy.collapseReflection} onClick={() => setReportExpanded(false)} />}
       <section ref={reportPanelRef} className={`brain-report ${reportExpanded ? "is-expanded" : ""} ${reportMinimized ? "is-minimized" : ""} ${reportOverflowing ? "has-overflow" : ""} ${reportAtEnd ? "is-at-end" : ""}`} role={reportExpanded ? "dialog" : "region"} aria-modal={reportExpanded || undefined} aria-label={t("brain.todayReflection")} tabIndex={reportExpanded ? -1 : undefined}>
         <header><span><ShieldCheck size={14} />{t("brain.todayReflection")}</span><div className="brain-report-actions">{reportMinimized ? <button type="button" onClick={() => setReportMinimized(false)}><Maximize2 size={14} />{semanticCopy.restoreReflection}</button> : <><button type="button" disabled={busy !== null} onClick={generateReport} title={engine === "local-gemma" ? semanticCopy.localButtonHint : undefined}>{busy === "report" ? <LoaderCircle size={14} className="spin" /> : report ? <RefreshCw size={14} /> : <Sparkles size={14} />}{report ? t("brain.regenerate") : t("brain.generateToday")}</button><button type="button" onClick={() => { setReportExpanded(false); setReportMinimized(true); }}><Minus size={14} />{semanticCopy.minimizeReflection}</button>{report && <button type="button" onClick={() => { setReportMinimized(false); setReportExpanded(!reportExpanded); }}>{reportExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}{reportExpanded ? semanticCopy.collapseReflection : semanticCopy.expandReflection}</button>}</>}</div></header>
+        {!reportMinimized && reports.length > 1 && <label className="brain-report-versions"><span>{({"zh-TW":"保留的版本","zh-CN":"保留的版本",en:"Saved versions",ja:"保存したバージョン",ko:"저장된 버전"})[language]}</span><select value={report?.id || ""} onChange={event=>setSelectedReportId(event.target.value)}>{reports.map((item,index)=><option key={item.id} value={item.id}>{index+1} · {item.model} · {new Date(item.updatedAt).toLocaleTimeString()}</option>)}</select></label>}
         {!reportMinimized && <div ref={reportReadingRef} className="brain-report-reading" onScroll={(event) => { const reading = event.currentTarget; setReportAtEnd(reading.scrollTop + reading.clientHeight >= reading.scrollHeight - 2); }}>{report ? <div className="brain-report-markdown" dangerouslySetInnerHTML={{ __html: reportHtml }} /> : <p className="brain-report-empty">{semanticCopy.reportEmpty}</p>}</div>}
       </section>
 

@@ -6,6 +6,8 @@ export function isWindows(platform = currentDesktopPlatform()) {
   return platform === "win32";
 }
 
+export function isAndroid() { return currentDesktopPlatform() === "android"; }
+
 export function primaryShortcut(key: string, platform = currentDesktopPlatform()) {
   return isWindows(platform) ? `Ctrl+${key}` : `⌘${key}`;
 }

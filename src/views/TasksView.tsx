@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import Dexie from "dexie";
-import { AlertTriangle, CalendarDays, Check, CheckCircle2, Circle, Clock3, FileText, ListTree, Plus, Sunrise } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, CheckCircle2, Circle, Clock3, FileText, ListTree, MoreHorizontal, Plus, Sunrise } from "lucide-react";
 import { db } from "../db";
 import { TaskDatePicker } from "../components/TaskDatePicker";
-import { showContextMenuFromPointer } from "../lib/contextMenu";
+import { showContextMenu, showContextMenuFromPointer } from "../lib/contextMenu";
+import { isAndroid } from "../lib/platform";
 import { useI18n } from "../hooks/useI18n";
 import { dueDateInputToTimestamp, setTaskDone } from "../lib/taskSync";
 import { getTaskEnhancementCopy } from "../lib/taskEnhancementCopy";
@@ -13,8 +14,10 @@ import type { TaskRecord } from "../types";
 import { getTaskHierarchyCopy } from "../lib/taskHierarchyCopy";
 
 export function TasksView() {
-  const [value, setValue] = useState("");
-  const [dueDate, setDueDate] = useState("");
+  const [value, setValue] = useState(() => isAndroid() ? localStorage.getItem("chengjing-task-draft") || "" : "");
+  const [dueDate, setDueDate] = useState(() => isAndroid() ? localStorage.getItem("chengjing-task-draft-date") || "" : "");
+  const [adding, setAdding] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [todayKey, setTodayKey] = useState(() => localDateKey(Date.now()));
   const [displayLimit, setDisplayLimit] = useState(240);
   const todayReference = timestampForLocalDateKey(todayKey);
@@ -78,15 +81,20 @@ export function TasksView() {
     }, 60_000);
     return () => window.clearInterval(timer);
   }, []);
+  useEffect(() => { if (isAndroid()) { localStorage.setItem("chengjing-task-draft",value); localStorage.setItem("chengjing-task-draft-date",dueDate); } }, [value,dueDate]);
 
   async function addTask(event: React.FormEvent) {
     event.preventDefault();
     const title = value.trim();
-    if (!title) return;
+    if (!title || adding) return;
+    setAdding(true);setSaveError("");
     const timestamp = Date.now();
+    try {
     await db.tasks.add({ id: crypto.randomUUID(), title, done: false, dueAt: dueDateInputToTimestamp(dueDate), createdAt: timestamp, updatedAt: timestamp });
     setValue("");
     setDueDate("");
+    } catch(error) { setSaveError(error instanceof Error ? error.message : String(error)); }
+    finally { setAdding(false); }
   }
 
   function formatMonthDay(timestamp: number) {
@@ -116,6 +124,7 @@ export function TasksView() {
     return <article key={task.id} data-task-id={task.id} data-task-depth={depth} style={{ "--task-depth": Math.min(depth, 4) } as CSSProperties} className={`${task.done ? "is-done" : ""} ${depth ? "is-subtask" : ""} ${extraClass}`.trim()} onContextMenu={(event) => showContextMenuFromPointer(event, { kind: "task", id: task.id })}>
       <button type="button" className="task-check" aria-label={task.done ? t("tasks.reopen") : t("tasks.markDone")} onClick={() => setTaskDone(task.id, !task.done)}>{task.done ? <CheckCircle2 size={19} /> : <Circle size={19} />}</button>
       <span><b>{task.title}</b><small>{depth > 0 && <em className="task-subtask-label"><ListTree size={11} />{hierarchyCopy.subtask}</em>}{task.dueAt && <><CalendarDays size={12} />{meta}</>}{!task.dueAt && <><Clock3 size={12} />{meta}</>}{task.cardId && <em><FileText size={11} />{taskCopy.fromNote}</em>}{progress.total > 0 && <em className="task-subtask-progress"><ListTree size={11} />{hierarchyCopy.progress(progress.done, progress.total)}</em>}</small></span>
+      {isAndroid() && <button className="task-more" type="button" aria-label={`${task.title} · ${t("nav.primary")}`} onClick={event=>{const rect=event.currentTarget.getBoundingClientRect();showContextMenu({kind:"task",id:task.id},rect.right,rect.bottom)}}><MoreHorizontal size={19}/></button>}
     </article>;
   }
 
@@ -148,8 +157,9 @@ export function TasksView() {
 
       <form className="task-add" onSubmit={addTask}>
         <label className="task-add-main"><Plus size={17} /><input value={value} onChange={(event) => setValue(event.target.value)} placeholder={t("tasks.placeholder")} /></label>
-        <div className="task-add-actions"><TaskDatePicker value={dueDate} onChange={setDueDate} label={taskCopy.dueOptional} /><button type="submit" disabled={!value.trim()}>{t("tasks.add")}</button></div>
+        <div className="task-add-actions"><TaskDatePicker value={dueDate} onChange={setDueDate} label={taskCopy.dueOptional} /><button type="submit" disabled={!value.trim()||adding}>{t("tasks.add")}</button></div>
       </form>
+      {saveError && <p role="alert">{saveError}</p>}
 
       <div className="task-groups task-timeline">
         <section className="task-section task-today-segment" data-task-segment="today">

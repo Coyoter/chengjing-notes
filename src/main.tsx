@@ -6,13 +6,15 @@ import "@xyflow/react/dist/style.css";
 import "./styles.css";
 import { App } from "./App";
 import { QuickCaptureWindow } from "./components/QuickCaptureWindow";
+import { initializeAndroid } from "./platform/android";
+import "./mobile.css";
 
 dayjs.locale("zh-tw");
 
 const quickCapture = new URLSearchParams(window.location.search).has("quick-capture");
 
-createRoot(document.getElementById("root")!).render(
+void initializeAndroid().then(() => createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {quickCapture ? <QuickCaptureWindow /> : <App />}
   </StrictMode>,
-);
+));

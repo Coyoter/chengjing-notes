@@ -19,3 +19,9 @@ build/ChengJingHotkey
 build/ChengJingQuickCapture.app/
 electron/google-oauth-runtime.cjs
 tools/windows-installer/installer/payload.zip
+android/.gradle/
+android/local.properties
+android/**/build/
+android/app/src/main/assets/public/
+android/signing/
+android-release/

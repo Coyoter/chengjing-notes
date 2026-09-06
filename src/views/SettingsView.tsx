@@ -39,6 +39,7 @@ import { QuickCaptureSettingsPanel } from "../components/QuickCaptureSettings";
 import { AdvancedAIProviderSettings } from "../components/AdvancedAIProviderSettings";
 import { getAdvancedProviderCopy } from "../lib/advancedProviderCopy";
 import { McpSettingsPanel } from "../components/McpSettings";
+import { SyncSettings } from "../components/SyncSettings";
 import { SettingsJumpNav } from "../components/SettingsJumpNav";
 import { getSettingsDisclosureCopy } from "../lib/settingsAnchorCopy";
 
@@ -235,11 +236,12 @@ export function SettingsView() {
         </div>
       </details>
 
-      <McpSettingsPanel />
+      {window.chengjing?.sync && <SyncSettings />}
+      {window.chengjing?.platform !== "android" && <McpSettingsPanel />}
 
       <UpdateSettingsSection />
 
-      <QuickCaptureSettingsPanel />
+      {window.chengjing?.platform !== "android" && <QuickCaptureSettingsPanel />}
 
       <section className="settings-section" id="appearance-settings">
         <header><span>{t("settings.appearance")}</span><h2>{t("settings.reading")}</h2></header>

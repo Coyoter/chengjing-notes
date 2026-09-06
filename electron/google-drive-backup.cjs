@@ -722,7 +722,50 @@ function createGoogleDriveBackupService(options) {
     return { removedManifests: removeIds.size, removedAssets: orphanedAssets.length, settings: next };
   }
 
+  async function syncList(kind = "packet") {
+    if (!["packet", "asset"].includes(kind)) throw new Error("sync-invalid-kind");
+    const files = []; let pageToken = "";
+    do {
+      const query = new URLSearchParams({ spaces: "appDataFolder", q: `trashed=false and appProperties has { key='app' and value='chengjing-sync-v1' } and appProperties has { key='kind' and value='${kind}' }`, fields: "nextPageToken,files(id,name,size,appProperties)", pageSize: "1000" });
+      if (pageToken) query.set("pageToken", pageToken);
+      const response = await requireOk(await authenticatedFetch(`${DRIVE_API}/files?${query}`), "sync-list-failed");
+      const value = await response.json(); files.push(...(value.files || [])); pageToken = value.nextPageToken || "";
+    } while (pageToken);
+    return { files };
+  }
+  async function syncGet(id) {
+    if (!/^[a-zA-Z0-9_-]{1,200}$/.test(id)) throw new Error("sync-invalid-id");
+    const response = await requireOk(await authenticatedFetch(`${DRIVE_API}/files/${id}?fields=appProperties,trashed`), "sync-read-failed");
+    const metadata = await response.json();
+    if (metadata.trashed || metadata.appProperties?.app !== "chengjing-sync-v1" || metadata.appProperties?.kind !== "packet") throw new Error("sync-file-not-owned");
+    return downloadText(id);
+  }
+  async function syncPut(id, data) {
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id) || typeof data !== "string" || data.length > 16_000_000) throw new Error("sync-invalid-packet");
+    return createBufferFile({ name: id, parents: ["appDataFolder"], appProperties: { app: "chengjing-sync-v1", kind: "packet" } }, data);
+  }
+  async function syncUploadAsset(asset) {
+    if (!/^[a-f0-9]{64}$/.test(asset.sha256)) throw new Error("sync-invalid-asset");
+    const listed = await syncList("asset");
+    if (listed.files.some((file) => file.name === asset.sha256)) return;
+    const source = path.resolve(attachmentsDirectory, asset.relativePath);
+    if (!source.startsWith(path.resolve(attachmentsDirectory) + path.sep)) throw new Error("sync-invalid-path");
+    const hash = createHash("sha256"); for await (const chunk of createReadStream(source)) hash.update(chunk);
+    if (hash.digest("hex") !== asset.sha256) throw new Error("sync-asset-hash-mismatch");
+    return createStreamFile({ name: asset.sha256, parents: ["appDataFolder"], appProperties: { app: "chengjing-sync-v1", kind: "asset" } }, source, (await fs.stat(source)).size);
+  }
+  async function syncDownloadAsset(asset) {
+    if (!/^[a-f0-9]{64}$/.test(asset.sha256)) throw new Error("sync-invalid-asset");
+    const listed = await syncList("asset"); const match = listed.files.find((file) => file.name === asset.sha256);
+    if (!match) throw new Error("sync-attachment-missing");
+    const relativePath = `sync-${randomUUID()}`; const destination = path.join(attachmentsDirectory, relativePath);
+    await streamDownload(match.id, destination);
+    const hash = createHash("sha256"); for await (const chunk of createReadStream(destination)) hash.update(chunk);
+    if (hash.digest("hex") !== asset.sha256) { await fs.rm(destination, { force: true }); throw new Error("sync-attachment-corrupt"); }
+    return { ...asset, relativePath, storage: "file" };
+  }
   return {
+    syncList, syncGet, syncPut, syncUploadAsset, syncDownloadAsset,
     adoptCurrentForOverwrite,
     cancelRestore,
     completeRestore,

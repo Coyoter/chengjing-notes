@@ -23,17 +23,17 @@ export function McpSettingsPanel() {
 
   async function update(patch: Partial<Pick<McpSettings, "enabled" | "accessMode" | "port">>) {
     if (!window.chengjing) return; setBusy(true); setNotice("");
-    try { const value = await window.chengjing.mcp.updateSettings(patch); setSettings(value); setPort(String(value.port)); }
+    try { const value = await window.chengjing.mcp!.updateSettings(patch); setSettings(value); setPort(String(value.port)); }
     catch (error) { setNotice(friendlyErrorMessage(error, copy.failed)); }
     finally { setBusy(false); }
   }
   async function copySetup(target: "codex" | "claude") {
-    try { await window.chengjing?.mcp.copySetup(target); setNotice(copy.copied); }
+    try { await window.chengjing?.mcp?.copySetup(target); setNotice(copy.copied); }
     catch (error) { setNotice(friendlyErrorMessage(error, copy.failed)); }
   }
   async function rotateToken() {
     if (!window.confirm(copy.rotateConfirm)) return; setBusy(true);
-    try { const value = await window.chengjing?.mcp.regenerateToken(); if (value) setSettings(value); setNotice(copy.tokenChanged); }
+    try { const value = await window.chengjing?.mcp?.regenerateToken(); if (value) setSettings(value); setNotice(copy.tokenChanged); }
     catch (error) { setNotice(friendlyErrorMessage(error, copy.failed)); }
     finally { setBusy(false); }
   }
@@ -71,7 +71,7 @@ export function McpSettingsPanel() {
             <button type="button" className="mcp-rotate" disabled={busy} onClick={() => void rotateToken()}><RotateCw size={14} />{copy.rotate}</button>
           </div>
         </details>
-        <details className="mcp-audit" onToggle={(event) => { if ((event.currentTarget as HTMLDetailsElement).open) void window.chengjing?.mcp.getAudit().then(setAudit); }}>
+        <details className="mcp-audit" onToggle={(event) => { if ((event.currentTarget as HTMLDetailsElement).open) void window.chengjing?.mcp?.getAudit().then(setAudit); }}>
           <summary><span><b>{copy.recent}</b><small>{audit.length ? `${audit.length}` : copy.noRecent}</small></span><ChevronDown size={15} /></summary>
           <div>{audit.length ? audit.slice(0, 8).map((entry) => <article key={entry.id}><i className={`is-${entry.outcome}`} /><span><b>{entry.tool}</b><small>{entry.summary}</small></span><time>{copy.outcomes[entry.outcome]} · {new Intl.DateTimeFormat(language, { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(entry.createdAt)}</time></article>) : <p>{copy.noRecent}</p>}</div>
         </details>

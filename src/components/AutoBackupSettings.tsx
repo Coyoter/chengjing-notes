@@ -223,7 +223,7 @@ export function AutoBackupSettingsPanel() {
       setNotice(text.cloudReady);
     } catch (error) {
       setNotice(friendlyErrorMessage(error, text.desktopRequired));
-      const status = await window.chengjing?.cloudBackups.getLocalStatus().catch(() => null);
+      const status = await window.chengjing?.cloudBackups?.getLocalStatus().catch(() => null);
       if (status) setCloudStatus(status);
     } finally {
       setBusy("");

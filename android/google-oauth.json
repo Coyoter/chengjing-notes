@@ -1,0 +1,9 @@
+{
+  "project": "chengjing-notes-production",
+  "package": "tw.techtarian.chengjing",
+  "releaseClientId": "594584088822-oanp2hcgt7kih8io6ppv6s2ppque0hn6.apps.googleusercontent.com",
+  "releaseCertificateSha1": "78:E9:EE:9B:9D:31:54:09:A7:59:D8:00:0C:0F:EA:F0:23:A5:33:68",
+  "developmentClientId": "594584088822-bd707mabcvumea0s40f9qr7rrvk67iau.apps.googleusercontent.com",
+  "developmentCertificateSha1": "3A:2D:4D:26:66:66:8C:99:74:80:BF:B2:41:12:B3:D7:5C:D9:89:3E",
+  "scope": "https://www.googleapis.com/auth/drive.appdata"
+}

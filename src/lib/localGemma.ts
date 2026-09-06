@@ -1,6 +1,7 @@
 import type { AIMessage } from "./modelTypes";
 import { translate } from "../i18n";
 import { useAppStore } from "../store";
+import { androidCall } from "../platform/android";
 
 export const LOCAL_MODEL = {
   id: "onnx-community/gemma-4-E2B-it-ONNX",
@@ -63,6 +64,7 @@ function sanitize(text: string) {
 }
 
 export async function inspectLocalModel() {
+  if (window.chengjing?.platform === "android") return androidCall<{ state: "ready" | "unsupported" | "not-downloaded"; cached: boolean; progress: number; size: number; message: string }>("local.status");
   if (!hasWebGPU()) {
     return { state: "unsupported" as const, cached: false, progress: 0, size: LOCAL_MODEL.approximateBytes, message: t("local.unsupported") };
   }
@@ -90,6 +92,11 @@ export async function inspectLocalModel() {
 }
 
 export async function prepareLocalModel(onProgress?: (progress: number, file: string) => void) {
+  if (window.chengjing?.platform === "android") {
+    const listener = (event: Event) => onProgress?.((event as CustomEvent).detail.progress, "Gemma 4");
+    window.addEventListener("chengjing:android-model-progress", listener);
+    try { return await androidCall("local.download"); } finally { window.removeEventListener("chengjing:android-model-progress", listener); }
+  }
   if (generatorPromise) return generatorPromise;
   if (!hasWebGPU()) throw new Error(t("local.noWebGPU"));
   generatorPromise = (async () => {
@@ -122,6 +129,7 @@ async function performLocalChat(messages: AIMessage[], options?: {
   onToken?: (text: string) => void;
   onProgress?: (progress: number, file: string) => void;
 }) {
+  if (window.chengjing?.platform === "android") return androidCall<{ text: string; model: string; usage: null; finishReason: string }>("local.generate", { messages, maxTokens: options?.maxTokens, temperature: options?.temperature });
   const inputCharacters = messages.reduce((sum, message) => sum + message.content.length, 0);
   if (inputCharacters > LOCAL_GENERATION_LIMITS.maxInputCharacters) throw new Error(t("local.inputTooLarge"));
   const generator = await prepareLocalModel(options?.onProgress);
@@ -185,6 +193,7 @@ export function generateLocalChat(messages: AIMessage[], options?: {
 }
 
 export async function clearLocalModel() {
+  if (window.chengjing?.platform === "android") return androidCall("local.remove");
   generatorPromise = null;
   generatorReady = false;
   const names = await caches.keys();
