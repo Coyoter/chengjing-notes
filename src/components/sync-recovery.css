@@ -1,0 +1,407 @@
+/* Google Sync card: keep all content inside a shared desktop/mobile inset. */
+.backup-method-card.sync-settings {
+  --sync-card-inset: 16px;
+  min-width: 0;
+}
+
+.backup-method-card.sync-settings > header {
+  min-height: 0;
+  gap: 12px;
+  padding: var(--sync-card-inset);
+}
+
+.backup-method-card.sync-settings > header > span {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  letter-spacing: normal;
+}
+
+.backup-method-card.sync-settings > header h4 {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.backup-method-card.sync-settings > header p {
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+}
+
+.backup-method-card.sync-settings > .sync-state {
+  margin-inline: var(--sync-card-inset);
+  min-width: 0;
+}
+
+.backup-method-card.sync-settings > .sync-actions {
+  gap: 10px 12px;
+  margin: 12px var(--sync-card-inset) 16px;
+}
+
+.backup-method-card.sync-settings > .sync-actions > button {
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  white-space: normal;
+}
+
+.backup-method-card.sync-settings > .sync-actions > button > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.backup-method-card.sync-settings > .sync-error {
+  margin: 0 var(--sync-card-inset) 16px;
+}
+
+/* Inset divider: never touch the enclosing card border. */
+.backup-method-card.sync-settings > .sync-recovery {
+  min-width: 0;
+  margin: 0 var(--sync-card-inset) 12px;
+  padding-top: 4px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.sync-recovery > summary {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-height: 68px;
+  padding: 12px 4px;
+  border-radius: 8px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.sync-recovery > summary::-webkit-details-marker,
+.sync-recovery .sync-conflict-review > summary::-webkit-details-marker,
+.sync-recovery .backup-import-tools > summary::-webkit-details-marker {
+  display: none;
+}
+
+.sync-recovery > summary::marker {
+  content: "";
+}
+
+.sync-recovery > summary > svg {
+  display: block;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.sync-recovery > summary > svg:last-child {
+  justify-self: end;
+  transition: transform 160ms ease;
+}
+
+.sync-recovery[open] > summary > svg:last-child {
+  transform: rotate(180deg);
+}
+
+.sync-recovery > summary > .sync-recovery-label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.sync-recovery-label > b {
+  color: var(--text-1);
+  font-size: calc(13px * var(--font-scale, 1));
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.sync-recovery-label > small {
+  color: var(--text-muted);
+  font-size: calc(12px * var(--font-scale, 1));
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.sync-recovery > summary:hover {
+  background: var(--surface-1);
+}
+
+.sync-recovery summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.sync-recovery-content {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  padding: 2px 0 4px;
+}
+
+/* Existing item recovery and legacy import remain subordinate tools. */
+.sync-recovery-content > .sync-conflict-review,
+.sync-recovery-content > .backup-import-tools {
+  min-width: 0;
+  margin: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+}
+
+.sync-recovery-content > .sync-conflict-review > summary,
+.sync-recovery-content > .backup-import-tools > summary {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-height: 60px;
+  padding: 12px 4px;
+  border-radius: 8px;
+  list-style: none;
+}
+
+.sync-recovery-content > .sync-conflict-review > summary > span,
+.sync-recovery-content > .backup-import-tools > summary > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.sync-recovery-content > .sync-conflict-review > summary > svg,
+.sync-recovery-content > .backup-import-tools > summary > svg {
+  flex: none;
+  max-width: 20px;
+}
+
+.sync-recovery-content > .sync-conflict-review > summary > svg:last-child,
+.sync-recovery-content > .backup-import-tools > summary > svg:last-child {
+  width: 16px;
+  justify-self: end;
+}
+
+.sync-recovery-content > .sync-conflict-review > summary b,
+.sync-recovery-content > .backup-import-tools > summary b {
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 600;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.sync-recovery-content > .sync-conflict-review > summary small,
+.sync-recovery-content > .backup-import-tools > summary small {
+  font-size: calc(11.5px * var(--font-scale, 1));
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.sync-recovery-content > .sync-conflict-review > div,
+.sync-recovery-content > .backup-import-tools > div {
+  min-width: 0;
+  padding: 0 4px 12px;
+}
+
+.sync-recovery .sync-recovery-hint {
+  margin: 0 0 12px;
+}
+
+.sync-recovery .sync-conflict {
+  min-width: 0;
+  margin-top: 12px;
+}
+
+.sync-recovery .sync-conflict > summary {
+  padding: 12px 0;
+}
+
+.sync-recovery .sync-conflict article {
+  min-width: 0;
+  padding: 12px;
+  background: var(--surface-1);
+}
+
+.sync-recovery .sync-conflict article > header {
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.sync-recovery .sync-conflict article > button,
+.sync-recovery .backup-import-tools > div > button {
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  min-height: 44px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.sync-recovery .sync-error {
+  margin: 12px 0 0;
+}
+
+@media (max-width: 520px) {
+  .backup-method-card.sync-settings > .sync-actions > .primary-button {
+    flex: 1 1 180px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-recovery > summary > svg,
+  .sync-recovery summary > svg {
+    transition: none;
+  }
+}
+
+/* Live daily recovery controls within the existing Google Sync card. */
+.sync-recovery-panel {
+  min-width: 0;
+}
+.sync-recovery-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.sync-recovery-panel > header > h5 {
+  margin: 0;
+  color: var(--text-1);
+  font-size: calc(13px * var(--font-scale, 1));
+  font-weight: 600;
+  line-height: 1.6;
+}
+.sync-recovery-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: calc(12px * var(--font-scale, 1));
+  line-height: 1.5;
+  white-space: normal;
+}
+.sync-recovery-refresh:hover:not(:disabled) {
+  color: var(--text-1);
+  background: var(--surface-1);
+}
+.sync-recovery-description,
+.sync-recovery-date-note,
+.sync-recovery-message {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: calc(12px * var(--font-scale, 1));
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.sync-recovery-date-note {
+  font-size: calc(11px * var(--font-scale, 1));
+}
+.sync-recovery-message.is-error {
+  color: var(--danger);
+}
+.sync-recovery-points {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  margin-top: 12px;
+}
+.sync-recovery-point {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 9px;
+  background: var(--surface-1);
+}
+.sync-recovery-point-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+.sync-recovery-point-copy > b {
+  color: var(--text-1);
+  font-size: calc(13px * var(--font-scale, 1));
+  line-height: 1.5;
+  font-weight: 600;
+}
+.sync-recovery-point-copy > small {
+  color: var(--text-muted);
+  font-size: calc(11.5px * var(--font-scale, 1));
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.sync-recovery-point > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  min-width: 0;
+  height: auto;
+  max-width: 100%;
+  padding: 8px 10px;
+  font-size: calc(12px * var(--font-scale, 1));
+  line-height: 1.5;
+  white-space: normal;
+}
+.sync-recovery-panel button > svg {
+  flex: none;
+}
+.sync-recovery-panel button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.sync-recovery-panel button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+.sync-recovery-receipt {
+  min-width: 0;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 9px;
+  background: var(--surface-1);
+  font-size: calc(12px * var(--font-scale, 1));
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.sync-recovery-receipt > p {
+  margin: 0 0 8px;
+  color: var(--text-1);
+}
+.sync-recovery-receipt summary {
+  padding: 4px 0;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.sync-recovery-receipt code {
+  display: block;
+  margin-top: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: calc(11px * var(--font-scale, 1));
+}
+@media (max-width: 420px) {
+  .sync-recovery-point {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .sync-recovery-point > button {
+    justify-self: start;
+  }
+}

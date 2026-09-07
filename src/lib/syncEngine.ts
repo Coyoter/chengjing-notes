@@ -12,6 +12,15 @@ export interface SyncTransport {
   put: (id: string, data: string) => Promise<unknown>;
 }
 let active: Promise<void> | null = null;
+
+// Synchronization, native staging, and recovery share the same workspace lock.
+// Errors release the lock; no caller can permanently block subsequent work.
+let syncWorkspaceTail: Promise<void> = Promise.resolve();
+function serializeSyncWorkspace<T>(operation: () => Promise<T>): Promise<T> {
+  const result = syncWorkspaceTail.then(operation);
+  syncWorkspaceTail = result.then(() => undefined, () => undefined);
+  return result;
+}
 function withLocalAsset(value: Record<string, unknown>, asset?: Record<string, unknown>) {
   return asset ? { ...value, storage: asset.storage, relativePath: asset.relativePath } : value;
 }
@@ -26,12 +35,14 @@ export async function* pendingSyncPackets(): AsyncGenerator<SyncPacket> {
     yield { protocol: "chengjing-sync-v1", id, operations };
   }
 }
-export async function stagePendingSync(transport: SyncTransport) {
-  if (!syncEnabled() || !transport.stage) return;
-  for await (const packet of pendingSyncPackets()) {
-    if (!syncEnabled()) break;
-    await transport.stage(packet);
-  }
+export function stagePendingSync(transport: SyncTransport): Promise<void> {
+  return serializeSyncWorkspace(async () => {
+    if (!syncEnabled() || !transport.stage) return;
+    for await (const packet of pendingSyncPackets()) {
+      if (!syncEnabled()) break;
+      await transport.stage(packet);
+    }
+  });
 }
 export async function enableSync() {
   await initializeSyncBaseline();
@@ -127,31 +138,57 @@ export async function applySyncPacket(input: unknown, transport?: SyncTransport)
     await db.table("syncOutbox").bulkDelete(packet.operations.map(operation => operation.id));
   });
 }
+async function synchronizeRecords(transport: SyncTransport): Promise<void> {
+  if (!syncEnabled()) return;
+  await reconcileLatestRecords(transport);
+  const listed = await transport.list();
+  for (const file of listed) {
+    if (!syncEnabled()) return;
+    if (!await db.table("syncInbox").get(file.name)) await applySyncPacket(JSON.parse(await transport.get(file.id)), transport);
+  }
+  for await (const packet of pendingSyncPackets()) {
+    if (!syncEnabled()) return;
+    await transport.stage?.(packet);
+    for (const operation of packet.operations) if (operation.table === "attachments" && operation.value) {
+      if (!syncEnabled()) return;
+      if (!transport.uploadAsset) throw new Error("sync-attachment-transport-required");
+      await transport.uploadAsset(operation.value);
+    }
+    if (!syncEnabled()) return;
+    await transport.put(packet.id, JSON.stringify(packet));
+    await db.transaction("rw", db.table("syncOutbox"), db.table("syncInbox"), async () => {
+      await db.table("syncOutbox").bulkDelete(packet.operations.map((op) => op.id));
+      await db.table("syncInbox").put({ id: packet.id });
+    });
+  }
+}
+
 export function synchronize(transport: SyncTransport): Promise<void> {
   if (active) return active;
-  active = (async () => {
-    if (!syncEnabled()) return;
-    await reconcileLatestRecords(transport);
-    const listed = await transport.list();
-    for (const file of listed) {
-      if (!syncEnabled()) return;
-      if (!await db.table("syncInbox").get(file.name)) await applySyncPacket(JSON.parse(await transport.get(file.id)), transport);
-    }
-    for await (const packet of pendingSyncPackets()) {
-      if (!syncEnabled()) return;
-      await transport.stage?.(packet);
-      for (const operation of packet.operations) if (operation.table === "attachments" && operation.value) {
-        if (!syncEnabled()) return;
-        if (!transport.uploadAsset) throw new Error("sync-attachment-transport-required");
-        await transport.uploadAsset(operation.value);
-      }
-      if (!syncEnabled()) return;
-      await transport.put(packet.id, JSON.stringify(packet));
-      await db.transaction("rw", db.table("syncOutbox"), db.table("syncInbox"), async () => {
-        await db.table("syncOutbox").bulkDelete(packet.operations.map((op) => op.id));
-        await db.table("syncInbox").put({ id: packet.id });
-      });
-    }
-  })().finally(() => { active = null; });
+  active = serializeSyncWorkspace(() => synchronizeRecords(transport))
+    .finally(() => { active = null; });
   return active;
+}
+
+/**
+ * Synchronize first, then hold the workspace exclusively for capture or restore.
+ * The callback must not call synchronize(), stagePendingSync(), or this function
+ * recursively. Post-restore uploads run after this promise resolves.
+ *
+ * Ordinary editor writes remain possible. Recovery separately verifies its
+ * safety-copy baseline and commits content plus sync operations atomically.
+ */
+export function withSynchronizedWorkspace<T>(
+  transport: SyncTransport,
+  operation: () => Promise<T>,
+): Promise<T> {
+  return serializeSyncWorkspace(async () => {
+    if (!syncEnabled()) throw new Error("sync-recovery-paused");
+    await synchronizeRecords(transport);
+    if (!syncEnabled()) throw new Error("sync-recovery-paused");
+    if (await db.table("syncOutbox").count()) {
+      throw new Error("sync-recovery-pending-changes");
+    }
+    return operation();
+  });
 }

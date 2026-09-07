@@ -519,6 +519,7 @@ function createGoogleDriveBackupService(options) {
   }
 
   async function disconnect() {
+    syncRecovery.setEnabled(false);
     const token = await loadToken().catch(() => null);
     if (token?.refreshToken || token?.accessToken) {
       await timedFetch(REVOKE_URL, {
@@ -764,7 +765,17 @@ function createGoogleDriveBackupService(options) {
     if (hash.digest("hex") !== asset.sha256) { await fs.rm(destination, { force: true }); throw new Error("sync-attachment-corrupt"); }
     return { ...asset, relativePath, storage: "file" };
   }
+  const syncRecovery = require("./sync-recovery-drive.cjs").createSyncRecoveryDrive({
+    userDataDirectory,
+    attachmentsDirectory,
+    authenticatedFetch,
+    downloadText,
+    createBufferFile,
+    createStreamFile,
+    streamDownload,
+  });
   return {
+    syncRecovery,
     syncList, syncGet, syncPut, syncUploadAsset, syncDownloadAsset,
     adoptCurrentForOverwrite,
     cancelRestore,

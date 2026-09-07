@@ -1,5 +1,6 @@
 import type { AppLanguage, ThemeMode } from "../types";
 import { useAppStore } from "../store";
+import { createAndroidSyncRecoveryBridge } from "./androidSyncRecovery";
 
 declare global {
   interface Window {
@@ -88,6 +89,7 @@ export async function initializeAndroid() {
       chooseFolder: () => androidCall("backup.chooseFolder"),
       write: (request) => androidCall("backup.write", request), writeSafety: (request) => androidCall("backup.write", { ...request, reason: "safety" }),
     },
+    syncRecovery: createAndroidSyncRecoveryBridge(androidCall),
     cloudBackups: {
       getLocalStatus: () => androidCall("cloud.localStatus"),
       getStatus: async () => { const local=await androidCall("google.status");if(local.connected)await androidCall("google.refresh");return androidCall("cloud.status"); },
@@ -104,6 +106,7 @@ export async function initializeAndroid() {
   if(info.qaIsolated) {
     document.documentElement.dataset.qaIsolated="true";
     window.chengjing.sync=undefined;
+    window.chengjing.syncRecovery=undefined;
     window.chengjing.cloudBackups=undefined;
   }
   document.documentElement.dataset.platform = "android";

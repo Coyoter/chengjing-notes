@@ -10,8 +10,8 @@ android {
         applicationId = "tw.techtarian.chengjing"
         minSdk = 28
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.10.1"
+        versionCode = 6
+        versionName = "0.10.2"
         buildConfigField("String", "DISTRIBUTION_CHANNEL", "\"$distributionChannel\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -31,6 +31,9 @@ android {
 }
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 dependencies {
+    // JVM tests only; these libraries are not packaged into the Android app.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20260719")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
     implementation("androidx.activity:activity-ktx:1.11.0")

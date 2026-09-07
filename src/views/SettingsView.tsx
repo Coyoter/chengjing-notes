@@ -39,7 +39,6 @@ import { QuickCaptureSettingsPanel } from "../components/QuickCaptureSettings";
 import { AdvancedAIProviderSettings } from "../components/AdvancedAIProviderSettings";
 import { getAdvancedProviderCopy } from "../lib/advancedProviderCopy";
 import { McpSettingsPanel } from "../components/McpSettings";
-import { CloudBackupImport } from "../components/CloudBackupImport";
 import { AndroidUpdateSettings } from "../components/AndroidUpdateSettings";
 import { SettingsJumpNav } from "../components/SettingsJumpNav";
 import { getSettingsDisclosureCopy } from "../lib/settingsAnchorCopy";
@@ -254,7 +253,6 @@ export function SettingsView() {
 
       <section className="settings-section" id="backup-settings">
         <AutoBackupSettingsPanel />
-        {window.chengjing?.sync && <CloudBackupImport />}
       </section>
 
       <section className="settings-section support-author" id="support-author">

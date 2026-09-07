@@ -1334,6 +1334,13 @@ ipcMain.handle("sync:put", (_event, { id, data }) => serializeCloudBackup(() => 
 ipcMain.handle("sync:upload-asset", (_event, asset) => serializeCloudBackup(() => cloudBackupService().syncUploadAsset(asset)));
 ipcMain.handle("sync:download-asset", (_event, asset) => serializeCloudBackup(() => cloudBackupService().syncDownloadAsset(asset)));
 
+require("./sync-recovery-ipc.cjs").registerSyncRecoveryIpc({
+  ipcMain,
+  getMainWindow: () => mainWindow,
+  getService: () => cloudBackupService().syncRecovery,
+});
+
+
 ipcMain.handle("cloud-backup:get-status", async () => serializeCloudBackup(async () => {
   try { return await cloudBackupService().getStatus(); }
   catch (error) { throw new Error(friendlyCloudBackupError(error)); }

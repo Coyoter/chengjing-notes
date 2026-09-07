@@ -444,3 +444,51 @@ export interface CloudBackupDownloadResult {
   baselineManifestId: string;
   snapshot: CloudBackupSnapshot;
 }
+
+// Google sync daily recovery bridge (v0.10.2).
+export interface SyncRecoverySnapshot {
+  id: string;
+  day: string;
+  snapshotAt: number;
+  size: number;
+  contentHash: string;
+}
+
+export interface SyncRecoveryStatus {
+  dayBasis: "UTC";
+  today: SyncRecoverySnapshot | null;
+  yesterday: SyncRecoverySnapshot | null;
+  dayBeforeYesterday: SyncRecoverySnapshot | null;
+}
+
+export interface SyncRecoveryAssetSource {
+  relativePath: string;
+  sha256: string;
+  size: number;
+}
+
+export interface SyncRecoveryWriteResult {
+  skipped: boolean;
+  uploadedAssets: number;
+  snapshot: SyncRecoverySnapshot;
+  status: SyncRecoveryStatus;
+  cleanupWarning?: string;
+}
+
+export interface SyncRecoveryDownloadResult {
+  restoreId: string;
+  data: string;
+  backupFilePath: string;
+  snapshot: SyncRecoverySnapshot;
+}
+
+export interface SyncRecoveryBridge {
+  getStatus: () => Promise<SyncRecoveryStatus>;
+  setEnabled: (enabled: boolean) => Promise<{ enabled: boolean }>;
+  createDaily: (request: {
+    data: string;
+    assets: SyncRecoveryAssetSource[];
+  }) => Promise<SyncRecoveryWriteResult>;
+  download: (id: string) => Promise<SyncRecoveryDownloadResult>;
+  releaseDownload: (restoreId: string) => Promise<{ cleaned: boolean }>;
+}

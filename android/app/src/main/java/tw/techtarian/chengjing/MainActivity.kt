@@ -107,8 +107,8 @@ class MainActivity : ComponentActivity() {
                 if (request.isForMainFrame && request.url.scheme in listOf("https", "http")) startActivity(Intent(Intent.ACTION_VIEW, request.url))
                 return true
             }
-            override fun onPageFinished(view: WebView, url: String) { emit("resume", JSONObject()) }
-            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean { recreate(); return true }
+            override fun onPageFinished(view: WebView, url: String) { services.suspendSyncRecovery(); emit("resume", JSONObject()) }
+            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean { services.suspendSyncRecovery(); recreate(); return true }
         }
         web.webChromeClient = object : WebChromeClient() {
             override fun onJsAlert(view: WebView, url: String, message: String, result: JsResult): Boolean {
@@ -120,7 +120,7 @@ class MainActivity : ComponentActivity() {
         }
         check(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) { "Please update Android System WebView" }
         WebViewCompat.addWebMessageListener(web, "ChengJingNative", setOf("https://appassets.androidplatform.net")) { _, message, origin, mainFrame, _ ->
-            if (!mainFrame || origin.host != "appassets.androidplatform.net") return@addWebMessageListener
+            if (!mainFrame || origin.scheme != "https" || origin.host != "appassets.androidplatform.net" || (origin.port != -1 && origin.port != 443)) return@addWebMessageListener
             try {
                 val request = JSONObject(message.data ?: "{}")
                 val id = request.getString("id")
@@ -129,7 +129,7 @@ class MainActivity : ComponentActivity() {
                     val envelope = JSONObject().put("id", id).put("value", value ?: JSONObject.NULL).put("error", error ?: JSONObject.NULL)
                     runOnUiThread { web.evaluateJavascript("window.__chengjingNativeReply?.($envelope)", null) }
                 }
-                if(qaIsolation&&request.getString("method").substringBefore('.') in listOf("google","cloud","sync")) {
+                if(qaIsolation&&request.getString("method").substringBefore('.') in listOf("google","cloud","sync","syncRecovery")) {
                     reply(null,"Cloud access is disabled in the isolated UI test workspace")
                     return@addWebMessageListener
                 }
@@ -177,10 +177,31 @@ class MainActivity : ComponentActivity() {
                             })
                         }
                     }
+                    "syncRecovery.setEnabled" -> {
+                        try { reply(services.call("syncRecovery.setEnabled", args), null) }
+                        catch (error: Exception) { reply(null, error.message ?: "sync-recovery-operation-failed") }
+                    }
                     "google.connect" -> runOnUiThread { authorizeGoogle(reply) }
                     "google.refresh" -> runOnUiThread { authorizeGoogle(reply, false) }
                     "app.close" -> runOnUiThread { reply(JSONObject().put("closed", true), null); moveTaskToBack(true) }
-                    else -> executor.execute { try { reply(services.call(request.getString("method"), args), null) } catch (error: Exception) { reply(null, error.message ?: "Operation failed") } }
+                    else -> {
+                        val method = request.getString("method")
+                        val recovery = method.startsWith("syncRecovery.")
+                            || (method == "attachments.restoreFromBackup"
+                                && args.optString("backupFilePath").startsWith(SyncRecoveryService.BACKUP_PREFIX))
+                        try {
+                            // Capture recovery authority BEFORE waiting for an executor thread.
+                            val operation: () -> Any? = if (recovery)
+                                services.prepareSyncRecoveryCall(method, args)
+                            else { { services.call(method, args) } }
+                            executor.execute {
+                                try { reply(operation(), null) }
+                                catch (error: Exception) { reply(null, error.message ?: "Operation failed") }
+                            }
+                        } catch (error: Exception) {
+                            reply(null, if (recovery) "sync-recovery-operation-failed" else "Operation failed")
+                        }
+                    }
                 }
             } catch (_: Exception) { /* Malformed messages have no native authority. */ }
         }
@@ -221,8 +242,9 @@ class MainActivity : ComponentActivity() {
         executor.execute { services.enqueueShare(text, uris); emit("resume", JSONObject()) }
     }
     fun emit(name: String, data: JSONObject) { runOnUiThread { if (::web.isInitialized) web.evaluateJavascript("window.dispatchEvent(new CustomEvent('chengjing:android-$name',{detail:$data}))", null) } }
-    override fun onPause() { if (::web.isInitialized) emit("pause", JSONObject()); super.onPause() }
+    override fun onPause() { services.suspendSyncRecovery(); if (::web.isInitialized) emit("pause", JSONObject()); super.onPause() }
     override fun onResume() { super.onResume(); if (::web.isInitialized) emit("resume", JSONObject()) }
+    override fun onDestroy() { services.suspendSyncRecovery(); super.onDestroy() }
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
         emit("system-theme",JSONObject().put("dark",android.content.res.Resources.getSystem().configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK==android.content.res.Configuration.UI_MODE_NIGHT_YES))

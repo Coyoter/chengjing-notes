@@ -38,6 +38,13 @@ contextBridge.exposeInMainWorld("chengjing", {
     write: (request) => ipcRenderer.invoke("backup:write", request),
     writeSafety: (request) => ipcRenderer.invoke("backup:write-safety", request),
   },
+  syncRecovery: {
+    getStatus: () => ipcRenderer.invoke("sync-recovery:get-status"),
+    setEnabled: (enabled) => ipcRenderer.invoke("sync-recovery:set-enabled", enabled),
+    createDaily: (request) => ipcRenderer.invoke("sync-recovery:create-daily", request),
+    download: (id) => ipcRenderer.invoke("sync-recovery:download", id),
+    releaseDownload: (restoreId) => ipcRenderer.invoke("sync-recovery:release-download", restoreId),
+  },
   cloudBackups: {
     onBeforeQuit: (callback) => {
       const listener = async (_event, id) => {

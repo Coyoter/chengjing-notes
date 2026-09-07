@@ -10,23 +10,35 @@ import { useI18n } from "../hooks/useI18n";
 import { getSyncActivity, subscribeSyncActivity, reportSyncActivity, syncStatusKind } from "../lib/syncActivity";
 import "./sync-settings.css";
 import { SyncConflictReview } from "./SyncConflictReview";
+import { SyncRecoverySection } from "./SyncRecoverySection";
+import { SyncRecoveryPanel } from "./SyncRecoveryPanel";
+import { syncRecovery } from "../lib/syncRecoveryRuntime";
+import { CloudBackupImport } from "./CloudBackupImport";
 
 export function syncTransport() {
   const bridge = window.chengjing?.sync;
   if (!bridge) throw new Error("Sync bridge unavailable");
   return { list: async () => (await bridge.list()).files, get: bridge.get, put: bridge.put, stage: bridge.stage, uploadAsset: bridge.uploadAsset, downloadAsset: bridge.downloadAsset };
 }
+function completedSync() {
+  reportSyncActivity("idle", "", syncEnabled());
+  void syncRecovery.afterSuccessfulSync();
+}
+
 export function SyncManager() {
   useEffect(() => {
+    void syncRecovery.syncStateChanged();
     let quiet: ReturnType<typeof setTimeout> | undefined;
     let staging: ReturnType<typeof setTimeout> | undefined;
     const run = () => {
       if (!syncEnabled() || !window.chengjing?.sync) return;
       reportSyncActivity("syncing");
-      void synchronize(syncTransport()).then(() => reportSyncActivity("idle","",syncEnabled())).catch((error) => reportSyncActivity("error", error.message));
+      void synchronize(syncTransport()).then(() => completedSync()).catch((error) => reportSyncActivity("error", error.message));
     };
     const startup = setTimeout(run, 3000); const interval = setInterval(run, 60_000);
+    const resume=()=>{ void syncRecovery.syncStateChanged().then(run); };
     const pause=()=>{
+      void syncRecovery.suspend();
       if(!syncEnabled()||!window.chengjing?.sync?.stage)return;
       window.dispatchEvent(new Event("chengjing:flush-editors"));
       void stagePendingSync(syncTransport()).catch(console.error);
@@ -37,8 +49,8 @@ export function SyncManager() {
         if (syncEnabled() && window.chengjing?.sync?.stage) void stagePendingSync(syncTransport()).catch(console.error);
       }, 200);
     };
-    window.addEventListener("online", run); window.addEventListener("chengjing:android-resume", run);window.addEventListener("chengjing:android-pause",pause);window.addEventListener("chengjing:sync-dirty",changed);
-    return () => { clearTimeout(startup);clearTimeout(quiet);clearTimeout(staging); clearInterval(interval); window.removeEventListener("online", run); window.removeEventListener("chengjing:android-resume", run);window.removeEventListener("chengjing:android-pause",pause);window.removeEventListener("chengjing:sync-dirty",changed); };
+    window.addEventListener("online", run); window.addEventListener("chengjing:android-resume", resume);window.addEventListener("chengjing:android-pause",pause);window.addEventListener("chengjing:sync-dirty",changed);
+    return () => { void syncRecovery.suspend(); clearTimeout(startup);clearTimeout(quiet);clearTimeout(staging); clearInterval(interval); window.removeEventListener("online", run); window.removeEventListener("chengjing:android-resume", resume);window.removeEventListener("chengjing:android-pause",pause);window.removeEventListener("chengjing:sync-dirty",changed); };
   }, []);
   return null;
 }
@@ -46,6 +58,8 @@ export function SyncSettings() {
   const { language } = useI18n(); const zh = language.startsWith("zh");
   const [enabled, setEnabled] = useState(syncEnabled); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const activity = useSyncExternalStore(subscribeSyncActivity, getSyncActivity);
+  const recoveryState = useSyncExternalStore(syncRecovery.subscribe, syncRecovery.getSnapshot);
+  const [toolsBusy, setToolsBusy] = useState(false);
   const pending = useLiveQuery(() => db.table("syncOutbox").count(), [], 0);
   const conflicts = useLiveQuery(() => db.table("syncRecords").filter((row: SyncRecord) => Boolean(row.recovery?.length)).toArray() as Promise<SyncRecord[]>, [], []);
   const working = busy || activity.phase === "syncing";
@@ -67,12 +81,12 @@ export function SyncSettings() {
       if(window.chengjing?.platform==="android") await androidCall("google.connect");
       else { const status=await window.chengjing?.cloudBackups?.getLocalStatus(); if(!status?.connected)await window.chengjing?.cloudBackups?.connect(); }
       if(window.chengjing?.platform==="android")await androidCall("sync.resume");
-      await enableSync();setEnabled(true);reportSyncActivity("syncing");await synchronize(syncTransport());reportSyncActivity("idle","",syncEnabled());
+      await enableSync();setEnabled(true);void syncRecovery.syncStateChanged();reportSyncActivity("syncing");await synchronize(syncTransport());completedSync();
     } catch(error) { const detail=error instanceof Error?error.message:String(error);setError(detail);reportSyncActivity("error",detail); } finally{setBusy(false)}
   }
-  async function run() { setBusy(true);setError("");reportSyncActivity("syncing");try{await synchronize(syncTransport());reportSyncActivity("idle","",syncEnabled())}catch(error){const detail=error instanceof Error?error.message:String(error);setError(detail);reportSyncActivity("error",detail)}finally{setBusy(false)} }
+  async function run() { setBusy(true);setError("");reportSyncActivity("syncing");try{await synchronize(syncTransport());completedSync()}catch(error){const detail=error instanceof Error?error.message:String(error);setError(detail);reportSyncActivity("error",detail)}finally{setBusy(false)} }
   async function pause() {
-    localStorage.removeItem("chengjing-sync-enabled");setEnabled(false);setError("");
+    localStorage.removeItem("chengjing-sync-enabled");setEnabled(false);setError("");void syncRecovery.syncStateChanged();
     try { if(window.chengjing?.platform==="android")await androidCall("sync.pause"); }
     catch(error) { setError(error instanceof Error?error.message:String(error)); }
   }
@@ -87,10 +101,30 @@ export function SyncSettings() {
     <div className={`sync-state is-${kind}`} role="status" aria-live="polite" aria-busy={working}>
       <StatusIcon size={21} className={working?"spin":""}/><div><b>{labels[kind][0]}</b>{labels[kind][1]&&<p>{labels[kind][1]}</p>}{activity.lastSuccessAt>0&&<small>{zh?"上次完成":"Last completed"} · {new Intl.DateTimeFormat(language,{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}).format(activity.lastSuccessAt)}</small>}</div>
     </div>
-    <div className="sync-actions"><button type="button" className="primary-button" disabled={working} onClick={()=>void(enabled?run():connect())}><RefreshCw size={17} className={working?"spin":""}/><span>{working?(zh?"正在同步…":"Syncing…"):enabled?(zh?"立即同步":"Sync now"):(zh?"啟用 Google 同步":"Enable Google sync")}</span></button>
+    <div className="sync-actions"><button type="button" className="primary-button" disabled={working || toolsBusy || recoveryState.phase === "restoring"} onClick={()=>void(enabled?run():connect())}><RefreshCw size={17} className={working?"spin":""}/><span>{working?(zh?"正在同步…":"Syncing…"):enabled?(zh?"立即同步":"Sync now"):(zh?"啟用 Google 同步":"Enable Google sync")}</span></button>
       {enabled&&<button type="button" className="sync-pause-button" onClick={()=>void pause()}><Pause size={15}/><span>{zh?"暫停同步":"Pause sync"}</span></button>}
     </div>
     {message&&<div className="sync-error" role="alert"><AlertTriangle size={16}/><p>{message}</p></div>}
-    <SyncConflictReview records={conflicts} language={language}/>
+    <SyncRecoverySection language={language} onOpen={() => {
+      if (!toolsBusy && syncEnabled() && window.chengjing?.syncRecovery) {
+        void syncRecovery.refresh().catch(() => {});
+      }
+    }}>
+      <SyncRecoveryPanel
+        language={language}
+        enabled={enabled}
+        available={Boolean(window.chengjing?.syncRecovery)}
+        blocked={working || toolsBusy}
+        state={recoveryState}
+        onRefresh={syncRecovery.refresh}
+        onRestore={syncRecovery.restorePoint}
+      />
+      <SyncConflictReview records={conflicts} language={language}
+        disabled={working || toolsBusy || recoveryState.phase !== "idle"}
+        onBusyChange={setToolsBusy}/>
+      {window.chengjing?.cloudBackups && <CloudBackupImport
+        disabled={working || toolsBusy || recoveryState.phase !== "idle"}
+        onBusyChange={setToolsBusy}/>}
+    </SyncRecoverySection>
   </article>;
 }
