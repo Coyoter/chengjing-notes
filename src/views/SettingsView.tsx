@@ -119,7 +119,8 @@ export function SettingsView() {
     setNotice(t("settings.testingNotice"));
     try {
       const result = await window.chengjing.ai.testOpenRouter();
-      const detail = result.limitRemaining === null ? result.label : `${result.label} · ${result.limitRemaining.toFixed(2)}`;
+      const remaining = Number(result.limitRemaining);
+      const detail = Number.isFinite(remaining) ? `${result.label} · ${remaining.toFixed(2)}` : result.label;
       setNotice(t("settings.connectionOk", { detail }));
     } catch (error) {
       setNotice(friendlyErrorMessage(error, t("settings.testFailed")));

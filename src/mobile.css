@@ -246,7 +246,7 @@ html[data-platform="android"] .window-drag-region { display: none; }
   html[data-platform="android"] .brain-toolbar.brain-mobile-tool-sheet { top:auto;bottom:0;left:0;right:0;transform:none;max-width:none;border-radius:24px 24px 0 0;padding:12px 16px 24px;display:flex;flex-direction:column;align-items:stretch;z-index:31;animation:brainToolsIn 220ms ease-out; }
   html[data-platform="android"] .brain-mobile-tool-sheet > button { min-height:48px; }
   html[data-platform="android"] .brain-mobile-tool-sheet > button:first-child { align-self:flex-end; }
-  html[data-platform="android"] .brain-notice { bottom:76px;left:12px;right:12px;max-width:none;font-size:calc(12px * var(--font-scale)); }
+  html[data-platform="android"] .brain-notice { top:auto;bottom:76px;left:12px;right:12px;width:auto;max-width:none;transform:none;font-size:calc(12px * var(--font-scale)); }
   @keyframes brainToolsIn { from { transform:translateY(24px);opacity:0; } to{transform:translateY(0);opacity:1;} }
   html[data-platform="android"] .brain-summary { max-width:calc(100% - 24px); }
   html[data-platform="android"] .brain-report { width:calc(100% - 24px); max-height:40%; right:12px; bottom:12px; }
