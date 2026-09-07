@@ -26,3 +26,6 @@ android/**/build/
 android/app/src/main/assets/public/
 android/signing/
 android-release/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+graft/
