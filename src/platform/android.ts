@@ -9,6 +9,27 @@ declare global {
   }
 }
 const pending = new Map<string, { resolve: (value: any) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+
+function transientAndroidNetworkError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /Unable to resolve host|UnknownHostException|No address associated with hostname|Network is unreachable|ENETUNREACH|EAI_AGAIN|sync-network-unavailable/i.test(message);
+}
+
+async function withAndroidGoogleNetworkRetry<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!transientAndroidNetworkError(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    try {
+      return await operation();
+    } catch (retryError) {
+      if (transientAndroidNetworkError(retryError)) throw new Error("sync-network-unavailable");
+      throw retryError;
+    }
+  }
+}
+
 export function androidCall<T = any>(method: string, args: Record<string, unknown> = {}): Promise<T> {
   return new Promise((resolve, reject) => {
     if (!window.ChengJingNative) { reject(new Error("Android native bridge unavailable")); return; }
@@ -44,8 +65,14 @@ export async function initializeAndroid() {
     platform: "android",
     sync: {
       stage: (packet) => androidCall("sync.stage", { packet }),
-      uploadAsset: (asset) => androidCall("sync.uploadAsset", asset), downloadAsset: (asset) => androidCall("sync.downloadAsset", asset),
-      list: async () => { await androidCall("google.refresh"); return androidCall("sync.list"); }, get: (id) => androidCall("sync.get", { id }), put: (id, data) => androidCall("sync.put", { id, data }),
+      uploadAsset: (asset) => withAndroidGoogleNetworkRetry(() => androidCall("sync.uploadAsset", asset)),
+      downloadAsset: (asset) => withAndroidGoogleNetworkRetry(() => androidCall("sync.downloadAsset", asset)),
+      list: () => withAndroidGoogleNetworkRetry(async () => {
+        await androidCall("google.refresh");
+        return androidCall("sync.list");
+      }),
+      get: (id) => withAndroidGoogleNetworkRetry(() => androidCall("sync.get", { id })),
+      put: (id, data) => withAndroidGoogleNetworkRetry(() => androidCall("sync.put", { id, data })),
     },
     app: {
       getPreferredLanguage: async () => ({ language: info.language, preferredLanguages: [info.language] }),

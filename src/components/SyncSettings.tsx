@@ -20,6 +20,18 @@ export function syncTransport() {
   if (!bridge) throw new Error("Sync bridge unavailable");
   return { list: async () => (await bridge.list()).files, get: bridge.get, put: bridge.put, stage: bridge.stage, uploadAsset: bridge.uploadAsset, downloadAsset: bridge.downloadAsset };
 }
+
+function friendlySyncError(message: string, zh: boolean) {
+  if (!message) return "";
+  if (message === "sync-network-unavailable"
+    || /Unable to resolve host|UnknownHostException|No address associated with hostname/i.test(message)) {
+    return zh
+      ? "網路暫時無法連線。內容已保存在這台裝置，澄境稍後會自動重試同步。"
+      : "The network is temporarily unavailable. Your changes are saved on this device and ChengJing will retry automatically.";
+  }
+  return message;
+}
+
 function completedSync() {
   reportSyncActivity("idle", "", syncEnabled());
   void syncRecovery.afterSuccessfulSync();
@@ -63,7 +75,7 @@ export function SyncSettings() {
   const pending = useLiveQuery(() => db.table("syncOutbox").count(), [], 0);
   const conflicts = useLiveQuery(() => db.table("syncRecords").filter((row: SyncRecord) => Boolean(row.recovery?.length)).toArray() as Promise<SyncRecord[]>, [], []);
   const working = busy || activity.phase === "syncing";
-  const message = error || (activity.phase === "error" ? activity.error : "");
+  const message = friendlySyncError(error || (activity.phase === "error" ? activity.error : ""), zh);
   const kind = syncStatusKind(enabled, working, message, pending, activity.lastSuccessAt);
   const labels = zh ? {
     working:["正在同步", ""], error:["同步尚未完成", "資料仍保存在這台裝置，請稍後再試。"],
