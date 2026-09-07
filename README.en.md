@@ -1,4 +1,4 @@
-# ChengJing Notes v0.9.5
+# ChengJing Notes v0.10.0
 
 <p align="center">
   <a href="README.md">繁體中文</a>
@@ -24,7 +24,7 @@ This is source-available software rather than OSI-approved “Open Source” sof
 
 ## Install
 
-Cross-platform development prerelease: [0.10.0-dev.3 for Android, Mac and Windows](https://github.com/Coyoter/chengjing-notes/releases/tag/v0.10.0-dev.3). Install over the previous build without uninstalling. This is not a Google Play release and full physical-device acceptance is incomplete. Bidirectional Google sync requires the compatible clients in this release; older desktop v0.9.5 still provides snapshot backups only. See [Android details](ANDROID.md).
+Cross-platform release: [0.10.0 for Android, Mac and Windows](https://github.com/Coyoter/chengjing-notes/releases/tag/v0.10.0). Install over the previous build without uninstalling. Google Play publication is handled separately; a GitHub release does not imply Play approval. Bidirectional Google sync requires compatible clients on every device; older desktop v0.9.5 supports snapshot backups only. See [Android details and known limitations](ANDROID.md).
 
 Official installers are currently available for Apple Silicon Macs and Windows ARM64, Intel, and AMD x64 systems:
 

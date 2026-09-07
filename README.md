@@ -1,4 +1,4 @@
-# 澄境筆記 ChengJing Notes v0.9.5
+# 澄境筆記 ChengJing Notes v0.10.0
 
 <p align="center">
   <a href="README.md"><strong>繁體中文</strong></a>
@@ -24,7 +24,7 @@
 
 ## 直接安裝
 
-跨平台開發測試版：[0.10.0-dev.3 Android、Mac、Windows 與更新說明](https://github.com/Coyoter/chengjing-notes/releases/tag/v0.10.0-dev.3)。可直接更新，不需移除。這不是 Google Play 正式版；完整真機驗收尚未完成。Google 雙向同步需各裝置使用本次相容同步版，舊桌面 v0.9.5 仍是備份功能。詳見 [Android 說明](ANDROID.md)。
+跨平台正式發布：[0.10.0 Android、Mac、Windows 與更新說明](https://github.com/Coyoter/chengjing-notes/releases/tag/v0.10.0)。可直接更新，不需移除。Google Play 上架另行處理；GitHub 發布不代表已通過 Play 審核。Google 雙向同步需各裝置使用本次相容同步版，舊桌面 v0.9.5 仍是備份功能。已測範圍與已知限制請見 [Android 說明](ANDROID.md)。
 
 目前正式安裝包支援 Apple Silicon Mac，以及 Windows ARM64／Intel、AMD x64：
 
