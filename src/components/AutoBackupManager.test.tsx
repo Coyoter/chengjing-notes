@@ -2,59 +2,124 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AutoBackupManager } from "./AutoBackupManager";
-import { backupRevision, markBackupChanged } from "../lib/backupChanges";
+
+const { isAutoBackupDue, announceAutoBackup } = vi.hoisted(() => ({
+  isAutoBackupDue: vi.fn(() => true),
+  announceAutoBackup: vi.fn(),
+}));
+
 vi.mock("../lib/autoBackup", () => ({
-  announceAutoBackup: vi.fn(), isAutoBackupDue: () => false,
-  isCloudBackupDue: (settings: { lastSuccessAt: number }) => Date.now() - settings.lastSuccessAt >= 1_800_000,
+  announceAutoBackup,
+  isAutoBackupDue,
   prepareCompleteBackup: async () => ({ data: "snapshot", assets: [] }),
 }));
-let root: Root; let exit: () => Promise<void>; let write: ReturnType<typeof vi.fn>;
+
+let root: Root;
+let exit: () => Promise<void>;
+let localWrite: ReturnType<typeof vi.fn>;
+let cloudWrite: ReturnType<typeof vi.fn>;
+
 beforeEach(async () => {
-  vi.useFakeTimers(); localStorage.clear();
-  const settings = { enabled: true, conflict: false, lastSuccessAt: Date.now() };
-  write = vi.fn(async () => ({ settings }));
-  window.chengjing = { cloudBackups: {
-    getLocalStatus: async () => ({ connected: true, settings }), write,
-    onBeforeQuit: (callback: () => Promise<void>) => { exit = callback; return () => {}; },
-  } } as unknown as NonNullable<Window["chengjing"]>;
+  vi.useFakeTimers();
+  localStorage.clear();
+  isAutoBackupDue.mockReturnValue(true);
+  announceAutoBackup.mockClear();
+
+  const settings = {
+    enabled: true,
+    directory: "/tmp/chengjing-backups",
+    intervalDays: 1,
+    retentionCount: 10,
+    lastSuccessAt: 0,
+  };
+
+  localWrite = vi.fn(async () => ({ settings }));
+  cloudWrite = vi.fn();
+
+  window.chengjing = {
+    backups: {
+      getSettings: async () => settings,
+      write: localWrite,
+    },
+    cloudBackups: {
+      write: cloudWrite,
+      onBeforeQuit: (callback: () => Promise<void>) => {
+        exit = callback;
+        return () => {};
+      },
+    },
+  } as unknown as NonNullable<Window["chengjing"]>;
+
   root = createRoot(document.createElement("div"));
   await act(async () => root.render(<AutoBackupManager />));
 });
-afterEach(async () => { await act(async () => root.unmount()); vi.useRealTimers(); delete window.chengjing; });
-it("短時使用停筆後備份，滑鼠和滾輪不會延後", async () => {
-  await act(async () => { markBackupChanged(); await vi.advanceTimersByTimeAsync(20_000); });
-  window.dispatchEvent(new Event("wheel")); window.dispatchEvent(new Event("pointerdown"));
-  await act(async () => { await vi.advanceTimersByTimeAsync(10_001); });
-  expect(write).toHaveBeenCalledTimes(1); expect(backupRevision()).toBe("");
+
+afterEach(async () => {
+  await act(async () => root.unmount());
+  vi.useRealTimers();
+  delete window.chengjing;
 });
-it("退出前不用等30秒，失敗保留待傳內容，重試成功才清除", async () => {
-  write.mockRejectedValueOnce(new Error("offline"));
-  await act(async () => { markBackupChanged(); });
-  const first = exit(); const caught = first.catch((error) => error.message);
-  await act(async () => { await vi.advanceTimersByTimeAsync(750); });
-  expect(await caught).toBe("offline"); expect(backupRevision()).not.toBe("");
-  const second = exit();
-  await act(async () => { await vi.advanceTimersByTimeAsync(750); await second; });
-  expect(backupRevision()).toBe(""); expect(write).toHaveBeenCalledTimes(2);
+
+it("啟動後若本機備份到期，只寫入本機備份", async () => {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2_001);
+  });
+
+  expect(localWrite).toHaveBeenCalledTimes(1);
+  expect(cloudWrite).not.toHaveBeenCalled();
+  expect(announceAutoBackup).toHaveBeenCalledTimes(1);
 });
-it("持續修改仍會在30分鐘期限執行", async () => {
-  for (let index = 0; index < 90; index++) {
-    await act(async () => { markBackupChanged(); await vi.advanceTimersByTimeAsync(20_000); });
-  }
-  expect(write).toHaveBeenCalledTimes(1);
+
+it("本機備份尚未到期時不會寫入", async () => {
+  isAutoBackupDue.mockReturnValue(false);
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(20_000);
+  });
+
+  expect(localWrite).not.toHaveBeenCalled();
+  expect(cloudWrite).not.toHaveBeenCalled();
 });
-it("重新啟動後補傳留下的待備份內容", async () => {
-  await act(async () => { markBackupChanged(); root.unmount(); });
-  root = createRoot(document.createElement("div"));
-  await act(async () => root.render(<AutoBackupManager />));
-  await act(async () => { await vi.advanceTimersByTimeAsync(2_001); });
-  expect(write).toHaveBeenCalledTimes(1); expect(backupRevision()).toBe("");
+
+it("退出前只補做已到期的本機備份，不寫 Google snapshot", async () => {
+  const quitting = exit();
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(750);
+    await quitting;
+  });
+
+  expect(localWrite).toHaveBeenCalledTimes(1);
+  expect(cloudWrite).not.toHaveBeenCalled();
 });
-it("上傳未結束時不重送，失敗後保留待傳記號", async () => {
-  let rejectUpload!: (error: Error) => void;
-  write.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectUpload = reject; }));
-  await act(async () => { markBackupChanged(); await vi.advanceTimersByTimeAsync(40_000); });
-  expect(write).toHaveBeenCalledTimes(1);
-  await act(async () => { rejectUpload(new Error("offline")); await vi.advanceTimersByTimeAsync(1); });
-  expect(backupRevision()).not.toBe("");
+
+it("本機備份失敗後等待一分鐘再重試", async () => {
+  localWrite
+    .mockRejectedValueOnce(new Error("disk unavailable"))
+    .mockResolvedValue({ settings: {
+      enabled: true,
+      directory: "/tmp/chengjing-backups",
+      intervalDays: 1,
+      retentionCount: 10,
+      lastSuccessAt: 0,
+    } });
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2_001);
+  });
+
+  expect(localWrite).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(59_000);
+  });
+
+  expect(localWrite).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5_000);
+  });
+
+  expect(localWrite).toHaveBeenCalledTimes(2);
+  expect(cloudWrite).not.toHaveBeenCalled();
 });

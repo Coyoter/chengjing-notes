@@ -10,8 +10,8 @@ android {
         applicationId = "tw.techtarian.chengjing"
         minSdk = 28
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.10.0"
+        versionCode = 5
+        versionName = "0.10.1"
         buildConfigField("String", "DISTRIBUTION_CHANNEL", "\"$distributionChannel\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

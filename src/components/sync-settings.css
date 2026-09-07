@@ -1,7 +1,7 @@
 .sync-settings { min-width:0; letter-spacing:normal; }
-.sync-settings > header > span { display:flex; align-items:center; gap:8px; letter-spacing:.04em; }
-.sync-settings > header h2 { line-height:1.4; letter-spacing:normal; }
-.sync-state { display:grid; grid-template-columns:24px minmax(0,1fr); align-items:start; gap:12px; padding:16px; border-radius:12px; background:var(--surface-2); }
+.sync-settings > header > span { display:grid; min-width:0; flex:1; letter-spacing:normal; }
+.sync-settings > header h4 { line-height:1.4; letter-spacing:normal; }
+.sync-state { display:grid; grid-template-columns:24px minmax(0,1fr); align-items:start; gap:12px; margin:0 15px; padding:12px; border-radius:9px; background:var(--surface-1); }
 .sync-state > svg { margin-top:2px; color:var(--accent-strong); flex:none; }
 .sync-state > div { display:grid; min-width:0; gap:5px; }
 .sync-state b { font-size:calc(14px * var(--font-scale)); font-weight:620; line-height:1.5; color:var(--text-1); }
@@ -9,12 +9,12 @@
 .sync-state small { font-size:calc(12px * var(--font-scale)); line-height:1.5; color:var(--text-muted); }
 .sync-state.is-error > svg { color:var(--warning); }
 .sync-state.is-paused > svg { color:var(--text-muted); }
-.sync-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; margin-top:16px; }
+.sync-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; margin:12px 15px 15px; }
 .sync-actions > button { min-height:48px; padding:10px 14px; line-height:1.4; letter-spacing:normal; }
 .sync-actions svg { flex:none; }
 .sync-actions .sync-pause-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; background:none; border:0; border-radius:8px; color:var(--text-muted); font-size:calc(13px * var(--font-scale)); }
 .sync-pause-button:hover { background:var(--surface-2); color:var(--text-1); }
-.sync-error { display:flex; align-items:flex-start; gap:8px; margin-top:14px; padding:12px; background:color-mix(in srgb,var(--danger) 8%,var(--surface-2)); border-radius:10px; color:var(--danger); }
+.sync-error { display:flex; align-items:flex-start; gap:8px; margin:0 15px 14px; padding:12px; background:color-mix(in srgb,var(--danger) 8%,var(--surface-2)); border-radius:10px; color:var(--danger); }
 .sync-error svg { flex:none; margin-top:3px; }
 .sync-error p { margin:0; min-width:0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:calc(13px * var(--font-scale)); line-height:1.6; }
 .sync-conflict { margin-top:18px; border-top:1px solid var(--border); }
