@@ -9,7 +9,6 @@ export function SettingsJumpNav() {
   const destinations = [
     ["language-settings", copy.language],
     ["ai-settings", copy.ai],
-    ["sync-settings", ({"zh-TW":"同步","zh-CN":"同步",en:"Sync",ja:"同期",ko:"동기화"})[language]],
     ["mcp-settings", copy.integrations],
     ["update-settings", copy.updates],
     ["quick-capture-settings", copy.quickCapture],
@@ -30,7 +29,7 @@ export function SettingsJumpNav() {
     <nav className="settings-jump-nav" aria-label={copy.label}>
       <span><Navigation2 size={14} /><b>{copy.label}</b></span>
       <div className="settings-jump-track">
-        {destinations.filter(([id]) => (id !== "sync-settings" || window.chengjing?.sync) && (window.chengjing?.platform !== "android" || !["mcp-settings", "quick-capture-settings"].includes(id))).map(([id, label]) => <a key={id} href={`#${id}`} onClick={(event) => jump(event, id)}>{label}</a>)}
+        {destinations.filter(([id]) => window.chengjing?.platform !== "android" || !["mcp-settings", "quick-capture-settings"].includes(id)).map(([id, label]) => <a key={id} href={`#${id}`} onClick={(event) => jump(event, id)}>{label}</a>)}
       </div>
     </nav>
   );

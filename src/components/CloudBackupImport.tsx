@@ -21,8 +21,8 @@ export function CloudBackupImport() {
     finally { setBusy(false); }
   }
   return <details className="backup-import-tools">
-    <summary><ArrowDownToLine size={19}/><span><b>{zh ? "資料搬移" : "Move your data"}</b><small>{zh ? "換裝置時，從已有的備份帶入內容" : "Bring existing backup content to a new device"}</small></span><ChevronDown size={17}/></summary>
-    <div><p>{zh ? "從 Google 備份加入資料，不取代目前內容。這是一次性的搬移工具，日常同步不需要操作。" : "Add content from a Google backup without replacing current data. This one-time migration tool is not needed for everyday sync."}</p>
+    <summary><ArrowDownToLine size={19}/><span><b>{zh ? "舊版 Google 備份搬移" : "Legacy Google backup import"}</b><small>{zh ? "僅供舊版備份資料一次性帶入" : "One-time import for backups created by older versions"}</small></span><ChevronDown size={17}/></summary>
+    <div><p>{zh ? "如果你曾使用舊版 Google 備份，可在這裡把資料加入目前內容。這是一次性相容工具，日常請直接使用 Google 同步。" : "If you used Google backup in an older version, import that data here without replacing current content. For everyday use, use Google Sync instead."}</p>
       <button type="button" className="secondary-button" disabled={busy} onClick={()=>void bringBackup()}>{busy ? <LoaderCircle size={17} className="spin"/> : <ArrowDownToLine size={17}/>}<span>{busy ? (zh ? "正在帶入…" : "Importing…") : (zh ? "從 Google 備份帶入" : "Import Google backup")}</span></button>
       {notice && <p className="backup-import-notice" role="status">{notice}</p>}
     </div>

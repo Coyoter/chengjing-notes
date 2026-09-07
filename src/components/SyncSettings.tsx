@@ -76,8 +76,14 @@ export function SyncSettings() {
     try { if(window.chengjing?.platform==="android")await androidCall("sync.pause"); }
     catch(error) { setError(error instanceof Error?error.message:String(error)); }
   }
-  return <section className="settings-section sync-settings" id="sync-settings">
-    <header><span><Cloud size={17} /> Google</span><h2>{zh?"跨裝置同步":"Cross-device sync"}</h2><p>{zh?"登入同一個 Google 帳號，接續各裝置的內容。首次同步會合併資料；同一筆內容自動採用最新修改。":"Sign in to the same Google account to continue across devices. First sync combines your data; the latest edit is used for each item."}</p></header>
+  return <article className="backup-method-card cloud-method sync-settings" id="sync-settings">
+    <header>
+    <i className="backup-method-icon"><Cloud size={20} /></i>
+    <span>
+      <h4>{zh?"Google 同步":"Google Sync"}</h4>
+      <p>{zh?"登入同一個 Google 帳號，在不同裝置間接續內容。首次同步會合併資料；同一筆內容自動採用最新修改。":"Sign in to the same Google account to continue across devices. First sync combines your data; the latest edit is used for each item."}</p>
+    </span>
+  </header>
     <div className={`sync-state is-${kind}`} role="status" aria-live="polite" aria-busy={working}>
       <StatusIcon size={21} className={working?"spin":""}/><div><b>{labels[kind][0]}</b>{labels[kind][1]&&<p>{labels[kind][1]}</p>}{activity.lastSuccessAt>0&&<small>{zh?"上次完成":"Last completed"} · {new Intl.DateTimeFormat(language,{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}).format(activity.lastSuccessAt)}</small>}</div>
     </div>
@@ -86,5 +92,5 @@ export function SyncSettings() {
     </div>
     {message&&<div className="sync-error" role="alert"><AlertTriangle size={16}/><p>{message}</p></div>}
     <SyncConflictReview records={conflicts} language={language}/>
-  </section>;
+  </article>;
 }

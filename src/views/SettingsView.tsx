@@ -39,7 +39,6 @@ import { QuickCaptureSettingsPanel } from "../components/QuickCaptureSettings";
 import { AdvancedAIProviderSettings } from "../components/AdvancedAIProviderSettings";
 import { getAdvancedProviderCopy } from "../lib/advancedProviderCopy";
 import { McpSettingsPanel } from "../components/McpSettings";
-import { SyncSettings } from "../components/SyncSettings";
 import { CloudBackupImport } from "../components/CloudBackupImport";
 import { AndroidUpdateSettings } from "../components/AndroidUpdateSettings";
 import { SettingsJumpNav } from "../components/SettingsJumpNav";
@@ -238,7 +237,6 @@ export function SettingsView() {
         </div>
       </details>
 
-      {window.chengjing?.sync && <SyncSettings />}
       {window.chengjing?.platform !== "android" && <McpSettingsPanel />}
 
       {window.chengjing?.platform==="android"?<AndroidUpdateSettings />:<UpdateSettingsSection />}
