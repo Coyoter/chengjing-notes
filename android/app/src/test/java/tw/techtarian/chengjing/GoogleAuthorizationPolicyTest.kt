@@ -18,6 +18,7 @@ class GoogleAuthorizationPolicyTest {
 
     @Test fun knownReauthorizationOverridesStaleLocalToken() {
         assertFalse(GoogleAuthorizationPolicy.connected("old-token", "AUTH_REQUIRED"))
+        assertFalse(GoogleAuthorizationPolicy.connected("old-token", "DISCONNECTED"))
         assertTrue(GoogleAuthorizationPolicy.connected("new-token", "AUTHORIZED"))
         assertTrue(GoogleAuthorizationPolicy.connected("legacy-token", null))
         assertEquals("new-token", GoogleAuthorizationPolicy.requireToken("new-token"))

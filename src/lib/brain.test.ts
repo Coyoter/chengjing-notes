@@ -106,6 +106,7 @@ describe("第二大腦資料整理", () => {
 
   it("獨立待辦與編輯器待辦都會成為可連結的神經元", () => {
     const graph = buildBrainGraph({
+      now: 12,
       cards: [card("source", "專案規劃", "整理發佈工作")], boards: [], fragments: [], boardNodes: [], tags: [], storedEdges: [],
       tasks: [
         { id: "direct", title: "確認發佈日期", done: false, createdAt: 10, updatedAt: 10 },

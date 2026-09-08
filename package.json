@@ -1,6 +1,6 @@
 {
   "name": "chengjing",
-  "version": "0.10.4",
+  "version": "0.10.5",
   "private": true,
   "author": "Techtarian",
   "description": "澄境 ChengJing — 本機優先的繁體中文視覺筆記與 AI 研究桌面應用",
@@ -51,6 +51,8 @@
     "qa:pdf-viewer": "node scripts/qa-pdf-viewer.mjs",
     "qa:ai-actions": "node scripts/qa-ai-actions.mjs",
     "qa:ai-permissions": "node scripts/qa-ai-permissions.mjs",
+    "qa:google-disconnect": "node scripts/qa-google-disconnect.mjs",
+    "qa:workspace-wishes": "node scripts/qa-workspace-wishes.mjs",
     "qa:openrouter-routing": "node scripts/qa-openrouter-routing.mjs",
     "qa:employee-workday": "node scripts/qa-employee-workday.mjs",
     "qa:wish-pool": "node scripts/qa-wish-pool.mjs",

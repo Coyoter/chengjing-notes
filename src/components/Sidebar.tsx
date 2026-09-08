@@ -1,4 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import { moveSidebarItem, normalizeSidebarOrder } from "../lib/sidebarOrder";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   Archive,
@@ -52,6 +54,13 @@ export function Sidebar() {
   const view = useAppStore((state) => state.view);
   const selectedBoardId = useAppStore((state) => state.selectedBoardId);
   const collapsed = useAppStore((state) => state.sidebarCollapsed);
+  const sidebarOrder = useAppStore(state => state.sidebarOrder);
+  const setSidebarOrder = useAppStore(state => state.setSidebarOrder);
+  const desktop = window.chengjing?.platform !== "android";
+  const reducedMotion = useReducedMotion();
+  const dragSource = useRef<AppView | null>(null);
+  const [dropTarget, setDropTarget] = useState<AppView | null>(null);
+  const orderedNav = normalizeSidebarOrder(desktop ? sidebarOrder : undefined).map(id => nav.find(item => item.view === id)!);
   const rightPanel = useAppStore((state) => state.rightPanel);
   const language = useAppStore((state) => state.language);
   const setView = useAppStore((state) => state.setView);
@@ -105,28 +114,44 @@ export function Sidebar() {
       </button>
 
       <nav className="primary-nav" aria-label={t("nav.primary")}>
-        {nav.map((item) => {
+        {orderedNav.map((item) => {
           const Icon = item.icon;
           const label = t(item.label);
           const badge = item.badge === "tasks" ? taskCount : 0;
           return (
-            <button
+            <motion.button
+              layout="position"
+              transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 450, damping: 35 }}
               key={item.view}
               type="button"
-              className={view === item.view ? "is-active" : ""}
-              onPointerEnter={() => prepareView(item.view)}
+              className={`${view === item.view ? "is-active" : ""}${dropTarget === item.view ? " is-reorder-target" : ""}`}
+              draggable={desktop}
+              data-nav-id={item.view}
+              onDragStartCapture={(event) => { if (!desktop) return; cancelPrepareView(); dragSource.current = item.view; event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/x-chengjing-navigation", item.view); }}
+              onDragOver={(event) => { if (!desktop || !dragSource.current) return; event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropTarget(item.view); }}
+              onDragLeave={() => setDropTarget(null)}
+              onDrop={(event) => { if (!desktop || !dragSource.current) return; event.preventDefault(); setSidebarOrder(moveSidebarItem(sidebarOrder, dragSource.current, item.view)); dragSource.current = null; setDropTarget(null); }}
+              onDragEndCapture={() => { dragSource.current = null; setDropTarget(null); }}
+              onKeyDown={(event) => {
+                if (!desktop || !event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+                event.preventDefault();
+                const order = normalizeSidebarOrder(sidebarOrder); const index = order.indexOf(item.view);
+                const target = order[index + (event.key === "ArrowUp" ? -1 : 1)];
+                if (target) setSidebarOrder(moveSidebarItem(order, item.view, target));
+              }}
+              onPointerEnter={() => { if (!dragSource.current) prepareView(item.view); }}
               onPointerLeave={cancelPrepareView}
-              onPointerDown={() => prepareViewNow(item.view)}
+              onPointerDown={() => { if (!desktop) prepareViewNow(item.view); }}
               onFocus={() => prepareViewNow(item.view)}
               onClick={() => setView(item.view)}
               aria-current={view === item.view ? "page" : undefined}
               aria-label={label}
-              title={collapsed ? label : undefined}
+              title={collapsed ? label : desktop ? `${label} · ${language.startsWith("zh") ? "拖曳排序，或按 Alt＋↑／↓" : "Drag to reorder, or Alt + ↑ / ↓"}` : undefined}
             >
               <Icon size={17} />
               {!collapsed && <span>{label}</span>}
               {!collapsed && badge > 0 && <b className="nav-badge">{badge}</b>}
-            </button>
+            </motion.button>
           );
         })}
       </nav>

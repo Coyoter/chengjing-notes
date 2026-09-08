@@ -20,3 +20,9 @@ export function syncStatusKind(enabled: boolean, working: boolean, error: string
 export function googleSyncNeedsAuthorization(error: string) {
   return /AUTH_REQUIRED|Google authorization required/i.test(error);
 }
+
+export function resetSyncActivity() {
+  localStorage.removeItem("chengjing-sync-last-success");
+  activity = { phase: "idle", error: "", lastSuccessAt: 0 };
+  listeners.forEach(listener => listener());
+}

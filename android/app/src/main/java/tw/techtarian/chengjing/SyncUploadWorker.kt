@@ -13,14 +13,15 @@ class SyncUploadWorker(context:Context,params:WorkerParameters):Worker(context,p
     override fun doWork():Result{
         if(!applicationContext.getSharedPreferences("settings",Context.MODE_PRIVATE).getBoolean("sync-enabled",false))return Result.success()
         val services=NativeServices(applicationContext)
+        val authorizationEpoch=services.googleAuthorizationEpoch()
         try{
             val auth=Tasks.await(Identity.getAuthorizationClient(applicationContext).authorize(AuthorizationRequest.builder().setRequestedScopes(listOf(Scope("https://www.googleapis.com/auth/drive.appdata"))).build()),30,TimeUnit.SECONDS)
             if(auth.hasResolution()){
-                services.googleAuthorizationRequired()
+                services.googleAuthorizationRequired(authorizationEpoch)
                 return Result.failure(workDataOf("error" to GoogleAuthorizationPolicy.AUTH_REQUIRED))
             }
             if(isStopped||!applicationContext.getSharedPreferences("settings",Context.MODE_PRIVATE).getBoolean("sync-enabled",false))return Result.success()
-            try { services.acceptGoogleToken(auth.accessToken) }
+            try { services.acceptGoogleToken(auth.accessToken, authorizationEpoch) }
             catch (error: IllegalStateException) {
                 if(error.message == GoogleAuthorizationPolicy.AUTH_ERROR)
                     return Result.failure(workDataOf("error" to GoogleAuthorizationPolicy.AUTH_REQUIRED))
@@ -42,7 +43,7 @@ class SyncUploadWorker(context:Context,params:WorkerParameters):Worker(context,p
         }catch(error:Exception){
             val cause = error.cause ?: error
             if(cause is com.google.android.gms.common.api.ApiException && GoogleAuthorizationPolicy.requiresInteraction(cause.statusCode)) {
-                services.googleAuthorizationRequired()
+                services.googleAuthorizationRequired(authorizationEpoch)
                 return Result.failure(workDataOf("error" to GoogleAuthorizationPolicy.AUTH_REQUIRED))
             }
             return if(runAttemptCount<5)Result.retry()else Result.failure()

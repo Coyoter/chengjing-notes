@@ -21,6 +21,11 @@ function serializeSyncWorkspace<T>(operation: () => Promise<T>): Promise<T> {
   syncWorkspaceTail = result.then(() => undefined, () => undefined);
   return result;
 }
+
+export function withPausedSyncWorkspace<T>(operation: () => Promise<T>): Promise<T> {
+  localStorage.removeItem("chengjing-sync-enabled");
+  return serializeSyncWorkspace(operation);
+}
 function withLocalAsset(value: Record<string, unknown>, asset?: Record<string, unknown>) {
   return asset ? { ...value, storage: asset.storage, relativePath: asset.relativePath } : value;
 }

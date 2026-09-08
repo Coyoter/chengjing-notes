@@ -9,7 +9,7 @@ internal object GoogleAuthorizationPolicy {
         ?: throw IllegalStateException(AUTH_ERROR)
 
     fun connected(token: String?, state: String?): Boolean =
-        !token.isNullOrBlank() && state != AUTH_REQUIRED
+        !token.isNullOrBlank() && state != AUTH_REQUIRED && state != "DISCONNECTED"
 
     // Google CommonStatusCodes: SIGN_IN_REQUIRED and RESOLUTION_REQUIRED.
     fun requiresInteraction(statusCode: Int) = statusCode == 4 || statusCode == 6

@@ -15,7 +15,6 @@ const {
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
-const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 const APP_PROPERTY = "chengjing-cloud-backup-v1";
@@ -520,14 +519,8 @@ function createGoogleDriveBackupService(options) {
 
   async function disconnect() {
     syncRecovery.setEnabled(false);
-    const token = await loadToken().catch(() => null);
-    if (token?.refreshToken || token?.accessToken) {
-      await timedFetch(REVOKE_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ token: token.refreshToken || token.accessToken }).toString(),
-      }).catch(() => {});
-    }
+    // Local unlink is not account-wide OAuth revocation. Other devices and
+    // existing Drive data must keep their authorization and content.
     tokenCache = null;
     await clearSecureToken(userDataDirectory);
     const current = await settings();

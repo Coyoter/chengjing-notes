@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Check, CheckCircle2, CheckSquare2, Circle, Columns3, LayoutGrid, ListTodo, Pin, Plus, Search, Square, Table2, Trash2, X } from "lucide-react";
+import { Archive, Check, CheckCircle2, CheckSquare2, Circle, Columns3, LayoutGrid, ListTodo, Pin, Plus, Search, Square, Table2, Trash2, X } from "lucide-react";
+import { EmptyTrashButton } from "../components/EmptyTrashButton";
+import { cardInDatabaseScope, type ContentScope } from "../lib/databaseScope";
 import { createTag, db, deleteCardPermanently, moveCardToTrash } from "../db";
 import { useAppStore } from "../store";
 import type { CardRecord, TaskRecord } from "../types";
@@ -17,7 +19,6 @@ import { ChevronDown } from "lucide-react";
 
 const stages = ["待整理", "研究中", "進行中", "已驗證", "已整理", "完成"];
 const stageKeys: Record<string, MessageKey> = { 待整理: "stage.unsorted", 研究中: "stage.research", 進行中: "stage.progress", 已驗證: "stage.verified", 已整理: "stage.organized", 完成: "stage.done" };
-type ContentScope = "all" | "cards" | "tasks" | "pinned";
 
 export function DatabaseView() {
   const [organizerOpen,setOrganizerOpen]=useState(false);
@@ -37,6 +38,7 @@ export function DatabaseView() {
   const { language, t } = useI18n();
   const tags = useLiveQuery(() => db.tags.orderBy("name").toArray(), [], []);
   const trashCardIds = useLiveQuery(() => db.cards.where("state").equals("trash").primaryKeys(), [], []);
+  const archivedCount = useLiveQuery(() => db.cards.where("state").equals("archived").count(), [], 0);
   const trashCardSet = useMemo(() => new Set(trashCardIds), [trashCardIds]);
   const selectedTag = tags.find((tag) => tag.id === selectedTagId);
   const taggedCardIds = useLiveQuery(async () => selectedTagId
@@ -44,10 +46,7 @@ export function DatabaseView() {
     : [], [selectedTagId], []);
   const taggedCardSet = useMemo(() => new Set(taggedCardIds), [taggedCardIds]);
   const normalized = query.trim().toLocaleLowerCase(language);
-  const cardMatches = (card: CardRecord) => card.state !== "trash"
-    && isMaterializedCard(card)
-    && scope !== "tasks"
-    && (scope !== "pinned" || card.favorite)
+  const cardMatches = (card: CardRecord) => cardInDatabaseScope(card, scope)
     && (!selectedTagId || card.tagIds.includes(selectedTagId))
     && includesQuery(`${card.title} ${card.plainText}`, query, language);
   const cards = useLiveQuery(async () => {
@@ -59,7 +58,7 @@ export function DatabaseView() {
     return [...new Map([...pinned, ...recent].map((card) => [card.id, card])).values()].sort((left, right) => Number(right.favorite) - Number(left.favorite) || right.updatedAt - left.updatedAt).slice(0, displayLimit);
   }, [displayLimit, language, query, scope, selectedTagId], []);
   const tasks = useLiveQuery(async () => {
-    if (scope === "cards" || scope === "pinned") return [];
+    if (scope === "cards" || scope === "pinned" || scope === "archive" || scope === "trash") return [];
     const candidates = await searchRecords(db.tasks, query, language, (task) => (!task.cardId || !trashCardSet.has(task.cardId)) && (!selectedTagId || Boolean(task.cardId && taggedCardSet.has(task.cardId))) && includesQuery(task.title, query, language), displayLimit);
     const filtered = candidates;
     const sourceCards = await db.cards.bulkGet([...new Set(filtered.map((task) => task.cardId).filter(Boolean) as string[])]);
@@ -79,14 +78,14 @@ export function DatabaseView() {
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
   const totalFiltered = useLiveQuery(async () => {
     const cardCount = scope === "tasks" ? 0 : await db.cards.filter(cardMatches).count();
-    if (scope === "cards" || scope === "pinned") return cardCount;
+    if (scope === "cards" || scope === "pinned" || scope === "archive" || scope === "trash") return cardCount;
     const taskCount = await db.tasks.filter((task) => (!task.cardId || !trashCardSet.has(task.cardId)) && (!selectedTagId || Boolean(task.cardId && taggedCardSet.has(task.cardId))) && includesQuery(task.title, query, language)).count();
     return cardCount + taskCount;
   }, [language, normalized, query, scope, selectedTagId, taggedCardIds.join("|"), trashCardIds.join("|")], 0);
   const databaseCounts = useLiveQuery(async () => {
     const [allCards, pinnedCards, allTasks, tagCounts] = await Promise.all([
-      db.cards.filter((card) => card.state !== "trash" && isMaterializedCard(card)).count(),
-      db.cards.filter((card) => card.state !== "trash" && card.favorite && isMaterializedCard(card)).count(),
+      db.cards.filter((card) => cardInDatabaseScope(card, "cards")).count(),
+      db.cards.filter((card) => cardInDatabaseScope(card, "pinned")).count(),
       db.tasks.filter((task) => !task.cardId || !trashCardSet.has(task.cardId)).count(),
       Promise.all(tags.map(async (tag) => {
         const cardIds = (await db.cards.where("tagIds").equals(tag.id).filter((card) => card.state !== "trash" && isMaterializedCard(card)).primaryKeys()).map(String);
@@ -131,7 +130,7 @@ export function DatabaseView() {
   function activateTask() { if (!selectionMode) setView("tasks"); }
   function taskDue(task: TaskRecord) { return task.dueAt ? taskCopyFormat(copy.due, { date: new Intl.DateTimeFormat(language, { year: "numeric", month: "short", day: "numeric" }).format(task.dueAt) }) : copy.noDue; }
   function tagNames(ids: string[]) { return ids.slice(0, 3).map((id) => tags.find((tag) => tag.id === id)?.name).filter(Boolean); }
-  function scopeTitle() { if (selectedTag) return selectedTag.name; return scope === "tasks" ? copy.tasksOnly : scope === "cards" ? copy.cardsOnly : scope === "pinned" ? t("database.pinned") : copy.allContent; }
+  function scopeTitle() { if (selectedTag) return selectedTag.name; return scope === "archive" ? t("library.archive") : scope === "trash" ? t("library.trash") : scope === "tasks" ? copy.tasksOnly : scope === "cards" ? copy.cardsOnly : scope === "pinned" ? t("database.pinned") : copy.allContent; }
 
   return <div className="database-page">
     <button type="button" className="mobile-section-picker" onClick={()=>setOrganizerOpen(true)} aria-expanded={organizerOpen}><Table2 size={18}/><span>{selectedTag?.name || t("nav.database")}</span><ChevronDown size={17}/></button>
@@ -144,6 +143,8 @@ export function DatabaseView() {
       <button type="button" className={scope === "cards" && selectedTagId === null ? "is-active" : ""} aria-pressed={scope === "cards" && selectedTagId === null} onClick={() => chooseScope("cards")}><Table2 size={15} /><span>{copy.cardsOnly}</span><b>{databaseCounts.allCards}</b></button>
       <button type="button" className={scope === "pinned" && selectedTagId === null ? "is-active" : ""} aria-pressed={scope === "pinned" && selectedTagId === null} onClick={() => chooseScope("pinned")}><Pin size={15} /><span>{t("database.pinned")}</span><b>{databaseCounts.pinnedCards}</b></button>
       <button type="button" className={scope === "tasks" && selectedTagId === null ? "is-active" : ""} aria-pressed={scope === "tasks" && selectedTagId === null} onClick={() => chooseScope("tasks")}><ListTodo size={15} /><span>{copy.tasksOnly}</span><b>{databaseCounts.allTasks}</b></button>
+      <button type="button" className={scope === "archive" ? "is-active" : ""} aria-pressed={scope === "archive"} onClick={() => chooseScope("archive")}><Archive size={15}/><span>{t("library.archive")}</span><b>{archivedCount}</b></button>
+      <button type="button" className={scope === "trash" ? "is-active" : ""} aria-pressed={scope === "trash"} onClick={() => chooseScope("trash")}><Trash2 size={15}/><span>{t("library.trash")}</span><b>{trashCardIds.length}</b></button>
       <h3>{t("database.byTag")}</h3>
       {tags.map((tag) => <button type="button" key={tag.id} className={selectedTagId === tag.id ? "is-active" : ""} aria-pressed={selectedTagId === tag.id} onClick={() => setSelectedTagId(tag.id)} onContextMenu={(event) => showContextMenuFromPointer(event, { kind: "tag", id: tag.id })}><i className={`tone-${tag.color}`} /><span>{tag.name}</span><b>{databaseCounts.tagCounts[tag.id] || 0}</b></button>)}
     </div>
@@ -152,6 +153,7 @@ export function DatabaseView() {
       <header className="database-header">
         <div><span>{selectedTag ? t("database.filterByTag") : t("database.structured")}</span><h2>{scopeTitle()}</h2><small>{taskCopyFormat(copy.matching, { count: totalFiltered })}</small></div>
         <div className="database-tools">
+          {scope === "trash" && <EmptyTrashButton disabled={bulkBusy} onBusyChange={setBulkBusy} onComplete={leaveSelectionMode}/>}
           <label className="inline-search"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("database.search")} /></label>
           {scope !== "tasks" && <button type="button" className={selectionMode ? "database-select-mode is-active" : "database-select-mode"} onClick={() => selectionMode ? leaveSelectionMode() : setSelectionMode(true)}><CheckSquare2 size={15} />{t("database.batch")}</button>}
           <div className="view-toggle"><button type="button" className={layout === "table" ? "is-active" : ""} onClick={() => setLayout("table")} aria-label={t("database.table")}><Table2 size={16} /></button><button type="button" className={layout === "kanban" ? "is-active" : ""} onClick={() => setLayout("kanban")} aria-label={t("database.kanban")}><Columns3 size={16} /></button></div>
@@ -166,7 +168,7 @@ export function DatabaseView() {
         <button type="button" className="bulk-close" onClick={leaveSelectionMode} aria-label={t("database.endBatch")}><X size={16} /></button>
       </div>}
 
-      {layout === "table" ? <div className="data-table-wrap"><table className="data-table">
+      {(scope === "trash" || scope === "archive") && totalFiltered === 0 ? <div className="database-empty-state" role="status">{scope === "trash" ? <Trash2 size={25}/> : <Archive size={25}/>}<p>{copy.empty}</p></div> : layout === "table" ? <div className="data-table-wrap"><table className="data-table">
         <thead><tr>{selectionMode && <th className="selection-column"><button type="button" onClick={toggleAllFiltered} aria-label={allFilteredSelected ? t("database.cancelSelectAll") : t("database.selectAll")}>{allFilteredSelected ? <CheckSquare2 size={16} /> : <Square size={16} />}</button></th>}<th>{t("database.name")}</th><th>{t("database.type")}</th><th>{copy.status}</th><th>{copy.tagsAndDue}</th><th>{t("database.updated")}</th></tr></thead>
         <tbody>
           {displayedCards.map((card) => <tr key={`card:${card.id}`} className={selectedIds.has(card.id) ? "is-selected" : ""} onClick={() => selectionMode && toggleCard(card.id)} onDoubleClick={() => !selectionMode && openCard(card.id)} onContextMenu={(event) => showContextMenuFromPointer(event, { kind: "card", id: card.id })}>

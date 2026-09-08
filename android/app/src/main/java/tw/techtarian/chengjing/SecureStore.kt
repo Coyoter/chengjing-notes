@@ -20,7 +20,7 @@ class SecureStore(context: Context) {
         }.generateKey()
     }
     @Synchronized fun put(name: String, value: String) {
-        if (value.isEmpty()) { prefs.edit().remove(name).commit(); return }
+        if (value.isEmpty()) { check(prefs.edit().remove(name).commit()); return }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE, key())
         cipher.updateAAD(name.toByteArray())
         check(prefs.edit().putString(name, Base64.encodeToString(cipher.iv + cipher.doFinal(value.toByteArray()), Base64.NO_WRAP)).commit())

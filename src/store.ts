@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import dayjs from "dayjs";
+import { DEFAULT_SIDEBAR_ORDER, normalizeSidebarOrder } from "./lib/sidebarOrder";
 import type { AIEngine, AppLanguage, AppView, OpenRouterRoutingMode, ThemeMode } from "./types";
 
 interface AppState {
@@ -15,6 +16,7 @@ interface AppState {
   createCardCollectionId: string | null;
   importOpen: boolean;
   sidebarCollapsed: boolean;
+  sidebarOrder: AppView[];
   showMiniMap: boolean;
   theme: ThemeMode;
   aiEngine: AIEngine;
@@ -48,6 +50,7 @@ interface AppState {
   setCreateCardOpen: (open: boolean, collectionId?: string | null) => void;
   setImportOpen: (open: boolean) => void;
   setSidebarCollapsed: (value: boolean) => void;
+  setSidebarOrder: (value: AppView[]) => void;
   setShowMiniMap: (value: boolean) => void;
   setTheme: (theme: ThemeMode) => void;
   setAIEngine: (engine: AIEngine) => void;
@@ -102,6 +105,7 @@ export const useAppStore = create<AppState>()(
       createCardCollectionId: null,
       importOpen: false,
       sidebarCollapsed: false,
+      sidebarOrder: DEFAULT_SIDEBAR_ORDER,
       showMiniMap: false,
       theme: "system",
       aiEngine: "openrouter",
@@ -135,6 +139,7 @@ export const useAppStore = create<AppState>()(
       setCreateCardOpen: (createCardOpen, createCardCollectionId = null) => set({ createCardOpen, createCardCollectionId }),
       setImportOpen: (importOpen) => set({ importOpen }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+      setSidebarOrder: (sidebarOrder) => set({ sidebarOrder: normalizeSidebarOrder(sidebarOrder) }),
       setShowMiniMap: (showMiniMap) => set({ showMiniMap }),
       setTheme: (theme) => set({ theme }),
       setAIEngine: (aiEngine) => set({ aiEngine }),
@@ -152,6 +157,7 @@ export const useAppStore = create<AppState>()(
       name: "chengjing-ui",
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
+        sidebarOrder: state.sidebarOrder,
         showMiniMap: state.showMiniMap,
         theme: state.theme,
         aiEngine: state.aiEngine,

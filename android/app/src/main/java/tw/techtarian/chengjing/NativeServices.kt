@@ -22,7 +22,7 @@ import java.time.ZoneOffset
 import androidx.documentfile.provider.DocumentFile
 
 class NativeServices(private val context: Context, private val backupApp: String = "chengjing-cloud-backup-v1", stateName: String = "settings", private val clock: () -> Long = { System.currentTimeMillis() }) {
-    companion object { private val syncUploadLock = Any() }
+    companion object { private val syncUploadLock = Any(); private val googleAuthLock = Any() }
     val store = SecureStore(context)
     private val inference by lazy { LocalInference(context) }
     private val prefs = context.getSharedPreferences(stateName, Context.MODE_PRIVATE)
@@ -87,15 +87,29 @@ class NativeServices(private val context: Context, private val backupApp: String
 
     fun suspendSyncRecovery() { syncRecoveryBridge.invalidate() }
 
-    fun googleAuthorizationRequired() {
-        check(prefs.edit().putString("google-auth-state", GoogleAuthorizationPolicy.AUTH_REQUIRED).commit())
+    fun googleAuthorizationEpoch(): Long = prefs.getLong("google-auth-epoch", 0)
+
+    fun googleAuthorizationRequired(epoch: Long = googleAuthorizationEpoch()) = synchronized(googleAuthLock) {
+        if (epoch == googleAuthorizationEpoch()) check(prefs.edit().putString("google-auth-state", GoogleAuthorizationPolicy.AUTH_REQUIRED).commit())
     }
 
-    fun acceptGoogleToken(value: String?) {
+    fun acceptGoogleToken(value: String?, epoch: Long = googleAuthorizationEpoch()) = synchronized(googleAuthLock) {
+        check(epoch == googleAuthorizationEpoch()) { "Google connection changed; reconnect your account" }
         val token = try { GoogleAuthorizationPolicy.requireToken(value) }
             catch (error: IllegalStateException) { googleAuthorizationRequired(); throw error }
         store.put("google-token", token)
         check(prefs.edit().putString("google-auth-state", "AUTHORIZED").commit())
+    }
+
+    private fun disconnectGoogle(): JSONObject {
+        suspendSyncRecovery()
+        synchronized(googleAuthLock) {
+            check(prefs.edit().putBoolean("sync-enabled", false).putString("google-auth-state", "DISCONNECTED").putLong("google-auth-epoch", googleAuthorizationEpoch() + 1).commit())
+            store.put("google-token", "")
+        }
+        androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-upload")
+        androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-recovery")
+        return JSONObject().put("connected", false)
     }
 
     private fun googleConnected() = GoogleAuthorizationPolicy.connected(
@@ -138,7 +152,7 @@ class NativeServices(private val context: Context, private val backupApp: String
         "ai.openRouterChat", "ai.providerChat" -> chat(args,method=="ai.openRouterChat")
         "web.fetch" -> { val url=args.getString("url"); require(Uri.parse(url).scheme=="https"); http.newCall(Request.Builder().url(url).build()).execute().use{ response->require(response.isSuccessful); JSONObject().put("html",response.body!!.string()).put("url",url) } }
         "google.status" -> JSONObject().put("connected",googleConnected()).put("authorizationState",prefs.getString("google-auth-state", "UNKNOWN"))
-        "google.disconnect" -> { suspendSyncRecovery();store.put("google-token","");prefs.edit().putBoolean("sync-enabled",false).commit();androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-upload");androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-recovery");JSONObject().put("connected",false) }
+        "google.disconnect" -> disconnectGoogle()
         "sync.pause" -> {suspendSyncRecovery();prefs.edit().putBoolean("sync-enabled",false).commit();androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-upload");androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-recovery");JSONObject()}
         "sync.resume" -> {prefs.edit().putBoolean("sync-enabled",true).commit();SyncUploadWorker.enqueue(context);JSONObject()}
         "syncRecovery.setEnabled", "syncRecovery.getStatus", "syncRecovery.createDaily",

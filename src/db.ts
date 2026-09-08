@@ -6,6 +6,7 @@ import dayjs from "dayjs";
 import { intlLocale, translate } from "./i18n";
 import { useAppStore } from "./store";
 import { cardSearchTerms, fragmentSearchTerms, taskSearchTerms } from "./lib/searchIndex";
+import { taskCompletionPatch } from "./lib/taskCompletion";
 import { inferJournalTouched, isMaterializedCard } from "./lib/journalVisibility";
 import {
   isUntouchedLegacyDemoCard,
@@ -168,8 +169,8 @@ class ChengJingDatabase extends Dexie {
       }
       return patch;
     });
-    this.tasks.hook("creating", (_key, task) => { task.searchTerms = taskSearchTerms(task, useAppStore.getState().language || "zh-TW"); task.doneKey = task.done ? "done" : "active"; task.scheduleKey = task.dueAt || Number.MAX_SAFE_INTEGER; });
-    this.tasks.hook("updating", (modifications, _key, oldTask) => { const task = { ...oldTask, ...modifications } as TaskRecord; return { searchTerms: taskSearchTerms(task, useAppStore.getState().language || "zh-TW"), doneKey: task.done ? "done" : "active", scheduleKey: task.dueAt || Number.MAX_SAFE_INTEGER }; });
+    this.tasks.hook("creating", (_key, task) => { task.searchTerms = taskSearchTerms(task, useAppStore.getState().language || "zh-TW"); task.doneKey = task.done ? "done" : "active"; task.scheduleKey = task.dueAt || Number.MAX_SAFE_INTEGER; Object.assign(task, taskCompletionPatch(task, {})); });
+    this.tasks.hook("updating", (modifications, _key, oldTask) => { const task = { ...oldTask, ...modifications } as TaskRecord; return { searchTerms: taskSearchTerms(task, useAppStore.getState().language || "zh-TW"), doneKey: task.done ? "done" : "active", scheduleKey: task.dueAt || Number.MAX_SAFE_INTEGER, ...taskCompletionPatch(oldTask, modifications) }; });
     this.fragments.hook("creating", (_key, fragment) => { fragment.searchTerms = fragmentSearchTerms(fragment, useAppStore.getState().language || "zh-TW"); fragment.pinnedKey = fragment.pinned ? "pinned" : "normal"; });
     this.fragments.hook("updating", (modifications, _key, oldFragment) => { const fragment = { ...oldFragment, ...modifications } as FragmentRecord; return { searchTerms: fragmentSearchTerms(fragment, useAppStore.getState().language || "zh-TW"), pinnedKey: fragment.pinned ? "pinned" : "normal" }; });
     const committedMutations = new WeakMap<Transaction, Array<Record<string, unknown>>>();

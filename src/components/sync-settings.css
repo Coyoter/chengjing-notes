@@ -48,3 +48,14 @@
 .android-update-settings > a { min-height:48px; text-decoration:none; }
 @media(prefers-reduced-motion:reduce) { .sync-settings .spin { animation:none; } }
 .sync-recovery-hint { margin: 16px 0; color: var(--text-muted); font-size: calc(13px * var(--font-scale, 1)); line-height: 1.65; }
+.sync-account-control { margin:0 15px 16px; }
+.sync-account-control p { margin:0; color:var(--text-muted); font-size:calc(13px * var(--font-scale)); line-height:1.65; }
+.sync-unlink-trigger { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:8px 10px; background:transparent; color:var(--text-muted); border:0; border-radius:8px; font:inherit; font-size:calc(13px * var(--font-scale)); }
+.sync-unlink-trigger:hover:not(:disabled) { color:var(--text-1); background:var(--surface-2); }
+.sync-unlink-confirm { margin-top:8px; padding:16px; border-radius:10px; background:var(--surface-1); display:grid; gap:10px; }
+.sync-unlink-confirm strong { font-size:calc(14px * var(--font-scale)); line-height:1.5; }
+.sync-unlink-confirm > div { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
+.sync-unlink-confirm button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:10px 14px; border:0; border-radius:8px; background:var(--surface-2); color:var(--text-1); font:inherit; font-size:calc(13px * var(--font-scale)); line-height:1.5; }
+.sync-unlink-confirm .sync-unlink-submit { color:var(--danger); }
+.sync-account-control button:focus-visible { outline:2px solid var(--accent-strong); outline-offset:2px; }
+@media (prefers-reduced-motion:no-preference) { .sync-account-control button { transition:background-color 160ms ease,color 160ms ease; } }

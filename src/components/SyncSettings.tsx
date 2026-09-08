@@ -14,6 +14,7 @@ import { SyncRecoverySection } from "./SyncRecoverySection";
 import { SyncRecoveryPanel } from "./SyncRecoveryPanel";
 import { syncRecovery } from "../lib/syncRecoveryRuntime";
 import { CloudBackupImport } from "./CloudBackupImport";
+import { GoogleDisconnectControl } from "./GoogleDisconnectControl";
 
 export function syncTransport() {
   const bridge = window.chengjing?.sync;
@@ -120,6 +121,8 @@ export function SyncSettings() {
       {enabled&&<button type="button" className="sync-pause-button" onClick={()=>void pause()}><Pause size={15}/><span>{zh?"暫停同步":"Pause sync"}</span></button>}
     </div>
     {message&&<div className="sync-error" role="alert"><AlertTriangle size={16}/><p>{message}</p></div>}
+    <GoogleDisconnectControl language={language} enabled={enabled} blocked={working || toolsBusy || recoveryState.phase !== "idle"}
+      onBusyChange={setBusy} onDisconnected={() => setEnabled(false)} onError={setError}/>
     <SyncRecoverySection language={language} onOpen={() => {
       if (!toolsBusy && syncEnabled() && window.chengjing?.syncRecovery) {
         void syncRecovery.refresh().catch(() => {});

@@ -150,6 +150,7 @@ export interface TaskRecord {
   id: string;
   title: string;
   done: boolean;
+  completedAt?: number;
   cardId?: string;
   sourceTaskId?: string;
   conversionKey?: string;
