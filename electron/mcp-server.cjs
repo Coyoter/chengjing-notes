@@ -28,12 +28,14 @@ function toolError(error) {
 
 function summary(tool, args) {
   const labels = {
+    chengjing_list_records: "分頁讀取工作內容", chengjing_action_schema: "讀取批次動作格式", chengjing_apply_actions: "批次修改工作內容",
+    chengjing_delete_items: "批次刪除工作內容", chengjing_manage_metadata: "整理分類與內容", chengjing_update_fields: "修改內容屬性",
     chengjing_status: "讀取工作區狀態", chengjing_search: "搜尋澄境", chengjing_get_item: "讀取澄境項目",
     chengjing_create_note: "新增筆記", chengjing_update_note: "修改筆記", chengjing_create_task: "新增待辦", chengjing_update_task: "修改待辦",
     chengjing_create_whiteboard: "新增白板", chengjing_update_whiteboard: "修改白板", chengjing_add_whiteboard_item: "加入白板項目", chengjing_move_whiteboard_item: "移動白板項目",
     chengjing_create_kanban: "新增看板", chengjing_update_kanban: "修改看板", chengjing_create_neuron: "新增神經元內容", chengjing_connect_neurons: "連結神經元",
   };
-  const detail = [args?.title, args?.query, args?.id, args?.boardId, args?.operation].find((item) => typeof item === "string" && item.trim());
+  const detail = [args?.plan?.summary, args?.title, args?.query, args?.id, args?.boardId, args?.operation, args?.table].find((item) => typeof item === "string" && item.trim());
   return `${labels[tool] || tool}${detail ? ` · ${String(detail).trim().slice(0, 100)}` : ""}`;
 }
 
@@ -61,6 +63,36 @@ function buildMcpServer(execute, version = "0.0.0") {
     title: "Read a ChengJing item / 讀取澄境項目",
     description: "Read one item by exact ID. For a neuron, also provide neuronType: card, board, task or fragment. / 依 ID 讀取單一項目。",
     inputSchema: z.object({ type: z.enum(["note", "whiteboard", "kanban", "task", "fragment", "neuron"]), id: z.string().min(1).max(180), neuronType: z.enum(["card", "board", "task", "fragment"]).optional() }), annotations: read,
+  });
+  register("chengjing_list_records", {
+    title: "List workspace records / 分頁讀取工作區資料",
+    description: "Enumerate all records, including trash. Follow nextCursor as after until null. Long text is chunked: contentRanges reports each field's total length/nextOffset; pass id and contentOffset to continue that record. No total content ceiling. Account settings/secrets and attachment bytes/paths are excluded. / 分頁及分段讀取完整文字，不受搜尋前幾筆限制。",
+    inputSchema: z.object({ table: z.enum(["cards", "boards", "boardNodes", "boardEdges", "kanbanBoards", "kanbanLists", "kanbanPlacements", "tags", "tasks", "highlights", "attachments", "fragments", "knowledgeGroups", "chatThreads", "chatMessages", "cardVersions", "brainEdges", "brainReports", "brainShares"]), id: z.string().optional(), after: z.string().optional(), limit: z.number().int().min(1).max(100).optional(), contentOffset: z.number().int().nonnegative().optional(), contentLength: z.number().int().min(1).max(8000).optional() }), annotations: read,
+  });
+  register("chengjing_action_schema", {
+    title: "Read batch action schema / 讀取批次動作格式",
+    description: "Get the current built-in action schema before submitting chengjing_apply_actions. / 取得新增、修改、刪除及白板操作的完整欄位。",
+    inputSchema: z.object({}), annotations: read,
+  });
+  register("chengjing_apply_actions", {
+    title: "Apply batch actions / 執行批次動作",
+    description: "Apply the built-in action plan atomically; no 40-action truncation. Read chengjing_action_schema and exact record IDs first. Includes create/update/delete for notes, tasks, fragments, boards and board nodes/edges. Cards are trashed, other deletions remove records. This is an explicit write under the configured MCP permission, not a preview. / 整批執行，不逐筆要求確認；失敗整批回滾。",
+    inputSchema: z.object({ plan: z.object({ summary: z.string(), actions: z.array(z.record(z.string(), z.unknown())).min(1) }), boardId: z.string().optional() }), annotations: { ...update, idempotentHint: false },
+  });
+  register("chengjing_delete_items", {
+    title: "Delete selected or all content / 批次刪除內容",
+    description: "Delete exact ids or all:true in a content table. table:workspace with all:true clears work content and classifications, not conversations, credentials, sync bookkeeping or recovery points. Cards go to trash unless permanent:true. Attachment files are retained for recovery. Existing shared-brain sync may propagate changes/deletions to published copies; this call does not verify remote completion. / 支援整批與全部清除；已分享內容可能隨既有同步移除，永久刪除需明確指定。",
+    inputSchema: z.object({ table: z.enum(["workspace", "cards", "boards", "tasks", "fragments", "kanbanBoards", "kanbanLists", "kanbanPlacements", "tags", "knowledgeGroups", "highlights", "brainEdges", "brainReports"]), ids: z.array(z.string().min(1)).optional(), all: z.boolean().optional(), permanent: z.boolean().optional() }), annotations: update,
+  });
+  register("chengjing_manage_metadata", {
+    title: "Manage tags, groups, highlights and fragments / 整理分類與內容",
+    description: "Create/update tags by name; knowledgeGroups by name/kind/parentId; highlights by cardId/content/note/color/page; fragments by content/pinned. Update brainEdges reason; use connect_neurons to create relations. Delete with delete_items. / 操作標籤、知識分類、劃記、片語與關聯說明。",
+    inputSchema: z.object({ table: z.enum(["tags", "knowledgeGroups", "highlights", "brainEdges", "fragments"]), operation: z.enum(["create", "update"]), id: z.string().optional(), name: z.string().optional(), kind: z.enum(["area", "topic"]).optional(), parentId: z.string().optional(), cardId: z.string().optional(), content: z.string().optional(), note: z.string().optional(), color: z.string().optional(), page: z.number().int().positive().optional(), reason: z.string().optional(), pinned: z.boolean().optional() }), annotations: { ...update, idempotentHint: false },
+  });
+  register("chengjing_update_fields", {
+    title: "Update content fields / 修改內容屬性",
+    description: "cards: title/content(replace plain text)/favorite/tagIds/collectionId/color/properties/state/startAt/dueAt; boards: title/description/favorite/tagIds; fragments: text/pinned/tagIds; tasks: title/done/dueDate; kanbanBoards: title/description/favorite; boardNodes: title/text/color/x/y/width/height/collapsed. Existing tags and topic IDs required. Null detaches collection/dates. Immutable IDs, secrets and raw HTML are not fields. / 修改標籤、分類、表格屬性與白板節點等內容欄位。",
+    inputSchema: z.object({ table: z.enum(["cards", "boards", "fragments", "tasks", "kanbanBoards", "boardNodes"]), id: z.string().min(1), expectedUpdatedAt: z.number().optional(), fields: z.record(z.string(), z.unknown()) }), annotations: update,
   });
   register("chengjing_create_note", {
     title: "Create note / 新增筆記",
@@ -104,8 +136,8 @@ function buildMcpServer(execute, version = "0.0.0") {
   });
   register("chengjing_create_kanban", {
     title: "Create kanban board / 新增看板",
-    description: "Create a kanban board with up to 12 initial list names. / 建立看板與初始清單。",
-    inputSchema: z.object({ title: z.string().min(1).max(240), description: z.string().max(10000).optional(), lists: z.array(z.string().min(1).max(120)).max(12).optional() }), annotations: create,
+    description: "Create a kanban board with initial list names. / 建立看板與初始清單。",
+    inputSchema: z.object({ title: z.string().min(1).max(240), description: z.string().max(10000).optional(), lists: z.array(z.string().min(1).max(120)).optional() }), annotations: create,
   });
   register("chengjing_update_kanban", {
     title: "Update kanban / 修改看板",
@@ -126,8 +158,9 @@ function buildMcpServer(execute, version = "0.0.0") {
   server.registerResource("chengjing-capabilities", "chengjing://workspace/capabilities", {
     title: "ChengJing MCP capabilities", description: "Safety and data-model notes for agents", mimeType: "application/json",
   }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify({
-    transport: "local Streamable HTTP", accessModes: ["read-only", "ask", "allow"], permanentDelete: false,
-    optimisticConcurrency: "Call get_item before updates and pass its updatedAt.",
+    transport: "local Streamable HTTP", accessModes: ["read-only", "ask", "allow"], permanentCardDelete: true,
+    optimisticConcurrency: "Individual update tools require updatedAt. Batch actions use exact IDs without a version precondition.",
+    batchActions: "chengjing_apply_actions uses explicit IDs but has no expectedUpdatedAt field. Read current data before planning. It supports deletion; cards are trashed. Use list_records for paginated full content access.",
     neurons: "Cards, boards, tasks and fragments are neuron content; brainEdges connect them.",
   }, null, 2) }] }));
   return server;

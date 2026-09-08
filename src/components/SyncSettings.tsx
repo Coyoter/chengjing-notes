@@ -7,7 +7,7 @@ import { enableSync, synchronize, stagePendingSync } from "../lib/syncEngine";
 import { syncEnabled } from "../lib/syncJournal";
 import type { SyncRecord } from "../lib/syncProtocol";
 import { useI18n } from "../hooks/useI18n";
-import { getSyncActivity, subscribeSyncActivity, reportSyncActivity, syncStatusKind } from "../lib/syncActivity";
+import { getSyncActivity, subscribeSyncActivity, reportSyncActivity, syncStatusKind, googleSyncNeedsAuthorization } from "../lib/syncActivity";
 import "./sync-settings.css";
 import { SyncConflictReview } from "./SyncConflictReview";
 import { SyncRecoverySection } from "./SyncRecoverySection";
@@ -23,6 +23,7 @@ export function syncTransport() {
 
 function friendlySyncError(message: string, zh: boolean) {
   if (!message) return "";
+  if (googleSyncNeedsAuthorization(message)) return zh ? "請重新連結 Google 帳號，才能繼續同步。內容仍保存在這台裝置。" : "Reconnect your Google account to continue syncing. Your content remains on this device.";
   if (message === "sync-network-unavailable"
     || /Unable to resolve host|UnknownHostException|No address associated with hostname/i.test(message)) {
     return zh
@@ -75,7 +76,9 @@ export function SyncSettings() {
   const pending = useLiveQuery(() => db.table("syncOutbox").count(), [], 0);
   const conflicts = useLiveQuery(() => db.table("syncRecords").filter((row: SyncRecord) => Boolean(row.recovery?.length)).toArray() as Promise<SyncRecord[]>, [], []);
   const working = busy || activity.phase === "syncing";
-  const message = friendlySyncError(error || (activity.phase === "error" ? activity.error : ""), zh);
+  const rawError = error || (activity.phase === "error" ? activity.error : "");
+  const needsAuthorization = googleSyncNeedsAuthorization(rawError);
+  const message = friendlySyncError(rawError, zh);
   const kind = syncStatusKind(enabled, working, message, pending, activity.lastSuccessAt);
   const labels = zh ? {
     working:["正在同步", ""], error:["同步尚未完成", "資料仍保存在這台裝置，請稍後再試。"],
@@ -113,7 +116,7 @@ export function SyncSettings() {
     <div className={`sync-state is-${kind}`} role="status" aria-live="polite" aria-busy={working}>
       <StatusIcon size={21} className={working?"spin":""}/><div><b>{labels[kind][0]}</b>{labels[kind][1]&&<p>{labels[kind][1]}</p>}{activity.lastSuccessAt>0&&<small>{zh?"上次完成":"Last completed"} · {new Intl.DateTimeFormat(language,{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}).format(activity.lastSuccessAt)}</small>}</div>
     </div>
-    <div className="sync-actions"><button type="button" className="primary-button" disabled={working || toolsBusy || recoveryState.phase === "restoring"} onClick={()=>void(enabled?run():connect())}><RefreshCw size={17} className={working?"spin":""}/><span>{working?(zh?"正在同步…":"Syncing…"):enabled?(zh?"立即同步":"Sync now"):(zh?"啟用 Google 同步":"Enable Google sync")}</span></button>
+    <div className="sync-actions"><button type="button" className="primary-button" disabled={working || toolsBusy || recoveryState.phase === "restoring"} onClick={()=>void(enabled&&!needsAuthorization?run():connect())}><RefreshCw size={17} className={working?"spin":""}/><span>{working?(zh?"正在同步…":"Syncing…"):needsAuthorization?(zh?"重新連結 Google":"Reconnect Google"):enabled?(zh?"立即同步":"Sync now"):(zh?"啟用 Google 同步":"Enable Google sync")}</span></button>
       {enabled&&<button type="button" className="sync-pause-button" onClick={()=>void pause()}><Pause size={15}/><span>{zh?"暫停同步":"Pause sync"}</span></button>}
     </div>
     {message&&<div className="sync-error" role="alert"><AlertTriangle size={16}/><p>{message}</p></div>}

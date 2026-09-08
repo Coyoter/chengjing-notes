@@ -16,3 +16,7 @@ export function syncStatusKind(enabled: boolean, working: boolean, error: string
   if (pending > 0) return "pending";
   return lastSuccessAt ? "ready" : "waiting";
 }
+
+export function googleSyncNeedsAuthorization(error: string) {
+  return /AUTH_REQUIRED|Google authorization required/i.test(error);
+}

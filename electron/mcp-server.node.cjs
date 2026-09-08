@@ -46,11 +46,18 @@ test("本機 Streamable HTTP MCP 可被正式 Client 初始化、列出與呼叫
     assert.equal(tools.tools.some((item) => item.name === "chengjing_search"), true);
     assert.equal(tools.tools.some((item) => item.name === "chengjing_create_kanban"), true);
     assert.equal(tools.tools.some((item) => item.name === "chengjing_connect_neurons"), true);
+    assert.equal(tools.tools.some((item) => item.name === "chengjing_list_records"), true);
+    assert.equal(tools.tools.some((item) => item.name === "chengjing_apply_actions"), true);
     const status = await client.callTool({ name: "chengjing_status", arguments: {} });
     assert.deepEqual(status.structuredContent, { app: "ChengJing", ok: true });
     await client.callTool({ name: "chengjing_create_note", arguments: { title: "MCP 測試", content: "內容" } });
     assert.equal(calls[0].meta.write, false);
     assert.equal(calls[1].meta.write, true);
+    await client.callTool({ name: "chengjing_list_records", arguments: { table: "cards", limit: 100 } });
+    await client.callTool({ name: "chengjing_apply_actions", arguments: { plan: { summary: "Batch", actions: Array.from({ length: 80 }, (_, i) => ({ type: "create_task", title: `Task ${i}`, description: "create" })) } } });
+    assert.equal(calls[2].meta.write, false);
+    assert.equal(calls[3].meta.write, true);
+    assert.equal(calls[3].args.plan.actions.length, 80);
     await client.close();
   } finally { await server.stop(); }
 });

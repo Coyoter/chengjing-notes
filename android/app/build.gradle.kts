@@ -1,3 +1,6 @@
+import java.security.KeyStore
+import java.security.MessageDigest
+
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
 val signingFile = rootProject.file("signing/credentials.json")
 val signingValues = if (signingFile.exists()) groovy.json.JsonSlurper().parse(signingFile) as Map<*, *> else emptyMap<String,String>()
@@ -30,6 +33,26 @@ android {
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 }
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
+
+val verifyGoogleOAuthSigning = tasks.register("verifyGoogleOAuthSigning") {
+    group = "verification"
+    description = "Check local release signing against the recorded Android OAuth registration; does not verify Google Cloud."
+    doLast {
+        val config = groovy.json.JsonSlurper().parse(rootProject.file("google-oauth.json")) as Map<*, *>
+        check(config["package"] == android.defaultConfig.applicationId) { "OAuth package does not match applicationId" }
+        check(config["scope"] == "https://www.googleapis.com/auth/drive.appdata") { "Unexpected Google Drive scope" }
+        check((config["releaseClientId"] as? String)?.endsWith(".apps.googleusercontent.com") == true) { "Missing recorded release OAuth client" }
+        check(signingFile.exists()) { "Release signing credentials are missing" }
+        val signing = android.signingConfigs.getByName("production")
+        val keystore = KeyStore.getInstance(signing.storeFile!!, signing.storePassword!!.toCharArray())
+        val certificate = keystore.getCertificate(signing.keyAlias) ?: error("Release signing certificate is missing")
+        val fingerprint = MessageDigest.getInstance("SHA-1").digest(certificate.encoded).joinToString(":") { "%02X".format(it) }
+        check(fingerprint.equals(config["releaseCertificateSha1"] as? String, ignoreCase = true)) { "Release certificate differs from google-oauth.json. Verify the corresponding Google Cloud Android client before release." }
+        logger.lifecycle("Local release signing matches the recorded OAuth fingerprint. Google Cloud registration and the Play App Signing certificate still require separate verification.")
+    }
+}
+tasks.matching { it.name == "preReleaseBuild" }.configureEach { dependsOn(verifyGoogleOAuthSigning) }
+
 dependencies {
     // JVM tests only; these libraries are not packaged into the Android app.
     testImplementation("junit:junit:4.13.2")

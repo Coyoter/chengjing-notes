@@ -15,9 +15,17 @@ class SyncUploadWorker(context:Context,params:WorkerParameters):Worker(context,p
         val services=NativeServices(applicationContext)
         try{
             val auth=Tasks.await(Identity.getAuthorizationClient(applicationContext).authorize(AuthorizationRequest.builder().setRequestedScopes(listOf(Scope("https://www.googleapis.com/auth/drive.appdata"))).build()),30,TimeUnit.SECONDS)
-            if(auth.hasResolution())return Result.failure()
+            if(auth.hasResolution()){
+                services.googleAuthorizationRequired()
+                return Result.failure(workDataOf("error" to GoogleAuthorizationPolicy.AUTH_REQUIRED))
+            }
             if(isStopped||!applicationContext.getSharedPreferences("settings",Context.MODE_PRIVATE).getBoolean("sync-enabled",false))return Result.success()
-            services.store.put("google-token",auth.accessToken?:return Result.failure())
+            try { services.acceptGoogleToken(auth.accessToken) }
+            catch (error: IllegalStateException) {
+                if(error.message == GoogleAuthorizationPolicy.AUTH_ERROR)
+                    return Result.failure(workDataOf("error" to GoogleAuthorizationPolicy.AUTH_REQUIRED))
+                throw error
+            }
             val folder=File(applicationContext.filesDir,"sync-upload")
             val known=services.driveList("packet").getJSONArray("files");val names=(0 until known.length()).map{known.getJSONObject(it).getString("name")}.toSet()
             for(file in folder.listFiles().orEmpty().filter{it.extension=="json"}){
@@ -31,7 +39,14 @@ class SyncUploadWorker(context:Context,params:WorkerParameters):Worker(context,p
                 file.delete()
             }
             return Result.success()
-        }catch(_:Exception){return if(runAttemptCount<5)Result.retry()else Result.failure()}
+        }catch(error:Exception){
+            val cause = error.cause ?: error
+            if(cause is com.google.android.gms.common.api.ApiException && GoogleAuthorizationPolicy.requiresInteraction(cause.statusCode)) {
+                services.googleAuthorizationRequired()
+                return Result.failure(workDataOf("error" to GoogleAuthorizationPolicy.AUTH_REQUIRED))
+            }
+            return if(runAttemptCount<5)Result.retry()else Result.failure()
+        }
     }
     companion object{
         fun enqueue(context:Context){

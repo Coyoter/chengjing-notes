@@ -50,6 +50,7 @@
     "qa:knowledge-library": "node scripts/qa-knowledge-library.mjs",
     "qa:pdf-viewer": "node scripts/qa-pdf-viewer.mjs",
     "qa:ai-actions": "node scripts/qa-ai-actions.mjs",
+    "qa:ai-permissions": "node scripts/qa-ai-permissions.mjs",
     "qa:openrouter-routing": "node scripts/qa-openrouter-routing.mjs",
     "qa:employee-workday": "node scripts/qa-employee-workday.mjs",
     "qa:wish-pool": "node scripts/qa-wish-pool.mjs",

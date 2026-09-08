@@ -311,7 +311,8 @@ export async function deleteTag(tagId: string) {
 }
 
 export async function seedDatabase() {
-  if ((await db.cards.count()) > 0) return;
+  if ((await db.preferences.get("demo-seed-complete"))?.value === true) return;
+  if ((await db.cards.count()) > 0) { await db.preferences.put({ key: "demo-seed-complete", value: true }); return; }
   if (typeof window !== "undefined" && window.chengjing?.platform === "android") return;
 
   const tagProduct = "tag-product";
@@ -454,7 +455,7 @@ export async function seedDatabase() {
     { id: "highlight-1", cardId: "card-welcome", text: "一張卡片可以出現在多個白板，但內容永遠只有一份。", note: "同一份內容可以在不同視覺脈絡中重用。", color: "amber", createdAt: now - day },
   ];
 
-  await db.transaction("rw", [db.cards, db.tags, db.boards, db.boardNodes, db.boardEdges, db.tasks, db.highlights, db.knowledgeGroups], async () => {
+  await db.transaction("rw", [db.cards, db.tags, db.boards, db.boardNodes, db.boardEdges, db.tasks, db.highlights, db.knowledgeGroups, db.preferences], async () => {
     await db.cards.bulkPut(cards);
     await db.tags.bulkPut(tags);
     await db.boards.put(board);
@@ -463,6 +464,7 @@ export async function seedDatabase() {
     await db.tasks.bulkPut(tasks);
     await db.highlights.bulkPut(highlights);
     await db.knowledgeGroups.bulkPut(knowledgeGroups);
+    await db.preferences.put({ key: "demo-seed-complete", value: true });
   });
 }
 
@@ -704,7 +706,7 @@ export async function restoreCardFromTrash(cardId: string) {
   return db.cards.update(cardId, { state: "active", deletedAt: undefined, updatedAt: Date.now() });
 }
 
-export async function deleteCardPermanently(cardId: string) {
+export async function deleteCardPermanently(cardId: string, retainAttachmentFiles = false) {
   const card = await db.cards.get(cardId);
   if (!card) return;
   const linkedTasks = await db.tasks.where("cardId").equals(cardId).toArray();
@@ -738,7 +740,9 @@ export async function deleteCardPermanently(cardId: string) {
       await db.cards.delete(cardId);
     },
   );
-  if (typeof window !== "undefined") await Promise.all(exclusiveAttachments.map((attachment) => attachment.storage === "file" && attachment.relativePath ? window.chengjing?.attachments?.remove(attachment.relativePath).catch(() => {}) : undefined));
+  // Transactional AI/MCP batches retain bytes for Undo; never perform file I/O
+  // before the enclosing database transaction has committed.
+  if (!retainAttachmentFiles && typeof window !== "undefined") await Promise.all(exclusiveAttachments.map((attachment) => attachment.storage === "file" && attachment.relativePath ? window.chengjing?.attachments?.remove(attachment.relativePath).catch(() => {}) : undefined));
 }
 
 export async function deleteFragmentPermanently(fragmentId: string) {

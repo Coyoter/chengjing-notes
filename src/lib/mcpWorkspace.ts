@@ -1,15 +1,20 @@
-import { createCard, db } from "../db";
+import { createCard, db, deleteCardPermanently, deleteBoardPermanently, deleteFragmentPermanently, deleteTag, deleteKnowledgeGroup, createTag, renameTag, createKnowledgeGroup, renameKnowledgeGroup } from "../db";
 import { useAppStore } from "../store";
 import type { BrainContentType, BrainRelationType, CardRecord, TaskRecord } from "../types";
 import { richHtmlFromPlainText } from "./boardContent";
 import { runGlobalHistoryAction } from "./globalHistory";
-import { createKanbanBoard, createKanbanList, moveKanbanPlacement, placeCardOnKanban } from "./kanban";
+import { createKanbanBoard, createKanbanList, moveKanbanPlacement, placeCardOnKanban, deleteKanbanBoard, deleteKanbanList } from "./kanban";
 import { searchQueryTerms } from "./searchIndex";
 import { includesQuery, searchRecords } from "./searchRecords";
-import { createTaskChild, dueDateInputToTimestamp, updateTaskEverywhere } from "./taskSync";
+import { createTaskChild, dueDateInputToTimestamp, updateTaskEverywhere, deleteTaskEverywhere } from "./taskSync";
+import { ACTION_RESPONSE_FORMAT, applyAIActionPlan, parseAIActionPlan } from "./aiActions";
+import { SYNC_TABLES } from "./syncProtocol";
 
 export type McpWorkspaceTool =
   | "chengjing_status" | "chengjing_search" | "chengjing_get_item"
+  | "chengjing_list_records" | "chengjing_action_schema" | "chengjing_apply_actions"
+  | "chengjing_delete_items" | "chengjing_manage_metadata"
+  | "chengjing_update_fields"
   | "chengjing_create_note" | "chengjing_update_note"
   | "chengjing_create_task" | "chengjing_update_task"
   | "chengjing_create_whiteboard" | "chengjing_update_whiteboard" | "chengjing_add_whiteboard_item" | "chengjing_move_whiteboard_item"
@@ -19,6 +24,9 @@ export type McpWorkspaceTool =
 export interface McpWorkspaceRequest { requestId: string; tool: McpWorkspaceTool; arguments: Record<string, unknown> }
 
 const writeTools = new Set<McpWorkspaceTool>([
+  "chengjing_apply_actions",
+  "chengjing_delete_items", "chengjing_manage_metadata",
+  "chengjing_update_fields",
   "chengjing_create_note", "chengjing_update_note", "chengjing_create_task", "chengjing_update_task",
   "chengjing_create_whiteboard", "chengjing_update_whiteboard", "chengjing_add_whiteboard_item", "chengjing_move_whiteboard_item",
   "chengjing_create_kanban", "chengjing_update_kanban", "chengjing_create_neuron", "chengjing_connect_neurons",
@@ -26,7 +34,11 @@ const writeTools = new Set<McpWorkspaceTool>([
 
 export function isMcpWorkspaceWrite(tool: McpWorkspaceTool) { return writeTools.has(tool); }
 
-function text(value: unknown, maximum = 20_000) { return typeof value === "string" ? value.trim().slice(0, maximum) : ""; }
+function text(value: unknown, maximum = 20_000) {
+  const result = typeof value === "string" ? value.trim() : "";
+  if (result.length > maximum) throw new Error(`mcp-field-too-long:${maximum}:split-content-into-append-operations`);
+  return result;
+}
 function identifier(value: unknown) { return text(value, 180); }
 function numberValue(value: unknown, fallback = 0, minimum = -20_000, maximum = 20_000) { const number = Number(value); return Number.isFinite(number) ? Math.max(minimum, Math.min(maximum, number)) : fallback; }
 function booleanValue(value: unknown, fallback = false) { return typeof value === "boolean" ? value : fallback; }
@@ -47,7 +59,8 @@ async function workspaceStatus() {
   ]);
   return {
     app: "ChengJing", databaseVersion: db.verno, counts: { notes, whiteboards, kanban, tasks, fragments, relations },
-    writeSafety: "Updates require the current updatedAt value. Permanent deletion is not exposed through MCP.",
+    writeSafety: "Individual update tools require updatedAt. Batch actions use explicit IDs or explicit all selection without a version precondition. delete_items can permanently delete content. Undo history is local to the running app, not a durable backup.",
+    batchActions: "chengjing_apply_actions supports the built-in action schema, including deletion. Cards go to trash; board and fragment deletion removes related local graph edges. Use chengjing_list_records to enumerate every page; never treat search results as the whole workspace.",
     neuronModel: "Notes, whiteboards, tasks and fragments are neurons. connect_neurons creates an explicit relationship between them.",
   };
 }
@@ -212,7 +225,7 @@ async function moveWhiteboardItem(args: Record<string, unknown>) {
 }
 
 async function createKanban(args: Record<string, unknown>) {
-  const title = requireText(args.title, "mcp-title-required", 240); const lists = Array.isArray(args.lists) ? args.lists.map((item) => text(item, 120)).filter(Boolean).slice(0, 12) : [];
+  const title = requireText(args.title, "mcp-title-required", 240); const lists = Array.isArray(args.lists) ? args.lists.map((item) => text(item, 120)).filter(Boolean) : [];
   const defaults = { "zh-TW": ["待處理", "進行中", "完成"], "zh-CN": ["待处理", "进行中", "完成"], en: ["To do", "Doing", "Done"], ja: ["未着手", "進行中", "完了"], ko: ["할 일", "진행 중", "완료"] } as const;
   const language = useAppStore.getState().language || "zh-TW";
   const board = await createKanbanBoard(title, lists.length ? lists : [...defaults[language]]);
@@ -272,7 +285,10 @@ async function connectNeurons(args: Record<string, unknown>) {
   await db.brainEdges.add(edge); return { type: "neuron_relation", ...edge, created: true };
 }
 
-async function executeWrite(tool: McpWorkspaceTool, args: Record<string, unknown>) {
+export async function executeMcpWorkspaceWrite(tool: McpWorkspaceTool, args: Record<string, unknown>) {
+  if (tool === "chengjing_update_fields") return updateFields(args);
+  if (tool === "chengjing_delete_items") return deleteItems(args);
+  if (tool === "chengjing_manage_metadata") return manageMetadata(args);
   if (tool === "chengjing_create_note") return createNote(args);
   if (tool === "chengjing_update_note") return updateNote(args);
   if (tool === "chengjing_create_task") return createTask(args);
@@ -288,10 +304,193 @@ async function executeWrite(tool: McpWorkspaceTool, args: Record<string, unknown
   throw new Error("mcp-tool-unsupported");
 }
 
+async function updateFields(args: Record<string, unknown>) {
+  const fields = args.fields;
+  if (!fields || typeof fields !== "object" || Array.isArray(fields)) throw new Error("mcp-fields-required");
+  const allowed: Record<string, string[]> = {
+    cards: ["title", "content", "favorite", "tagIds", "collectionId", "color", "properties", "state", "startAt", "dueAt"],
+    boards: ["title", "description", "favorite", "tagIds"],
+    fragments: ["text", "pinned", "tagIds"],
+    tasks: ["title", "done", "dueDate"],
+    kanbanBoards: ["title", "description", "favorite"],
+    boardNodes: ["title", "text", "color", "x", "y", "width", "height", "collapsed"],
+  };
+  const tableName = String(args.table || "");
+  const allowedFields = allowed[tableName];
+  if (!allowedFields) throw new Error("mcp-table-not-allowed");
+  const id = identifier(args.id); const table = db.table(tableName);
+  const current = await table.get(id);
+  if (!current) throw new Error("mcp-item-not-found");
+  if (args.expectedUpdatedAt !== undefined) assertExpected(tableName, id, current.updatedAt, args.expectedUpdatedAt);
+  const patch: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (!allowedFields.includes(key)) throw new Error(`mcp-field-not-writable:${key}`);
+    if (["favorite", "pinned", "done", "collapsed"].includes(key)) { if (typeof value !== "boolean") throw new Error("mcp-field-type-invalid"); }
+    else if (["startAt", "dueAt"].includes(key)) { if (value !== null && (typeof value !== "number" || !Number.isFinite(value) || value < 0)) throw new Error("mcp-date-invalid"); }
+    else if (["x", "y", "width", "height"].includes(key)) { if (typeof value !== "number" || !Number.isFinite(value) || (["width", "height"].includes(key) && value <= 0)) throw new Error("mcp-geometry-invalid"); }
+    else if (key === "tagIds") {
+      if (!Array.isArray(value) || value.some(item => typeof item !== "string")) throw new Error("mcp-tags-invalid");
+      if ((await db.tags.bulkGet(value)).some(tag => !tag)) throw new Error("mcp-tag-not-found");
+    } else if (key === "properties") {
+      if (!value || typeof value !== "object" || Array.isArray(value) || Object.values(value).some(item => !(item === null || typeof item === "string" || typeof item === "boolean" || (typeof item === "number" && Number.isFinite(item)) || (Array.isArray(item) && item.every(part => typeof part === "string"))))) throw new Error("mcp-properties-invalid");
+    } else if (key === "collectionId" && value === null) { /* detach */ }
+    else if (key === "dueDate" && value === null) { /* clear */ }
+    else if (typeof value !== "string") throw new Error("mcp-field-type-invalid");
+    if (key === "title" && !String(value).trim()) throw new Error("mcp-title-required");
+    if (key === "state" && !["active", "inbox", "archived", "trash"].includes(String(value))) throw new Error("mcp-state-invalid");
+    if (key === "collectionId" && value !== null && (await db.knowledgeGroups.get(String(value)))?.kind !== "topic") throw new Error("mcp-collection-not-found");
+    if (key === "dueDate" && value !== null && !dueDateInputToTimestamp(String(value))) throw new Error("mcp-date-invalid");
+    patch[key] = value === null && ["collectionId", "dueAt", "startAt"].includes(key) ? undefined : value;
+  }
+  if (!Object.keys(patch).length) throw new Error("mcp-no-changes");
+  if (tableName === "tasks") return updateTask({ ...patch, id, expectedUpdatedAt: current.updatedAt });
+  if (tableName === "cards") {
+    if (patch.content !== undefined || patch.title !== undefined || patch.favorite !== undefined) {
+      await updateNote({ id, expectedUpdatedAt: current.updatedAt, contentMode: "replace", content: patch.content, title: patch.title, favorite: patch.favorite });
+      delete patch.content; delete patch.title; delete patch.favorite;
+    }
+    if (patch.state !== undefined) patch.deletedAt = patch.state === "trash" ? Date.now() : undefined;
+  }
+  if (tableName !== "boardNodes") patch.updatedAt = nextUpdatedAt((await table.get(id))?.updatedAt || 0);
+  else await db.boards.update(current.boardId, { updatedAt: Date.now() });
+  await table.update(id, patch);
+  return { table: tableName, record: await table.get(id) };
+}
+
+const deletableTables = ["cards", "boards", "tasks", "fragments", "kanbanBoards", "kanbanLists", "kanbanPlacements", "tags", "knowledgeGroups", "highlights", "brainEdges", "brainReports"] as const;
+
+async function deleteItems(args: Record<string, unknown>) {
+  const tableName = String(args.table || "");
+  const wholeWorkspace = tableName === "workspace";
+  if (!wholeWorkspace && !(deletableTables as readonly string[]).includes(tableName)) throw new Error("mcp-table-not-allowed");
+  if (wholeWorkspace && args.all !== true) throw new Error("mcp-explicit-all-required");
+  if (!wholeWorkspace && args.all !== true && (!Array.isArray(args.ids) || !args.ids.length || args.ids.some(id => typeof id !== "string" || !id))) throw new Error("mcp-explicit-selection-required");
+  // Keep conversations, credentials, sync bookkeeping and recovery points.
+  // Existing shared-brain synchronization may propagate source changes/deletion.
+  const tables = wholeWorkspace ? deletableTables : [tableName];
+  const counts: Record<string, number> = {};
+  if (wholeWorkspace || tableName === "cards") await db.preferences.put({ key: "demo-seed-complete", value: true });
+  for (const name of tables) {
+    const table = db.table(name);
+    const ids = (args.all === true ? await table.toCollection().primaryKeys() : [...new Set(args.ids as string[])]) as string[];
+    if (name === "cards" && args.all === true && args.permanent === true) {
+      // One pass for all cards, not N invocations each rescanning every other
+      // card to check attachment sharing. Bytes stay available for Undo.
+      const cards = await db.cards.toArray();
+      const cardIds = new Set(ids);
+      const tasks = await db.tasks.filter(task => Boolean(task.cardId && cardIds.has(task.cardId))).toArray();
+      const taskIds = new Set(tasks.map(task => task.id));
+      const nodes = await db.boardNodes.filter(node => Boolean(node.cardId && cardIds.has(node.cardId))).toArray();
+      const nodeIds = new Set(nodes.map(node => node.id));
+      await db.boardEdges.filter(edge => nodeIds.has(edge.source) || nodeIds.has(edge.target)).delete();
+      await db.boardNodes.bulkDelete([...nodeIds]);
+      await db.kanbanPlacements.filter(row => cardIds.has(row.cardId)).delete();
+      await db.highlights.filter(row => cardIds.has(row.cardId)).delete();
+      await db.cardVersions.filter(row => cardIds.has(row.cardId)).delete();
+      await db.tasks.bulkDelete([...taskIds]);
+      await db.brainEdges.filter(edge => (edge.sourceType === "card" && cardIds.has(edge.sourceId)) || (edge.targetType === "card" && cardIds.has(edge.targetId)) || (edge.sourceType === "task" && taskIds.has(edge.sourceId)) || (edge.targetType === "task" && taskIds.has(edge.targetId))).delete();
+      await db.attachments.bulkDelete([...new Set(cards.flatMap(card => card.attachmentIds))]);
+      await db.cards.bulkDelete(ids);
+      counts[name] = ids.length;
+      continue;
+    }
+    let deleted = 0;
+    for (const id of ids) {
+      const record = await table.get(id);
+      if (!record) continue;
+      if (name === "cards") {
+        if (args.permanent === true) await deleteCardPermanently(id, true);
+        else await db.cards.update(id, { state: "trash", deletedAt: Date.now(), updatedAt: Date.now() });
+      } else if (name === "boards") await deleteBoardPermanently(id);
+      else if (name === "tasks") await deleteTaskEverywhere(id);
+      else if (name === "fragments") await deleteFragmentPermanently(id);
+      else if (name === "kanbanBoards") await deleteKanbanBoard(id);
+      else if (name === "kanbanLists") await deleteKanbanList(id);
+      else if (name === "tags") await deleteTag(id);
+      else if (name === "knowledgeGroups") await deleteKnowledgeGroup(id);
+      else await table.delete(id);
+      deleted += 1;
+    }
+    counts[name] = deleted;
+  }
+  return { counts, permanentCards: args.permanent === true, kept: ["conversations", "credentials", "sync bookkeeping", "recovery points", "attachment files for recovery"], sharedContent: "Existing shared-brain synchronization may update or remove published copies. This database result does not verify remote completion." };
+}
+
+async function manageMetadata(args: Record<string, unknown>) {
+  const table = String(args.table || "");
+  const operation = String(args.operation || "");
+  const id = identifier(args.id);
+  if (!["tags", "knowledgeGroups", "highlights", "brainEdges", "fragments"].includes(table)) throw new Error("mcp-table-not-allowed");
+  if (!["create", "update"].includes(operation)) throw new Error("mcp-operation-invalid");
+  if (operation === "update" && (!id || !await db.table(table).get(id))) throw new Error("mcp-item-not-found");
+  if (table === "tags") {
+    const name = requireText(args.name, "mcp-name-required", 240);
+    return operation === "create" ? createTag(name) : renameTag(id, name);
+  }
+  if (table === "knowledgeGroups") {
+    const name = requireText(args.name, "mcp-name-required", 240);
+    if (operation === "update") { await renameKnowledgeGroup(id, name); return db.knowledgeGroups.get(id); }
+    if (args.kind !== "area" && args.kind !== "topic") throw new Error("mcp-group-kind-invalid");
+    return createKnowledgeGroup(args.kind, name, identifier(args.parentId) || undefined);
+  }
+  if (table === "fragments") {
+    const content = requireText(args.content, "mcp-content-required", 100_000);
+    if (operation === "create") return createNeuron({ type: "fragment", content, pinned: args.pinned });
+    await db.fragments.update(id, { text: content, ...(typeof args.pinned === "boolean" ? { pinned: args.pinned } : {}), updatedAt: Date.now() });
+    return db.fragments.get(id);
+  }
+  if (table === "brainEdges") {
+    if (operation === "create") return connectNeurons(args);
+    const patch = { reason: requireText(args.reason, "mcp-reason-required", 2_000) };
+    await db.brainEdges.update(id, patch); return db.brainEdges.get(id);
+  }
+  const previous = id ? await db.highlights.get(id) : undefined;
+  const cardId = identifier(args.cardId) || previous?.cardId;
+  if (!cardId || !await db.cards.get(cardId)) throw new Error("mcp-card-not-found");
+  const record = { id: operation === "create" ? crypto.randomUUID() : id, cardId, text: typeof args.content === "string" ? args.content : previous?.text || "", note: typeof args.note === "string" ? args.note : previous?.note || "", color: text(args.color, 40) || previous?.color || "amber", createdAt: previous?.createdAt || Date.now(), ...(Number.isInteger(args.page) && Number(args.page) > 0 ? { page: Number(args.page) } : previous?.page ? { page: previous.page } : {}) };
+  if (!record.text.trim()) throw new Error("mcp-content-required");
+  await db.highlights.put(record); return record;
+}
+
 export async function handleMcpWorkspaceRequest(request: McpWorkspaceRequest) {
+  if (request.tool === "chengjing_action_schema") return ACTION_RESPONSE_FORMAT.json_schema.schema;
+  if (request.tool === "chengjing_list_records") {
+    const tableName = String(request.arguments.table || "");
+    if (!(SYNC_TABLES as readonly string[]).includes(tableName)) throw new Error("mcp-table-not-allowed");
+    const cursor = typeof request.arguments.after === "string" ? request.arguments.after : "";
+    const limit = Math.floor(numberValue(request.arguments.limit, 10, 1, 100));
+    const contentOffset = Math.floor(numberValue(request.arguments.contentOffset, 0, 0, Number.MAX_SAFE_INTEGER));
+    const contentLength = Math.floor(numberValue(request.arguments.contentLength, 1000, 1, 8000));
+    const table = db.table(tableName);
+    const requestedId = identifier(request.arguments.id);
+    const row = requestedId ? await table.get(requestedId) : undefined;
+    const rows = requestedId ? row ? [row] : [] : await (cursor ? table.where(":id").above(cursor) : table.orderBy(":id")).limit(limit + 1).toArray();
+    const page = rows.slice(0, limit);
+    const contentRanges: Array<{ id: string; fields: Record<string, { total: number; nextOffset: number | null }> }> = [];
+    const records = page.map(({ searchTerms: _search, blob: _blob, relativePath: _path, ...record }) => {
+      const fields: Record<string, { total: number; nextOffset: number | null }> = {};
+      for (const key of ["plainText", "contentHtml", "text", "content", "description", "note"]) {
+        if (typeof record[key] !== "string") continue;
+        const source = record[key];
+        record[key] = source.slice(contentOffset, contentOffset + contentLength);
+        fields[key] = { total: source.length, nextOffset: contentOffset + contentLength < source.length ? contentOffset + contentLength : null };
+      }
+      contentRanges.push({ id: record.id, fields });
+      return record;
+    });
+    return { table: tableName, records, contentRanges, contentOffset, nextCursor: rows.length > limit ? page.at(-1)?.id : null };
+  }
+  if (request.tool === "chengjing_apply_actions") {
+    const raw = request.arguments.plan;
+    if (!raw || typeof raw !== "object" || !Array.isArray((raw as { actions?: unknown }).actions)) throw new Error("mcp-invalid-action-plan");
+    const plan = parseAIActionPlan(JSON.stringify(raw));
+    if (plan.queries?.length || plan.moreActions) throw new Error("mcp-plan-incomplete");
+    if (!plan.actions.length || plan.actions.length !== (raw as { actions: unknown[] }).actions.length) throw new Error("mcp-unsupported-action");
+    return applyAIActionPlan(plan, { boardId: identifier(request.arguments.boardId) || undefined });
+  }
   if (request.tool === "chengjing_status") return workspaceStatus();
   if (request.tool === "chengjing_search") return workspaceSearch(request.arguments);
   if (request.tool === "chengjing_get_item") return getItem(request.arguments);
   if (!isMcpWorkspaceWrite(request.tool)) throw new Error("mcp-tool-unsupported");
-  return runGlobalHistoryAction(() => db.transaction("rw", db.tables, () => executeWrite(request.tool, request.arguments)));
+  return runGlobalHistoryAction(() => db.transaction("rw", db.tables, async () => await executeMcpWorkspaceWrite(request.tool, request.arguments)));
 }

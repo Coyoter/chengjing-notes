@@ -15,6 +15,7 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Square,
   TriangleAlert,
   WandSparkles,
   X,
@@ -23,8 +24,8 @@ import { createCard, db } from "../db";
 import { useI18n } from "../hooks/useI18n";
 import { useAppStore } from "../store";
 import { buildSpaceContext, contextForBoard, contextForCard, runAI } from "../lib/ai";
-import { applyAIActionPlan, buildAIActionContext, looksLikeAIAction, planAIActions, planHasDestructiveActions, type AIActionPlan } from "../lib/aiActions";
-import { formatAiActionResult, getAiActionCopy } from "../lib/aiActionCopy";
+import { applyAIActionPlan, buildAIActionContext, looksLikeAIAction, looksLikeWorkspaceResearch, planAIActions, planHasDestructiveActions, type AIActionPlan } from "../lib/aiActions";
+import { formatAiActionResult, getAiActionCopy, getAiPermissionCopy } from "../lib/aiActionCopy";
 import type { AIMessage } from "../lib/modelTypes";
 import { AIMarkdown } from "./AIMarkdown";
 import { renderSafeMarkdown } from "../lib/safeMarkdown";
@@ -32,6 +33,9 @@ import { renderSafeMarkdown } from "../lib/safeMarkdown";
 export function AIPanel() {
   const { language, t } = useI18n();
   const actionCopy = getAiActionCopy(language);
+  const permissionCopy = getAiPermissionCopy(language);
+  const autoApply = useAppStore(state => state.aiAutoApply);
+  const setAutoApply = useAppStore(state => state.setAIAutoApply);
   const close = useAppStore((state) => state.closeRightPanel);
   const selectedCardId = useAppStore((state) => state.selectedCardId);
   const selectedBoardId = useAppStore((state) => state.selectedBoardId);
@@ -138,10 +142,12 @@ export function AIPanel() {
     if (!clean || loading || requestBusy.current || !conversationReady) return;
     setInput("");
     setAIDraft("");
+    if (/(有.*權限.*[嗎?？]|有.*权限.*[吗?？]|有哪些.*功能|do you have.*permission|what can you do)/i.test(clean)) { await planChanges(clean, true); return; }
     if (actionMode || looksLikeAIAction(clean)) {
       await planChanges(clean);
       return;
     }
+    if (spaceSearch && looksLikeWorkspaceResearch(clean)) { await planChanges(clean, true); return; }
     setError("");
     setStreamingText("");
     setModelProgress(0);
@@ -170,6 +176,7 @@ export function AIPanel() {
         onToken: (text) => { if (current()) setStreamingText(text); },
         onProgress: (progress) => { if (current()) setModelProgress(progress); },
       });
+      if (!current()) return;
       await db.transaction("rw", [db.chatThreads, db.chatMessages], async () => {
         if (!await db.chatThreads.get(id)) return;
         await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "assistant", content: result.text, model: result.model, createdAt: Date.now() });
@@ -183,7 +190,7 @@ export function AIPanel() {
     }
   }
 
-  async function planChanges(prompt: string) {
+  async function planChanges(prompt: string, readOnly = false) {
     const clean = prompt.trim();
     if (!clean || loading || requestBusy.current) return;
     setInput(""); setError(""); setPendingPlan(null); setLoading(true);
@@ -195,7 +202,7 @@ export function AIPanel() {
       await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "user", content: clean, createdAt: Date.now() });
       const context = await buildAIActionContext(contextType, selectedCardId, selectedBoardId, spaceSearch);
       if (!current()) return;
-      const plan = await planAIActions({ engine, model, prompt: clean, context, temperature: 0.1 });
+      const plan = await planAIActions({ engine, model, prompt: clean, context, temperature: 0.1, isCurrent: current, allowWorkspaceQueries: spaceSearch, readOnly });
       if (!current()) return;
       if (plan.actions.length === 0) {
         const summary = plan.summary.trim();
@@ -205,9 +212,11 @@ export function AIPanel() {
         setActionMode(false);
         return;
       }
-      setPendingPlan(plan);
       await db.chatMessages.add({ id: crypto.randomUUID(), threadId: id, role: "assistant", content: plan.summary, model: activeModelLabel, createdAt: Date.now() });
       await db.chatThreads.update(id, { updatedAt: Date.now() });
+      if (!current()) return;
+      if (autoApply && !readOnly) await applyPlan(plan, id, current);
+      else setPendingPlan(plan);
     } catch (exception) { if (current()) setError(exception instanceof Error ? exception.message : actionCopy.failed); }
     finally { if (current()) { setLoading(false); requestBusy.current = false; } }
   }
@@ -220,14 +229,18 @@ export function AIPanel() {
     void planChanges(request.prompt);
   }, [aiActionRequest, applyingPlan, consumeAIActionRequest, conversationReady, loading]);
 
-  async function applyPlan() {
-    if (!pendingPlan || applyingPlan) return;
+  async function applyPlan(plan = pendingPlan, targetThreadId = threadId, isCurrent?: () => boolean) {
+    if (!plan || applyingPlan) return;
     setApplyingPlan(true); setError("");
     try {
-      const result = await applyAIActionPlan(pendingPlan, { boardId: contextType === "board" ? selectedBoardId : undefined, cardId: contextType === "card" ? selectedCardId : undefined });
+      const result = await applyAIActionPlan(plan, { boardId: contextType === "board" ? selectedBoardId : undefined, cardId: contextType === "card" ? selectedCardId : undefined }, isCurrent);
       const message = formatAiActionResult(language, result.applied, result.skipped);
-      if (threadId) await db.chatMessages.add({ id: crypto.randomUUID(), threadId, role: "assistant", content: message, createdAt: Date.now() });
       setPendingPlan(null); setActionMode(false);
+      // A failed chat receipt must not leave a successfully applied plan available
+      // to run a second time (which would duplicate newly created content).
+      if (targetThreadId) await db.chatMessages.add({ id: crypto.randomUUID(), threadId: targetThreadId, role: "assistant", content: message, createdAt: Date.now() }).catch(() => {
+        setError(language.startsWith("zh") ? "變更已套用，但無法保存這次的對話紀錄。" : "Changes were applied, but the chat receipt could not be saved.");
+      });
       const createdBoardId = result.createdBoardIds.at(-1);
       if (createdBoardId) {
         useAppStore.getState().openBoard(createdBoardId);
@@ -261,6 +274,7 @@ export function AIPanel() {
       <header className="panel-header ai-panel-header">
         <div><span>{t("ai.brand")}</span><h2>{t("ai.headline")}</h2></div>
         <div className="ai-panel-actions">
+          <button type="button" className={`ai-action-mode ai-permission-toggle${autoApply ? " is-active" : ""}`} aria-pressed={Boolean(autoApply)} title={permissionCopy.hint} disabled={loading || applyingPlan} onClick={() => setAutoApply(!autoApply)}>{autoApply ? <WandSparkles size={14} /> : <ListChecks size={14} />}<span>{autoApply ? permissionCopy.direct : permissionCopy.preview}</span></button>
           <button type="button" className="icon-button" disabled={!conversationReady || loading || applyingPlan} onClick={() => void startNewConversation()} aria-label={t("ai.newConversation")} title={t("ai.newConversation")}><Plus size={17} /></button>
           <button type="button" className="icon-button" onClick={close} aria-label={t("ai.close")}><X size={18} /></button>
         </div>
@@ -307,7 +321,11 @@ export function AIPanel() {
         {contextType === "card" && <div className="ai-prompt-chips" aria-label={t("ai.recommendedPrompts")}><span>{t("ai.recommendedPrompts")}</span><button type="button" onClick={() => setInput(t("card.aiPrompt"))}><Sparkles size={12} />{t("ai.summarizeCard")}</button></div>}
         <div className="ai-composer">
           <textarea value={input} onChange={(event) => setInput(event.target.value)} onCompositionStart={() => { composingRef.current = true; }} onCompositionEnd={(event) => { composingRef.current = false; setInput(event.currentTarget.value); }} placeholder={t("ai.placeholder")} onKeyDown={(event) => { if (event.key !== "Enter" || event.shiftKey) return; if (composingRef.current || (event.nativeEvent as KeyboardEvent).isComposing || event.keyCode === 229) return; event.preventDefault(); void send(event.currentTarget.value); }} />
-          <div><button type="button" className={actionMode ? "ai-action-mode is-active" : "ai-action-mode"} aria-label={actionCopy.mode} title={actionCopy.modeHint} onClick={() => setActionMode(!actionMode)}><WandSparkles size={15} /><span>{actionCopy.mode}</span></button><span>{engine === "local-gemma" ? <><ShieldCheck size={12} />{t("ai.localPrivacy")}</> : <><Cloud size={12} />{t("ai.cloudPrivacy", { model })}</>}</span><button type="button" className="send-button" disabled={!input.trim() || loading || !conversationReady} onClick={() => void send(input)} aria-label={t("ai.send")}><ArrowUp size={16} /></button></div>
+          <div><button type="button" className={actionMode ? "ai-action-mode is-active" : "ai-action-mode"} aria-label={actionCopy.mode} title={actionCopy.modeHint} onClick={() => setActionMode(!actionMode)}><WandSparkles size={15} /><span>{actionCopy.mode}</span></button><span>{engine === "local-gemma" ? <><ShieldCheck size={12} />{t("ai.localPrivacy")}</> : <><Cloud size={12} />{t("ai.cloudPrivacy", { model })}</>}</span><button type="button" className="send-button" disabled={applyingPlan || (!loading && (!input.trim() || !conversationReady))} onClick={() => {
+            if (!loading) { void send(input); return; }
+            requestVersion.current += 1; requestBusy.current = false;
+            setLoading(false); setStreamingText(""); setPendingPlan(null);
+          }} aria-label={loading ? actionCopy.cancel : t("ai.send")}>{loading ? <Square size={14} /> : <ArrowUp size={16} />}</button></div>
         </div>
         <p>{t("ai.disclaimer")}</p>
       </footer>

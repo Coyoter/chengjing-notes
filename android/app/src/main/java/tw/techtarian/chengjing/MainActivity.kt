@@ -64,8 +64,7 @@ class MainActivity : ComponentActivity() {
     private val googleConsent = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         try {
             val auth = Identity.getAuthorizationClient(this).getAuthorizationResultFromIntent(result.data)
-            val token = auth.accessToken ?: throw IllegalStateException("Google authorization did not return access")
-            services.store.put("google-token", token)
+            services.acceptGoogleToken(auth.accessToken)
             finishGoogle(JSONObject().put("connected", true), null)
         } catch (error: Exception) { finishGoogle(null, error.message ?: "Google authorization cancelled") }
     }
@@ -223,10 +222,22 @@ class MainActivity : ComponentActivity() {
         googleAuthorizing=true
         Identity.getAuthorizationClient(this).authorize(AuthorizationRequest.builder().setRequestedScopes(listOf(Scope("https://www.googleapis.com/auth/drive.appdata"))).build())
             .addOnSuccessListener { result ->
-                if (result.hasResolution() && googleInteractive) googleConsent.launch(IntentSenderRequest.Builder(result.pendingIntent!!.intentSender).build())
-                else if(result.hasResolution()) finishGoogle(null,"Google authorization required; reconnect your account")
-                else { services.store.put("google-token", result.accessToken ?: ""); finishGoogle(JSONObject().put("connected", true), null) }
-            }.addOnFailureListener { error -> finishGoogle(null, error.message ?: "Google authorization failed") }
+                try {
+                    if (result.hasResolution()) {
+                        services.googleAuthorizationRequired()
+                        if (googleInteractive) googleConsent.launch(IntentSenderRequest.Builder(result.pendingIntent!!.intentSender).build())
+                        else finishGoogle(null, GoogleAuthorizationPolicy.AUTH_ERROR)
+                    } else {
+                        services.acceptGoogleToken(result.accessToken)
+                        finishGoogle(JSONObject().put("connected", true), null)
+                    }
+                } catch (error: Exception) { finishGoogle(null, error.message ?: "Google authorization failed") }
+            }.addOnFailureListener { error ->
+                if (error is com.google.android.gms.common.api.ApiException && GoogleAuthorizationPolicy.requiresInteraction(error.statusCode)) {
+                    services.googleAuthorizationRequired()
+                    finishGoogle(null, GoogleAuthorizationPolicy.AUTH_ERROR)
+                } else finishGoogle(null, error.message ?: "Google authorization failed")
+            }
     }
     private fun finishGoogle(value: Any?, error: String?) {
         val waiters=googleWaiters.toList();googleWaiters.clear();googleAuthorizing=false;googleInteractive=false

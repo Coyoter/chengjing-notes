@@ -26,6 +26,7 @@ interface AppState {
   customProviderModel: string;
   temperature: number;
   spaceSearch: boolean;
+  aiAutoApply: boolean;
   fontScale: number;
   language: AppLanguage;
   aiDraft: string;
@@ -56,6 +57,7 @@ interface AppState {
   setCustomProvider: (value: { id: string; name: string; model: string }) => void;
   setTemperature: (value: number) => void;
   setSpaceSearch: (value: boolean) => void;
+  setAIAutoApply: (value: boolean) => void;
   setFontScale: (value: number) => void;
   setLanguage: (language: AppLanguage) => void;
 }
@@ -111,6 +113,7 @@ export const useAppStore = create<AppState>()(
       customProviderModel: "",
       temperature: 0.55,
       spaceSearch: true,
+      aiAutoApply: false,
       fontScale: 1,
       language: initialLanguage(),
       aiDraft: "",
@@ -141,6 +144,7 @@ export const useAppStore = create<AppState>()(
       setCustomProvider: ({ id: customProviderId, name: customProviderName, model: customProviderModel }) => set({ customProviderId, customProviderName, customProviderModel }),
       setTemperature: (temperature) => set({ temperature }),
       setSpaceSearch: (spaceSearch) => set({ spaceSearch }),
+      setAIAutoApply: (aiAutoApply) => set({ aiAutoApply }),
       setFontScale: (fontScale) => set({ fontScale }),
       setLanguage: (language) => set({ language }),
     }),
@@ -159,6 +163,7 @@ export const useAppStore = create<AppState>()(
         customProviderModel: state.customProviderModel,
         temperature: state.temperature,
         spaceSearch: state.spaceSearch,
+        aiAutoApply: state.aiAutoApply,
         fontScale: state.fontScale,
         language: state.language,
       }),

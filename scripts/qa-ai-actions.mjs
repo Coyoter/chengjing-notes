@@ -87,7 +87,12 @@ const structuredOutputRequested = await page.evaluate(() => Boolean(window.__aiA
 const conciseBoardInstructionRequested = await page.evaluate(() => { const instruction = window.__aiActionsQa[0]?.messages?.[0]?.content || ""; return instruction.includes("一張卡片只保留一個核心") && instruction.includes("不能為了簡短而刪除") && instruction.includes("create_board_text 只用於不超過 40 字"); });
 await page.screenshot({ path: path.join(output, "01-action-preview.png"), fullPage: true });
 await plan.getByRole("button", { name: "套用 7 個變更", exact: true }).click();
-await aiPanel.getByText("已完成 7 個變更。", { exact: true }).waitFor();
+await aiPanel.getByText("已完成 7 個變更。", { exact: true }).waitFor().catch(async error => {
+  console.error(await aiPanel.innerText());
+  await page.screenshot({ path: path.join(output, "failure.png"), fullPage: true });
+  await browser.close();
+  throw error;
+});
 await page.getByRole("button", { name: "關閉 AI", exact: true }).click();
 await page.locator(".flow-card").filter({ hasText: "確認發佈日期" }).waitFor();
 await page.locator(".flow-card").filter({ hasText: "整理會議簡報" }).waitFor();

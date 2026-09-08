@@ -87,6 +87,20 @@ class NativeServices(private val context: Context, private val backupApp: String
 
     fun suspendSyncRecovery() { syncRecoveryBridge.invalidate() }
 
+    fun googleAuthorizationRequired() {
+        check(prefs.edit().putString("google-auth-state", GoogleAuthorizationPolicy.AUTH_REQUIRED).commit())
+    }
+
+    fun acceptGoogleToken(value: String?) {
+        val token = try { GoogleAuthorizationPolicy.requireToken(value) }
+            catch (error: IllegalStateException) { googleAuthorizationRequired(); throw error }
+        store.put("google-token", token)
+        check(prefs.edit().putString("google-auth-state", "AUTHORIZED").commit())
+    }
+
+    private fun googleConnected() = GoogleAuthorizationPolicy.connected(
+        store.get("google-token"), prefs.getString("google-auth-state", ""))
+
     fun prepareSyncRecoveryCall(method: String, args: JSONObject): () -> JSONObject {
         val target = if (method == "attachments.restoreFromBackup"
             && args.optString("backupFilePath").startsWith(SyncRecoveryService.BACKUP_PREFIX))
@@ -123,7 +137,7 @@ class NativeServices(private val context: Context, private val backupApp: String
         "ai.listProviderModels", "ai.testProvider" -> { val p=profile(args.getString("id")); val models=json(p.getString("baseUrl").trimEnd('/')+"/models",secret=store.get("provider-${p.getString("id")}")).getJSONArray("data"); if(method=="ai.testProvider") JSONObject().put("ok",true).put("models",models).put("modelAvailable",true) else models }
         "ai.openRouterChat", "ai.providerChat" -> chat(args,method=="ai.openRouterChat")
         "web.fetch" -> { val url=args.getString("url"); require(Uri.parse(url).scheme=="https"); http.newCall(Request.Builder().url(url).build()).execute().use{ response->require(response.isSuccessful); JSONObject().put("html",response.body!!.string()).put("url",url) } }
-        "google.status" -> JSONObject().put("connected",store.get("google-token").isNotEmpty())
+        "google.status" -> JSONObject().put("connected",googleConnected()).put("authorizationState",prefs.getString("google-auth-state", "UNKNOWN"))
         "google.disconnect" -> { suspendSyncRecovery();store.put("google-token","");prefs.edit().putBoolean("sync-enabled",false).commit();androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-upload");androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-recovery");JSONObject().put("connected",false) }
         "sync.pause" -> {suspendSyncRecovery();prefs.edit().putBoolean("sync-enabled",false).commit();androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-upload");androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-recovery");JSONObject()}
         "sync.resume" -> {prefs.edit().putBoolean("sync-enabled",true).commit();SyncUploadWorker.enqueue(context);JSONObject()}
@@ -263,7 +277,7 @@ class NativeServices(private val context: Context, private val backupApp: String
         return (0 until files.length()).map{val file=files.getJSONObject(it);val p=file.getJSONObject("appProperties");JSONObject().put("id",file.getString("id")).put("size",file.optLong("size")).put("slot",p.optString("slot")).put("snapshotAt",Instant.parse(p.getString("snapshotAt")).toEpochMilli()).put("day",p.optString("day")).put("contentHash",p.optString("contentHash")).put("deviceId",p.optString("deviceId"))}.sortedByDescending{it.getLong("snapshotAt")}
     }
     @Synchronized private fun cloudStatus(remote: Boolean): JSONObject {
-        val settings=cloudSettings();val connected=store.get("google-token").isNotEmpty();val list=if(remote&&connected)snapshots()else emptyList()
+        val settings=cloudSettings();val connected=googleConnected();val list=if(remote&&connected)snapshots()else emptyList()
         val current=list.firstOrNull{it.optString("slot")=="current"};val previous=list.firstOrNull{it.optString("slot")=="previous"&&clock()-it.getLong("snapshotAt")<=172800000}
         val conflict=if(remote&&connected)current!=null&&current.optString("id")!=settings.optString("lastKnownManifestId")else settings.optBoolean("conflict")
         settings.put("conflict",conflict);if(conflict)settings.put("enabled",false);save("cloud-backup",settings)
