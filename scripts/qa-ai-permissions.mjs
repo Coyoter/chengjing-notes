@@ -22,7 +22,7 @@ try {
       const prompt = request.messages.at(-1).content;
       let plan;
       if (prompt.includes("你有權限")) plan = { summary: "可批次處理工作內容。", actions: [] };
-      else if (prompt.includes("清空測試待辦")) plan = { summary: "清除測試待辦", actions: [{ type: "workspace_tool", tool: "chengjing_delete_items", arguments: { table: "tasks", all: true }, description: "刪除全部待辦" }] };
+      else if (prompt.includes("清空測試待辦")) plan = { summary: "清除測試待辦", actions: [{ type: "workspace_tool", function: { name: "chengjing_delete_items", arguments: JSON.stringify({ table: "tasks", all: true }) }, description: "刪除全部待辦" }] };
       else plan = { summary: "新增 120 筆測試待辦", actions: Array.from({ length: 120 }, (_, i) => ({ type: "create_task", title: `Permission QA ${i}`, description: `新增待辦 ${i}` })) };
       return { text: JSON.stringify(plan), model: request.model, usage: null, finishReason: "stop" };
     } } };

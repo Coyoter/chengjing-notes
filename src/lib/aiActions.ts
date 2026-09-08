@@ -61,6 +61,36 @@ workspaceWriteTools.add("chengjing_update_fields");
 function cleanString(value: unknown, maximum = 4_000) { return typeof value === "string" ? value.trim().slice(0, maximum) : undefined; }
 function finiteNumber(value: unknown, minimum = -10_000, maximum = 10_000) { const number = Number(value); return Number.isFinite(number) ? Math.min(maximum, Math.max(minimum, number)) : undefined; }
 function objectValue(value: unknown) { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined; }
+function argumentObject(value: unknown) {
+  if (typeof value !== "string") return objectValue(value);
+  try { return objectValue(JSON.parse(value)); } catch { return undefined; }
+}
+
+function parseWorkspaceCall(candidate: Record<string, unknown>) {
+  const records = [candidate, objectValue(candidate.payload), objectValue(candidate.data), objectValue(candidate.parameters), argumentObject(candidate.arguments)].filter(Boolean) as Record<string, unknown>[];
+  for (const record of records) {
+    const nested = objectValue(record.tool) || objectValue(record.function);
+    const nameAlias = cleanString(record.name, 100);
+    const knownNameAlias = nameAlias && [nameAlias, `chengjing_${nameAlias}`].some(name => workspaceWriteTools.has(name) || workspaceReadTools.has(name)) ? nameAlias : undefined;
+    const rawName = cleanString(typeof record.tool === "string" ? record.tool : undefined, 100)
+      || cleanString(record.toolName ?? record.tool_name ?? nested?.name, 100) || knownNameAlias;
+    if (!rawName) continue;
+    // Only an exact existing tool, or its unambiguous namespace-free spelling.
+    const tool = workspaceWriteTools.has(rawName) || workspaceReadTools.has(rawName) ? rawName
+      : workspaceWriteTools.has(`chengjing_${rawName}`) || workspaceReadTools.has(`chengjing_${rawName}`) ? `chengjing_${rawName}` : rawName;
+    const args = record.arguments ?? record.parameters ?? record.args ?? nested?.arguments ?? nested?.parameters ?? nested?.args;
+    return { tool, arguments: argumentObject(args) };
+  }
+  return { tool: undefined, arguments: argumentObject(candidate.arguments ?? candidate.parameters ?? candidate.args) };
+}
+
+export function workspacePlanNeedsRepair(plan: AIActionPlan) {
+  return plan.actions.some(action => action.type === "workspace_tool" && (!action.tool || !workspaceWriteTools.has(action.tool) || !objectValue(action.arguments)));
+}
+
+function workspaceFormatError() {
+  return ({ "zh-TW": "AI 回傳的操作格式仍不完整，這次沒有變更資料。請再試一次。", "zh-CN": "AI 返回的操作格式仍不完整，本次没有更改数据。请再试一次。", en: "The AI action format is incomplete. No data was changed. Please try again.", ja: "AIの操作形式が不完全です。データは変更されていません。もう一度お試しください。", ko: "AI 작업 형식이 불완전합니다. 데이터는 변경되지 않았습니다. 다시 시도해 주세요." })[useAppStore.getState().language || "zh-TW"];
+}
 function candidateValue(candidate: Record<string, unknown>, ...keys: string[]) {
   const nested = [candidate, objectValue(candidate.parameters), objectValue(candidate.arguments), objectValue(candidate.args), objectValue(candidate.payload), objectValue(candidate.data)].filter(Boolean) as Array<Record<string, unknown>>;
   for (const record of nested) for (const key of keys) if (record[key] !== undefined && record[key] !== null) return record[key];
@@ -101,7 +131,10 @@ export function parseAIActionPlan(raw: string): AIActionPlan {
   const payload = JSON.parse(clean.slice(start, end + 1));
   const inputActions = Array.isArray(payload?.actions) ? payload.actions : [];
   const actions = inputActions.flatMap((candidate: Record<string, unknown>, index: number) => {
-    const type = cleanString(candidateValue(candidate, "type", "action", "actionType"), 40) as AIActionType | undefined;
+    if (!objectValue(candidate)) throw new Error("invalid-ai-action-plan");
+    const rawType = cleanString(candidateValue(candidate, "type", "action", "actionType"), 100);
+    const directTool = rawType && workspaceWriteTools.has(rawType) ? rawType : undefined;
+    const type = (directTool ? "workspace_tool" : rawType) as AIActionType | undefined;
     if (!type || !actionTypes.has(type)) return [];
     const title = cleanString(candidateValue(candidate, "title", "name", "heading", "nodeTitle", "sectionTitle"), 180);
     const text = cleanContent(candidateValue(candidate, "text", "body", "details", "summary", "note", "markdown"), 8_000);
@@ -116,7 +149,7 @@ export function parseAIActionPlan(raw: string): AIActionPlan {
     const fallback = type === "create_board_edge" ? edgeFallback : title || text?.slice(0, 80) || targetId || type;
     return [{
       type,
-      tool: cleanString(candidate.tool, 100), arguments: objectValue(candidate.arguments),
+      ...parseWorkspaceCall(directTool ? { ...candidate, tool: directTool } : candidate),
       description: cleanString(candidateValue(candidate, "description", "actionDescription", "preview"), 220) || fallback,
       tempId, targetId, title, text, content,
       label,
@@ -129,9 +162,11 @@ export function parseAIActionPlan(raw: string): AIActionPlan {
   });
   const queries = Array.isArray(payload?.queries) ? payload.queries.map((query: unknown) => {
     const record = objectValue(query);
-    const tool = cleanString(record?.tool, 100);
+    const call = parseWorkspaceCall(record || {});
+    const tool = call.tool;
     if (!tool || !workspaceReadTools.has(tool)) throw new Error("ai-read-tool-invalid");
-    return { tool, arguments: objectValue(record?.arguments) || {} };
+    if (!call.arguments) throw new Error("ai-read-tool-invalid");
+    return { tool, arguments: call.arguments };
   }) : undefined;
   return { summary: cleanString(payload?.summary, 20_000) || "AI change plan", actions, queries, researchNotes: cleanString(payload?.researchNotes, 20_000), moreActions: payload?.moreActions === true };
 }
@@ -209,7 +244,10 @@ export const ACTION_RESPONSE_FORMAT = {
         actions: { type: "array", items: { type: "object", properties: {
           tool: { type: "string", enum: [...workspaceWriteTools] }, arguments: { type: "object", additionalProperties: true },
           type: { type: "string", enum: [...actionTypes] }, description: { type: "string" }, tempId: { type: ["string", "null"] }, targetId: { type: ["string", "null"] }, title: { type: ["string", "null"] }, content: { type: ["string", "null"] }, text: { type: ["string", "null"] }, label: { type: ["string", "null"] }, sourceRef: { type: ["string", "null"] }, targetRef: { type: ["string", "null"] }, cardRef: { type: ["string", "null"] }, boardRef: { type: ["string", "null"] }, collectionId: { type: ["string", "null"] }, date: { type: ["string", "null"] }, dueDate: { type: ["string", "null"] }, contentMode: { type: ["string", "null"], enum: ["append", "replace", null] }, done: { type: ["boolean", "null"] }, x: { type: ["number", "null"] }, y: { type: ["number", "null"] }, width: { type: ["number", "null"] }, height: { type: ["number", "null"] },
-        }, required: ["type", "description"], additionalProperties: false } },
+        }, required: ["type", "description"], anyOf: [
+          { properties: { type: { enum: [...actionTypes].filter(type => type !== "workspace_tool") } } },
+          { properties: { type: { const: "workspace_tool" } }, required: ["tool", "arguments"] },
+        ], additionalProperties: false } },
       }, required: ["summary", "actions"], additionalProperties: false,
     },
   },
@@ -318,6 +356,30 @@ export async function planAIActions(options: { engine: AIEngine; model: string; 
       // 初次計畫仍可由下方保底實體化，避免修復請求失敗後整批工作消失。
     }
   }
+  if (workspacePlanNeedsRepair(plan)) {
+    try {
+    const original = plan;
+    const repaired = parseAIActionPlan(await requestPlan(`${userContent}\n\n<incomplete_plan>${JSON.stringify(original)}</incomplete_plan>\nrepair_workspace_tool_fields：只修正這份計畫的工具欄位格式。workspace_tool 必須提供完整 tool 名称及 arguments 物件。不得增加、減少或更換動作，不得擴大刪除範圍，不得把 all 或 permanent 改為 true；原本已提供的 arguments、ID、tempId 必須原樣保留。不要把工具名稱寫在 description，不要再要求確認；只回傳修正後的完整 JSON 計畫。`));
+    const preserved = repaired.actions.length === original.actions.length && original.actions.every((before, index) => {
+      const after = repaired.actions[index];
+      if (before.type !== after.type) return false;
+      if (before.type !== "workspace_tool") return JSON.stringify(before) === JSON.stringify(after);
+      if (before.tool && workspaceWriteTools.has(before.tool) && before.tool !== after.tool) return false;
+      for (const key of ["tempId", "targetId", "boardRef"] as const) if (before[key] !== after[key]) return false;
+      // Compare parsed values, not key ordering. No argument may be added when a
+      // concrete argument object was already present (especially all/permanent).
+      const canonical = (value: unknown): string => JSON.stringify(value && typeof value === "object" && !Array.isArray(value)
+        ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, nested]) => [key, JSON.parse(canonical(nested))])) : value) ?? "null";
+      return !before.arguments || canonical(before.arguments) === canonical(after.arguments);
+    });
+    if (!preserved || repaired.queries?.length || repaired.moreActions || workspacePlanNeedsRepair(repaired)) throw new Error(workspaceFormatError());
+    plan = repaired;
+    } catch {
+      if (options.isCurrent?.() === false) throw new Error("ai-request-cancelled");
+      throw new Error(workspaceFormatError());
+    }
+  }
+  if (options.isCurrent?.() === false) throw new Error("ai-request-cancelled");
   return materializeAIActionPlan(plan);
 }
 
@@ -373,7 +435,7 @@ async function applyAIActionPlanInTransaction(plan: AIActionPlan, context: { boa
   }
   let plannedNodeIndex = 0;
   for (const action of plan.actions) {
-    if (action.type === "workspace_tool" && (!action.tool || !workspaceWriteTools.has(action.tool) || !action.arguments)) throw new Error("ai-write-tool-invalid");
+    if (action.type === "workspace_tool" && (!action.tool || !workspaceWriteTools.has(action.tool) || !objectValue(action.arguments))) throw new Error(workspaceFormatError());
     if (action.type !== "create_board_card" && action.type !== "create_board_text" && action.type !== "create_board_section") continue;
     plannedNodeIndex += 1;
     if (!action.tempId) action.tempId = `new-node-${plannedNodeIndex}`;
