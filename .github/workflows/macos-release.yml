@@ -1,4 +1,4 @@
-name: macOS 澄境建置與測試版 Release
+name: macOS 澄境正式版建置與 Release
 
 on:
   push:
@@ -63,14 +63,13 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: 建立 GitHub 測試版 Release
+      - name: 建立 GitHub 正式版 Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          TAG="v${VERSION}-macos.${GITHUB_RUN_NUMBER}"
+          TAG="v${VERSION}"
           gh release create "$TAG" release/*.dmg release/ChengJing-macOS.sha256 \
             --repo "$GITHUB_REPOSITORY" \
-            --title "澄境 macOS 測試版 ${TAG}" \
-            --prerelease \
+            --title "澄境筆記 ${VERSION}" \
             --generate-notes
