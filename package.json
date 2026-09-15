@@ -14,7 +14,7 @@
     "build": "tsc -b && vite build && node scripts/verify-built-gemma4-patch.mjs",
     "start": "electron .",
     "dist:dir": "node scripts/prepare-google-oauth.mjs --required && npm run icons && npm run build && electron-builder --dir",
-    "dist:mac": "node scripts/prepare-google-oauth.mjs --required && npm run icons && npm run build && electron-builder --mac dmg",
+    "dist:mac": "node scripts/prepare-google-oauth.mjs --required && npm run icons && npm run build && electron-builder --mac dmg --publish never",
     "dist:win": "node scripts/prepare-google-oauth.mjs --required && npm run icons && npm run build && electron-builder --win --dir --x64 && node scripts/build-windows-installer.mjs x64 && electron-builder --win --dir --arm64 && node scripts/build-windows-installer.mjs arm64",
     "dist:win:x64": "node scripts/prepare-google-oauth.mjs --required && npm run icons && npm run build && electron-builder --win --dir --x64 && node scripts/build-windows-installer.mjs x64",
     "dist:win:arm64": "node scripts/prepare-google-oauth.mjs --required && npm run icons && npm run build && electron-builder --win --dir --arm64 && node scripts/build-windows-installer.mjs arm64",
