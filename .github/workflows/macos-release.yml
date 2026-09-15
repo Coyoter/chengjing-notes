@@ -31,6 +31,9 @@ jobs:
       - name: 安裝依賴
         run: npm ci
 
+      - name: 安裝回歸檢查用 Chromium
+        run: npx playwright install chromium
+
       - name: 執行型別檢查與必要測試
         env:
           CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET }}
