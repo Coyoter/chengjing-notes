@@ -1,0 +1,121 @@
+/* Preview lists must shrink to their panel, not to a title's min-content width.
+   Keep clipping on individual text fields; never hide a whole panel or page. */
+.card-list {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.card-list-item,
+.card-list-item .card-list-heading,
+.card-list-item .card-list-heading > h3 {
+  min-width: 0;
+}
+
+.card-list-item .card-list-heading > svg {
+  flex-shrink: 0;
+}
+
+/* The non-compact card is also used by Inbox. Long URLs must wrap there. */
+.card-list-item .card-list-content > p {
+  overflow-wrap: anywhere;
+}
+
+.card-list-item .card-list-content footer {
+  min-width: 0;
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.card-list-item .card-list-content footer > span {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.card-list-item .card-list-content footer > i {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Today: constrain both the outer grid items and the nested preview tracks. */
+.today-page .today-grid > .surface-panel {
+  min-width: 0;
+}
+
+.today-page .board-preview-list,
+.today-page .task-list {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.today-page .board-preview-list > button,
+.today-page .task-list > label {
+  min-width: 0;
+}
+
+.today-page .board-preview-list > button > span,
+.today-page .task-list > label > span {
+  min-width: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.today-page .board-preview-list > button > svg,
+.today-page .task-check {
+  flex-shrink: 0;
+}
+
+/* Unlike navigation previews, task instructions remain fully readable. */
+.today-page .task-list b,
+.today-page .task-list small {
+  overflow-wrap: anywhere;
+}
+
+.today-page .today-hero,
+.today-page .hero-actions,
+.today-page .section-heading {
+  flex-wrap: wrap;
+}
+
+.today-page .today-hero > div,
+.today-page .section-heading > div {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.today-page .metric-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.today-page .metric-row > button {
+  min-width: 0;
+  height: auto;
+  min-height: 70px;
+}
+
+.today-page .metric-row > button > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.today-page .metric-row > button > svg,
+.today-page .hero-actions svg,
+.today-page .section-heading .text-button > svg {
+  flex-shrink: 0;
+}
+
+/* A wide window can still have a narrow workspace when a side panel is open.
+   Preserve the existing viewport breakpoint; additionally watch actual space. */
+@container app-main (max-width: 760px) {
+  .today-page .today-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .today-page .recent-panel {
+    grid-row: auto;
+  }
+}

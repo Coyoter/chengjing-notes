@@ -8,6 +8,7 @@ import { App } from "./App";
 import { QuickCaptureWindow } from "./components/QuickCaptureWindow";
 import { initializeAndroid } from "./platform/android";
 import "./mobile.css";
+import "./preview-layout.css";
 
 dayjs.locale("zh-tw");
 
