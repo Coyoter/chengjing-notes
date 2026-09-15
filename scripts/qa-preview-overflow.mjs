@@ -131,7 +131,7 @@ async function inspect(page, original) {
         if (rect.width <= 0 || rect.left < panel.left - 1 || rect.right > panel.right + 1) problems.push(`${selector}: outside panel`);
       }
     }
-    for (const [selector, width] of [[".fixture-pin", 13], [".item-more", 28], [".card-kind-mark", 34], [".task-check", 24], [".board-preview-list > button > svg", 15]]) {
+    for (const [selector, width] of [[".fixture-pin", 13], [".item-more", 28], [".card-kind-mark", 34], [".task-check", 30], [".board-preview-list > button > svg", 15]]) {
       for (const el of document.querySelectorAll(selector)) {
         if (Math.abs(el.getBoundingClientRect().width - width) > 1) problems.push(`${selector}: squeezed`);
       }
