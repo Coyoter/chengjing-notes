@@ -27,3 +27,9 @@ old = 'expect(cardAsFragment(await card(old.id))).toEqual(old);'
 new = 'expect(cardAsFragment(await card(old.id))).toEqual({ id: old.id, text: old.text, pinned: old.pinned, tagIds: old.tagIds, createdAt: old.createdAt, updatedAt: old.updatedAt });'
 assert s.count(old) == 2
 p.write_text(s.replace(old, new))
+
+replace('README.md', '- 隻言片語：兩三個字即可保存、釘選、修改、複製、轉成卡片、送進白板／看板或第二大腦', '- 隻言片語：輸入即成為未整理卡片，標籤與卡片庫共用；可直接修改、釘選、歸類或加入待辦／白板／看板')
+
+replace('README.en.md', '- Snippets that can be saved, pinned, edited, copied, converted into cards, or sent to a whiteboard, board, or Second Brain', '- Quick captures are unfiled cards from the start, sharing library tags and supporting direct editing, pinning, filing, and task/whiteboard/kanban placement')
+
+replace("scripts/qa-capture-cards.mjs", '    await poll(() => page.evaluate(() => window.__qa.db.kanbanPlacements.count()), 1);\n    await navigate(page, "library"); await page.locator(".library-tag-section > button").filter({ hasText: "AI" }).click();', '    await poll(() => page.evaluate(() => window.__qa.db.kanbanPlacements.count()), 1);\n    await navigate(page, "library"); await page.locator(".mobile-section-picker").click();\n    await page.locator(".library-tag-section > button").filter({ hasText: "AI" }).click();\n    await page.locator(".library-organizer.is-open").waitFor({ state: "detached" });')
