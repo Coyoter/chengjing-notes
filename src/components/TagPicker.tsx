@@ -57,13 +57,13 @@ export function TagPicker({ selectedIds, onChange, className = "", maxVisible = 
 
   return (
     <div ref={root} className={`tag-strip shared-tag-picker ${className}`.trim()} data-tag-picker>
-      {selected.slice(0, maxVisible).map((tag) => <button type="button" key={tag.id} className={`tone-${tag.color}`} title={`${t("common.remove")} ${tag.name}`} onClick={() => void onChange(selectedIds.filter((id) => id !== tag.id))}><i className={`tone-${tag.color}`} />{tag.name}<X size={11} /></button>)}
+      {selected.slice(0, maxVisible).map((tag) => <button type="button" key={tag.id} className={`tone-${tag.color}`} title={`${t("common.remove")} ${tag.name}`} onClick={() => void onChange(selectedIds.filter((id) => id !== tag.id))}><i className={`tone-${tag.color}`} /><span className="tag-chip-label">{tag.name}</span><X size={11} /></button>)}
       {selected.length > maxVisible && <span className="tag-overflow-count">+{selected.length - maxVisible}</span>}
       <div className="tag-picker-wrap">
         <button type="button" className="add-tag" aria-expanded={open} onClick={() => { setOpen(!open); setCreating(false); setDraft(""); }}><Plus size={12} />{t("tags.add")}</button>
         {open && <div className="tag-picker" role="listbox">
           <div className="tag-picker-options">
-            {available.map((tag) => <button type="button" key={tag.id} onClick={async () => { await onChange([...selectedIds, tag.id]); setOpen(false); }}><i className={`tone-${tag.color}`} />{tag.name}</button>)}
+            {available.map((tag) => <button type="button" key={tag.id} onClick={async () => { await onChange([...selectedIds, tag.id]); setOpen(false); }}><i className={`tone-${tag.color}`} /><span className="tag-chip-label" title={tag.name}>{tag.name}</span></button>)}
             {available.length === 0 && <p>{t("tags.empty")}</p>}
           </div>
           <i className="tag-picker-separator" />
