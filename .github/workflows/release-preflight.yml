@@ -1,0 +1,43 @@
+name: Cross-platform release preflight
+on:
+  push:
+    branches: [release/all-platforms-v0.10.11]
+    paths: [.github/workflows/release-preflight.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Inspect release signing configuration without exposing values
+        env:
+          RELEASE_SECRET_CONTEXT: ${{ toJSON(secrets) }}
+        run: |
+          mkdir -p preflight
+          python3 - <<'PY'
+          import os,json,re
+          values=json.loads(os.environ.pop('RELEASE_SECRET_CONTEXT'))
+          names=sorted(k for k,v in values.items() if v and re.search(r'ANDROID|KEYSTORE|SIGNING|CHENGJING.*(?:PASSWORD|ALIAS|CREDENTIAL)',k))
+          report={'configuredSigningInputNames':names,'desktopOAuthConfigured':bool(values.get('CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET'))}
+          with open('preflight/signing-readiness.json','w') as f: json.dump(report,f,indent=2)
+          print(json.dumps(report,indent=2))
+          PY
+      - name: Preserve current and last Android source for release review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git archive --format=zip 9fa643f9d976222d751cf811287eeecdcb5f11fb > preflight/current-source.zip
+          git archive --format=zip v0.10.6 > preflight/android-v0.10.6-source.zip
+          git diff --stat v0.10.6 9fa643f9d976222d751cf811287eeecdcb5f11fb > preflight/source-diff-stat.txt
+          git diff v0.10.6 9fa643f9d976222d751cf811287eeecdcb5f11fb -- android > preflight/android-baseline.diff
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | {tag: .tag_name, draft, prerelease, target: .target_commitish, assets: [.assets[] | {name, size, digest, url: .browser_download_url}]}' > preflight/releases.jsonl
+          cat preflight/source-diff-stat.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cross-platform-release-preflight
+          path: preflight/
+          retention-days: 7
