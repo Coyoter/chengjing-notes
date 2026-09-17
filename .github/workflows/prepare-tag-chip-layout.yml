@@ -1,0 +1,85 @@
+name: Verify tag-chip layout hotfix
+on:
+  push:
+    branches: [fix/tag-chip-layout-v0.10.12]
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium
+      - name: Reproduce the released layout bug
+        run: |
+          set +e
+          CHENGJING_TAG_LAYOUT_BEFORE=1 CHENGJING_TAG_LAYOUT_OUTPUT=qa-artifacts/tag-chip-before node scripts/qa-tag-chip-layout.mjs > /tmp/tag-layout-before.log 2>&1
+          STATUS=$?
+          set -e
+          cat /tmp/tag-layout-before.log
+          test "$STATUS" -ne 0
+          grep -q TAG_CHIP_LAYOUT /tmp/tag-layout-before.log
+      - name: Apply narrowly scoped source changes and align release metadata
+        run: |
+          python3 - <<'PY'
+          import json,pathlib,re
+          def replace(file,old,new):
+              p=pathlib.Path(file); text=p.read_text()
+              assert text.count(old)==1,(file,old,text.count(old))
+              p.write_text(text.replace(old,new))
+          replace('src/mobile.css','.mobile-thought-stream article > div {','.mobile-thought-stream .mobile-thought-meta {')
+          replace('src/mobile.css','.mobile-thought-stream article button {','.mobile-thought-stream .mobile-thought-meta > button {')
+          replace('src/components/MobileCapture.tsx','<div><time>{relativeTime(fragment.createdAt,language)}</time>','<div className="mobile-thought-meta"><time>{relativeTime(fragment.createdAt,language)}</time>')
+          replace('src/components/TagPicker.tsx',' />{tag.name}<X size={11} />',' /><span className="tag-chip-label">{tag.name}</span><X size={11} />')
+          replace('src/components/TagPicker.tsx',' />{tag.name}</button>',' /><span className="tag-chip-label" title={tag.name}>{tag.name}</span></button>')
+          replace('src/main.tsx','import "./library.css";','import "./library.css";\nimport "./components/tag-picker.css";')
+          for filename in ['package.json','package-lock.json']:
+              p=pathlib.Path(filename); data=json.loads(p.read_text()); assert data['version']=='0.10.11'; data['version']='0.10.12'
+              if filename=='package.json': data['scripts']['qa:tag-chip-layout']='node scripts/qa-tag-chip-layout.mjs'
+              else: data['packages']['']['version']='0.10.12'
+              p.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
+          p=pathlib.Path('release-version.json'); data=json.loads(p.read_text()); assert data['version']=='0.10.11' and data['androidVersionCode']==15
+          data['version']='0.10.12'; data['androidVersionCode']=16; p.write_text(json.dumps(data,indent=2)+'\n')
+          replace('android/app/build.gradle.kts','versionCode = 15','versionCode = 16')
+          replace('android/app/build.gradle.kts','versionName = "0.10.11"','versionName = "0.10.12"')
+          replace('.github/workflows/all-platforms-release.yml','          npm run qa:library-tag-colors','          npm run qa:library-tag-colors\n          npm run qa:tag-chip-layout')
+          replace('CHANGELOG.md','# 更新紀錄\n','# 更新紀錄\n\n## 0.10.12 — 2026-09-17\n\n- 修正手機隻言片語標籤與「＋標籤」被固定寬度樣式壓縮的問題。\n- 共用標籤文字保持單行、底色隨內容加寬，過長以省略號顯示；保留原色點及標籤資料。\n- 重新建置 DMG、Windows x64／ARM64 EXE、Android APK 與 AAB。\n- [完整更新說明](docs/releases/v0.10.12.md)。\n')
+          PY
+          git diff --check
+      - name: Verify fixed layout and existing functionality
+        env:
+          CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET }}
+        run: |
+          npm run typecheck
+          npm test
+          npm run qa:tag-chip-layout
+          npm run qa:library-tag-colors
+          npm run qa:capture-cards
+          npm run qa:archive-library
+      - name: Save evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tag-chip-layout-preflight
+          path: |
+            qa-artifacts/
+            src/styles.css
+            src/mobile.css
+            src/components/TagPicker.tsx
+          retention-days: 14
+      - name: Commit verified source to the working branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/mobile.css src/components/MobileCapture.tsx src/components/TagPicker.tsx src/main.tsx package.json package-lock.json release-version.json android/app/build.gradle.kts .github/workflows/all-platforms-release.yml CHANGELOG.md
+          git diff --cached --check
+          git commit -m 'fix: keep tag chips horizontal and size backgrounds to their labels (v0.10.12)'
+          git push origin HEAD:fix/tag-chip-layout-v0.10.12
