@@ -1,3 +1,4 @@
+import { migrateLegacyFragments, FLEETING_MIGRATION_KEY } from "./migrateFragments";
 import { db } from "../db";
 import { validateBackup } from "./backupValidation";
 import { prepareCompleteBackup, writeRestoreSafetyBackup } from "./autoBackup";
@@ -29,5 +30,6 @@ export async function importBackupForSync() {
     await applySyncPacket({protocol:"chengjing-sync-v1",id:`${actor}-${index}`,operations:batch},{list:async()=>[],get:async()=>"",put:async()=>{},downloadAsset:async(asset)=>asset});
     await db.table("syncOutbox").bulkPut(batch);
   }
+  if (await db.preferences.get(FLEETING_MIGRATION_KEY)) await migrateLegacyFragments();
   return operations.length;
 }

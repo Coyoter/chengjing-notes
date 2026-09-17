@@ -1,4 +1,4 @@
-import { db } from "../db";
+import { db, finishOrganizingCard } from "../db";
 import type { TaskRecord } from "../types";
 
 export function contentTaskTitle(value: string) {
@@ -17,9 +17,15 @@ export function matchesUnscheduledContentTask(task: TaskRecord, title: string, c
 export async function createUnscheduledContentTask(input: { title: string; sourceKey: string; cardId?: string }) {
   const title = contentTaskTitle(input.title);
   if (!title) throw new Error("empty-task-title");
+  return db.transaction("rw", [db.cards, db.tasks], async () => {
+  if (input.cardId) {
+    const card = await db.cards.get(input.cardId);
+    if (!card || card.state === "archived" || card.state === "trash") throw new Error("task-source-unavailable");
+  }
   const conversionKey = `content:${input.sourceKey}`;
   const candidates = await db.tasks.where("conversionKey").equals(conversionKey).toArray();
   const existing = candidates.find((task) => matchesUnscheduledContentTask(task, title, conversionKey, input.cardId));
+  if (input.cardId) await finishOrganizingCard(input.cardId);
   if (existing) return { task: existing, created: false };
   const timestamp = Date.now();
   const task: TaskRecord = {
@@ -33,4 +39,5 @@ export async function createUnscheduledContentTask(input: { title: string; sourc
   };
   await db.tasks.add(task);
   return { task, created: true };
+  });
 }

@@ -356,7 +356,7 @@ export function buildBrainGraph(input: {
     const semanticTitle = card.kind === "journal" ? journalBrainTitle(card, language) : card.title;
     const tagText = card.tagIds.map((id) => tagMap.get(id)).filter(Boolean).join(" ");
     const text = `${semanticTitle}\n${card.plainText}\n${tagText}`.trim();
-    drafts.push({ key: `card:${card.id}`, type: "card", id: card.id, title: semanticTitle, text: card.plainText, sourceKind: card.kind, keywords: extractKeywords(text, 16, language), createdAt: card.createdAt, observedAt: card.kind === "journal" ? journalObservedAt(card.journalDate, card.createdAt) : card.createdAt, updatedAt: card.updatedAt });
+    drafts.push({ key: `card:${card.id}`, type: "card", id: card.id, title: semanticTitle, text: card.plainText, sourceKind: card.properties.captureSource === "fragment" ? "fragment" : card.kind, keywords: extractKeywords(text, 16, language), createdAt: card.createdAt, observedAt: card.kind === "journal" ? journalObservedAt(card.journalDate, card.createdAt) : card.createdAt, updatedAt: card.updatedAt });
   });
   input.boards.forEach((board) => {
     const tagText = board.tagIds.map((id) => tagMap.get(id)).filter(Boolean).join(" ");

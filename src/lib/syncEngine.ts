@@ -1,3 +1,4 @@
+import { migrateLegacyFragments, FLEETING_MIGRATION_KEY } from "./migrateFragments";
 import { db } from "../db";
 import { ignoreTransactionHistory } from "./historyTransactions";
 import { syncEnabled, remoteSyncTransactions, baselineSyncTransactions } from "./syncJournal";
@@ -137,6 +138,7 @@ export function synchronize(transport: SyncTransport): Promise<void> {
       if (!syncEnabled()) return;
       if (!await db.table("syncInbox").get(file.name)) await applySyncPacket(JSON.parse(await transport.get(file.id)), transport);
     }
+    if (await db.preferences.get(FLEETING_MIGRATION_KEY)) await migrateLegacyFragments();
     for await (const packet of pendingSyncPackets()) {
       if (!syncEnabled()) return;
       await transport.stage?.(packet);

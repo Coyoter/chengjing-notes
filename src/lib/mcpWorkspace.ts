@@ -1,4 +1,4 @@
-import { createCard, db } from "../db";
+import { createCard, createFleetingCard, db } from "../db";
 import { isActiveCard, isVisibleCard } from "./cardVisibility";
 import { getHiddenTaskIds } from "./activeContent";
 import { useAppStore } from "../store";
@@ -46,12 +46,12 @@ function requireText(value: unknown, code: string, maximum: number) { const resu
 async function workspaceStatus() {
   const hiddenTasks = await getHiddenTaskIds();
   const [notes, whiteboards, kanban, tasks, fragments, relations] = await Promise.all([
-    db.cards.filter(isVisibleCard).count(), db.boards.count(), db.kanbanBoards.count(), db.tasks.filter((task) => !hiddenTasks.has(task.id)).count(), db.fragments.count(), db.brainEdges.count(),
+    db.cards.filter(isVisibleCard).count(), db.boards.count(), db.kanbanBoards.count(), db.tasks.filter((task) => !hiddenTasks.has(task.id)).count(), db.cards.where("state").equals("inbox").count(), db.brainEdges.count(),
   ]);
   return {
     app: "ChengJing", databaseVersion: db.verno, counts: { notes, whiteboards, kanban, tasks, fragments, relations },
     writeSafety: "Updates require the current updatedAt value. Permanent deletion is not exposed through MCP.",
-    neuronModel: "Notes, whiteboards, tasks and fragments are neurons. connect_neurons creates an explicit relationship between them.",
+    neuronModel: "Notes (including captured thoughts), whiteboards and tasks are neurons. Fragment inputs are aliases for cards. connect_neurons creates an explicit relationship between them.",
   };
 }
 
@@ -71,9 +71,9 @@ async function workspaceSearch(args: Record<string, unknown>) {
     const values = await searchRecords(db.tasks, query, language, (task) => !hidden.has(task.id) && matchesQuery(task.title, query, terms), limit + 1);
     for (const task of values) if (matchesQuery(task.title, query, terms)) results.push({ type: "task", id: task.id, title: task.title, done: task.done, cardId: task.cardId, parentTaskId: task.parentTaskId, dueAt: task.dueAt, createdAt: task.createdAt, updatedAt: task.updatedAt });
   }
-  if (requested.has("fragment")) {
-    const values = await searchRecords(db.fragments, query, language, (fragment) => matchesQuery(fragment.text, query, terms), limit + 1);
-    for (const fragment of values) if (matchesQuery(fragment.text, query, terms)) results.push({ type: "fragment", id: fragment.id, text: fragment.text.slice(0, 900), pinned: fragment.pinned, tagIds: fragment.tagIds, createdAt: fragment.createdAt, updatedAt: fragment.updatedAt });
+  if (requested.has("fragment") && !requested.has("note")) {
+    const values = await searchRecords(db.cards, query, language, card => isVisibleCard(card) && card.properties.captureSource === "fragment" && matchesQuery(`${card.title} ${card.plainText}`, query, terms), limit + 1);
+    results.push(...values.map(card => compactCard(card, 900)));
   }
   if (requested.has("whiteboard")) {
     const values = await searchRecords(db.boards, query, language, (board) => matchesQuery(`${board.title} ${board.description}`, query, terms), limit + 1);
@@ -92,7 +92,7 @@ async function getItem(args: Record<string, unknown>) {
   if (!id) throw new Error("mcp-id-required");
   if (type === "note") { const item = await db.cards.get(id); if (!isActiveCard(item)) throw new Error("mcp-item-not-found"); return compactCard(item, 100_000); }
   if (type === "task") { const hidden = await getHiddenTaskIds(); const item = await db.tasks.get(id); if (!item || hidden.has(id)) throw new Error("mcp-item-not-found"); const children = await db.tasks.where("parentTaskId").equals(id).filter((task) => !hidden.has(task.id)).toArray(); return { type, ...item, children: children.map((child) => ({ id: child.id, title: child.title, done: child.done, updatedAt: child.updatedAt })) }; }
-  if (type === "fragment") { const item = await db.fragments.get(id); if (!item) throw new Error("mcp-item-not-found"); return { type, ...item, searchTerms: undefined }; }
+  if (type === "fragment") { const item = await db.cards.get(id); if (!isActiveCard(item)) throw new Error("mcp-item-not-found"); return compactCard(item, 100_000); }
   if (type === "whiteboard") {
     const board = await db.boards.get(id); if (!board) throw new Error("mcp-item-not-found");
     const [nodes, edges] = await Promise.all([db.boardNodes.where("boardId").equals(id).toArray(), db.boardEdges.where("boardId").equals(id).toArray()]);
@@ -255,7 +255,7 @@ async function brainEntity(type: BrainContentType, id: string) {
   if (type === "card") { const value = await db.cards.get(id); return isActiveCard(value) ? compactCard(value, 6_000) : null; }
   if (type === "board") { const value = await db.boards.get(id); return value ? { type: "whiteboard", ...value } : null; }
   if (type === "task") { const value = await db.tasks.get(id); return value && !(await getHiddenTaskIds()).has(id) ? { type: "task", ...value } : null; }
-  if (type === "fragment") { const value = await db.fragments.get(id); return value ? { type: "fragment", ...value, searchTerms: undefined } : null; }
+  if (type === "fragment") { const value = await db.cards.get(id); return isActiveCard(value) ? compactCard(value, 6_000) : null; }
   return null;
 }
 
@@ -263,13 +263,13 @@ async function createNeuron(args: Record<string, unknown>) {
   const type = text(args.type, 30);
   if (type === "note") return createNote(args);
   if (type === "task") return createTask(args);
-  if (type === "fragment") { const value = requireText(args.content, "mcp-content-required", 20_000); const timestamp = Date.now(); const fragment = { id: crypto.randomUUID(), text: value, pinned: booleanValue(args.pinned), tagIds: [] as string[], createdAt: timestamp, updatedAt: timestamp }; await db.fragments.add(fragment); return { type: "fragment", ...fragment }; }
+  if (type === "fragment") { const card = await createFleetingCard(requireText(args.content, "mcp-content-required", 20_000)); if (booleanValue(args.pinned)) { await db.cards.update(card.id, { favorite: true }); card.favorite = true; } return compactCard(card); }
   if (type === "whiteboard") return createWhiteboard(args);
   throw new Error("mcp-neuron-type-invalid");
 }
 
 async function connectNeurons(args: Record<string, unknown>) {
-  const sourceType = text(args.sourceType, 20) as BrainContentType; const targetType = text(args.targetType, 20) as BrainContentType; const sourceId = identifier(args.sourceId); const targetId = identifier(args.targetId);
+  const sourceType = (args.sourceType === "fragment" ? "card" : text(args.sourceType, 20)) as BrainContentType; const targetType = (args.targetType === "fragment" ? "card" : text(args.targetType, 20)) as BrainContentType; const sourceId = identifier(args.sourceId); const targetId = identifier(args.targetId);
   if (!sourceId || !targetId || (sourceType === targetType && sourceId === targetId)) throw new Error("mcp-neuron-reference-invalid");
   if (!(await brainEntity(sourceType, sourceId)) || !(await brainEntity(targetType, targetId))) throw new Error("mcp-item-not-found");
   const relationType = text(args.relationType, 40) as BrainRelationType;

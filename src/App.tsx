@@ -27,6 +27,7 @@ import { initializeGlobalHistory, redoGlobalAction, runWithoutGlobalHistory, und
 import { migrateLegacyAttachments } from "./lib/attachments";
 import { scrollIntoViewWhenReady } from "./lib/utils";
 import { MobileChrome } from "./components/MobileChrome";
+import { migrateLegacyFragments } from "./lib/migrateFragments";
 import { SyncManager } from "./components/SyncSettings";
 
 let workspaceBootstrap: Promise<void> | null = null;
@@ -37,7 +38,7 @@ const CreateCardModal = lazy(() => import("./components/CreateCardModal").then((
 const ImportModal = lazy(() => import("./components/ImportModal").then((module) => ({ default: module.ImportModal })));
 
 function prepareWorkspace() {
-  if (!workspaceBootstrap) workspaceBootstrap = seedDatabase().then(async () => {
+  if (!workspaceBootstrap) workspaceBootstrap = migrateLegacyFragments().then(() => seedDatabase()).then(async () => {
     const sweep = window.chengjing?.attachments?.sweepPending;
     const pending = await window.chengjing?.attachments?.pendingPaths?.().catch(() => []) || [];
     if (sweep && pending.length) {

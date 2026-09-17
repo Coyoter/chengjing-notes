@@ -1,4 +1,4 @@
-# ChengJing Notes v0.10.8
+# ChengJing Notes v0.10.9
 
 <p align="center">
   <a href="README.md">繁體中文</a>
@@ -23,6 +23,8 @@ You may use ChengJing at work and integrate it into a larger product or service 
 This is source-available software rather than OSI-approved “Open Source” software, because the Open Source Definition does not allow a license to prohibit selling. It is nevertheless free to use, modify, fork, and share under the project’s [ChengJing Free Use and No Resale License 1.0](LICENSE.md). For a plain-language Traditional-Chinese explanation, see [LICENSE.zh-TW.md](LICENSE.zh-TW.md). Third-party packages and assets remain subject to their own licenses.
 
 ## Install
+
+**v0.10.9 is a macOS ARM64 update.** Quick captures are cards from their first save, immediately visible under library tags. Organize the same card into a topic, whiteboard, kanban or linked task without converting or copying it. Existing fragments migrate with their IDs, timestamps, tags, pins and relationships preserved. [Release scope and details](docs/releases/v0.10.9.md). No new Android APK or Windows installer is included.
 
 Cross-platform release: [0.10.0 for Android, Mac and Windows](https://github.com/Coyoter/chengjing-notes/releases/tag/v0.10.0). Install over the previous build without uninstalling. Google Play publication is handled separately; a GitHub release does not imply Play approval. Bidirectional Google sync requires compatible clients on every device; older desktop v0.9.5 supports snapshot backups only. See [Android details and known limitations](ANDROID.md).
 

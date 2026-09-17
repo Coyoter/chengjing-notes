@@ -1,6 +1,6 @@
 {
   "name": "chengjing",
-  "version": "0.10.8",
+  "version": "0.10.9",
   "private": true,
   "author": "Techtarian",
   "description": "澄境 ChengJing — 本機優先的繁體中文視覺筆記與 AI 研究桌面應用",
@@ -76,7 +76,8 @@
     "smoke:electron-main": "node scripts/electron-main-smoke.mjs",
     "icons": "node scripts/build-icon.mjs",
     "prepare:ort": "node scripts/copy-ort-assets.mjs",
-    "typecheck": "tsc -b --pretty false"
+    "typecheck": "tsc -b --pretty false",
+    "qa:fleeting-cards": "node scripts/qa-fleeting-cards.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/node": "^2.0.0",

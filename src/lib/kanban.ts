@@ -1,4 +1,4 @@
-import { db, createCard } from "../db";
+import { db, createCard, finishOrganizingCard } from "../db";
 import type { KanbanBoardRecord, KanbanListRecord, KanbanPlacementRecord } from "../types";
 
 export async function createKanbanBoard(title: string, defaultLists: string[] = []): Promise<KanbanBoardRecord> {
@@ -26,6 +26,11 @@ export async function createKanbanCard(boardId: string, listId: string, title: s
 }
 
 export async function placeCardOnKanban(boardId: string, listId: string, cardId: string): Promise<KanbanPlacementRecord> {
+  return db.transaction("rw", [db.cards, db.kanbanPlacements, db.kanbanBoards, db.kanbanLists], async () => {
+  const card = await db.cards.get(cardId);
+  const target = await db.kanbanLists.get(listId);
+  if (!card || card.state === "archived" || card.state === "trash" || !target || target.boardId !== boardId) throw new Error("kanban-target-invalid");
+  await finishOrganizingCard(cardId);
   const existing = await db.kanbanPlacements.where("boardId").equals(boardId).filter((placement) => placement.cardId === cardId).first();
   if (existing) return existing;
   const siblings = await db.kanbanPlacements.where("listId").equals(listId).sortBy("order");
@@ -34,6 +39,7 @@ export async function placeCardOnKanban(boardId: string, listId: string, cardId:
   await db.kanbanPlacements.add(placement);
   await db.kanbanBoards.update(boardId, { updatedAt: timestamp });
   return placement;
+  });
 }
 
 function reordered<T extends { id: string; order: number; updatedAt: number }>(items: T[], now: number) {

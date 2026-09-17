@@ -1,4 +1,4 @@
-import { db, getOrCreateJournal } from "../db";
+import { db, getOrCreateJournal, createFleetingCard, updateFleetingText, moveCardToTrash } from "../db";
 import type { AIEngine, BoardNodeRecord, BoardRecord, CardRecord, TaskRecord } from "../types";
 import { dueDateInputToTimestamp, deleteTaskEverywhere, updateTaskEverywhere } from "./taskSync";
 import { runAI } from "./ai";
@@ -286,7 +286,7 @@ export async function applyAIActionPlan(plan: AIActionPlan, context: { boardId?:
   const existingBoards = new Set(boards.map((item) => item.id));
   const existingCards = new Set(cards.map((item) => item.id));
   const existingTasks = new Set(tasks.map((item) => item.id));
-  const existingFragments = new Set(fragments.map((item) => item.id));
+  const existingFragments = new Set([...fragments.map((item) => item.id), ...cards.filter(card => isActiveCard(card) && card.properties.captureSource === "fragment").map(card => card.id)]);
   const existingNodes = new Set(nodes.map((item) => item.id));
   const existingEdges = new Set(edges.map((item) => item.id));
   const nodeBoardById = new Map(nodes.map((item) => [item.id, item.boardId]));
@@ -433,9 +433,9 @@ export async function applyAIActionPlan(plan: AIActionPlan, context: { boardId?:
           await db.cards.update(card.id, patch);
         }
       } else if (action.type === "delete_card" && action.targetId) await db.cards.update(action.targetId, { state: "trash", deletedAt: now, updatedAt: now });
-      else if (action.type === "create_fragment" && (action.text || action.content)) await db.fragments.add({ id: crypto.randomUUID(), text: action.text || action.content || "", pinned: false, tagIds: [], createdAt: now, updatedAt: now });
-      else if (action.type === "update_fragment" && action.targetId) await db.fragments.update(action.targetId, { text: action.text || action.content || "", updatedAt: now });
-      else if (action.type === "delete_fragment" && action.targetId) await db.fragments.delete(action.targetId);
+      else if (action.type === "create_fragment" && (action.text || action.content)) await createFleetingCard(action.text || action.content || "");
+      else if (action.type === "update_fragment" && action.targetId) await updateFleetingText(action.targetId, action.text || action.content || "");
+      else if (action.type === "delete_fragment" && action.targetId) await moveCardToTrash(action.targetId);
       else if (action.type === "move_board_node" && action.targetId) { const patch: Partial<BoardNodeRecord> = {}; if (action.x !== undefined) patch.x = action.x; if (action.y !== undefined) patch.y = action.y; if (Object.keys(patch).length) await db.boardNodes.update(action.targetId, patch); const boardId = nodeBoardById.get(action.targetId); if (boardId) touchedBoards.add(boardId); }
       else if (action.type === "delete_board_node" && action.targetId) { const boardId = nodeBoardById.get(action.targetId); await db.boardEdges.filter((edge) => edge.source === action.targetId || edge.target === action.targetId).delete(); await db.boardNodes.delete(action.targetId); existingNodes.delete(action.targetId); if (boardId) touchedBoards.add(boardId); }
       else if (action.type === "create_board_edge") {

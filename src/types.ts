@@ -226,6 +226,7 @@ export interface PreferenceRecord {
 }
 
 export interface CardVersionRecord {
+  captureSnapshot?: { tagIds: string[]; favorite: boolean };
   id: string;
   cardId: string;
   title: string;

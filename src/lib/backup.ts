@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { migrateLegacyFragments } from "./migrateFragments";
 import { db } from "../db";
 import { intlLocale, translate } from "../i18n";
 import { useAppStore } from "../store";
@@ -141,6 +142,7 @@ export async function restoreBackup(raw: string, backupFilePath = "") {
       if (Array.isArray(values) && values.length) await db.table(name).bulkAdd(values);
     }
     if (restoredAttachments.length) await db.attachments.bulkAdd(restoredAttachments);
+    await migrateLegacyFragments();
   });
   clearGlobalHistory();
   await window.chengjing?.attachments?.cleanup(restoredAttachments.map((attachment: AttachmentRecord) => attachment.relativePath).filter(Boolean) as string[]);

@@ -1,0 +1,5 @@
+.organize-card-dialog { width: min(460px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.organize-card-dialog header p { line-height: 1.6; overflow-wrap: anywhere; margin-top: 12px; }
+.organize-card-dialog .content-edit-fields label { display: grid; gap: 8px; min-width: 0; }
+.organize-card-dialog select { width: 100%; min-width: 0; max-width: 100%; min-height: 42px; border: 1px solid var(--border); border-radius: 8px; color: var(--text-1); background: var(--surface-2); padding: 8px; }
+.organize-card-dialog footer { flex-wrap: wrap; }

@@ -5,6 +5,7 @@ import { ignoreTransactionHistory, transactionHistoryIgnored } from "./lib/histo
 import dayjs from "dayjs";
 import { intlLocale, translate } from "./i18n";
 import { useAppStore } from "./store";
+import { cardAsFragment, fragmentAsCard, fleetingTextPatch, isFleetingCard } from "./lib/fleetingCard";
 import { cardSearchTerms, fragmentSearchTerms, taskSearchTerms } from "./lib/searchIndex";
 import { inferJournalTouched, isMaterializedCard } from "./lib/journalVisibility";
 import {
@@ -277,7 +278,10 @@ export async function moveCardToKnowledgeGroup(cardId: string, collectionId?: st
     const group = await db.knowledgeGroups.get(collectionId);
     if (!group || group.kind !== "topic") throw new Error("invalid-topic");
   }
-  await db.cards.update(cardId, { collectionId, updatedAt: Date.now() });
+  await db.transaction("rw", db.cards, async () => {
+    await db.cards.update(cardId, { collectionId, updatedAt: Date.now() });
+    if (collectionId) await finishOrganizingCard(cardId);
+  });
 }
 
 export async function renameTag(tagId: string, value: string): Promise<TagRecord> {
@@ -678,22 +682,39 @@ export async function pruneAllCardVersions() {
 export async function restoreCardVersion(versionId: string) {
   const version = await db.cardVersions.get(versionId);
   if (!version) throw new Error(translate(useAppStore.getState().language || "zh-TW", "db.versionMissing"));
-  await updateCardWithHistory(version.cardId, { title: version.title, contentHtml: version.contentHtml, plainText: version.plainText });
+  await updateCardWithHistory(version.cardId, { title: version.title, contentHtml: version.contentHtml, plainText: version.plainText, ...(version.captureSnapshot || {}) });
+}
+
+export async function createFleetingCard(text: string, tagIds: string[] = [], id = crypto.randomUUID()): Promise<CardRecord> {
+  const value = text.trim();
+  if (!value) throw new Error(translate(useAppStore.getState().language || "zh-TW", "db.fragmentEmpty"));
+  return db.transaction("rw", db.cards, async () => {
+    const existing = await db.cards.get(id);
+    if (existing) {
+      if (!isFleetingCard(existing)) throw new Error("capture-id-conflict");
+      return existing; // Native share retries must not duplicate or resurrect a card.
+    }
+    const timestamp = Date.now();
+    const card = fragmentAsCard({ id, text: value, pinned: false, tagIds, createdAt: timestamp, updatedAt: timestamp });
+    await db.cards.add(card);
+    return card;
+  });
 }
 
 export async function createFragment(text: string, tagIds: string[] = []): Promise<FragmentRecord> {
-  const timestamp = Date.now();
-  const fragment: FragmentRecord = {
-    id: crypto.randomUUID(),
-    text: text.trim(),
-    pinned: false,
-    tagIds: [...new Set(tagIds)],
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-  if (!fragment.text) throw new Error(translate(useAppStore.getState().language || "zh-TW", "db.fragmentEmpty"));
-  await db.fragments.add(fragment);
-  return fragment;
+  return cardAsFragment(await createFleetingCard(text, tagIds));
+}
+
+export async function updateFleetingText(id: string, text: string) {
+  const card = await db.cards.get(id);
+  if (!card || card.state === "archived" || card.state === "trash") throw new Error("capture-card-not-found");
+  const value = text.trim();
+  if (!value) throw new Error(translate(useAppStore.getState().language || "zh-TW", "db.fragmentEmpty"));
+  await updateCardWithHistory(id, { ...fleetingTextPatch(value), updatedAt: Date.now() });
+}
+
+export async function finishOrganizingCard(id: string) {
+  await db.cards.where("id").equals(id).filter(card => card.state === "inbox").modify({ state: "active", updatedAt: Date.now() });
 }
 
 export async function moveCardToTrash(cardId: string) {

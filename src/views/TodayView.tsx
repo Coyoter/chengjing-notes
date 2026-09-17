@@ -16,7 +16,7 @@ export function TodayView() {
     return db.tasks.orderBy("dueAt").filter((task) => !hidden.has(task.id) && !task.done && !task.parentTaskId).limit(4).toArray();
   }, [], []);
   const boards = useLiveQuery(() => db.boards.orderBy("updatedAt").reverse().limit(3).toArray(), [], []);
-  const fragmentCount = useLiveQuery(() => db.fragments.count(), [], 0);
+  const fragmentCount = useLiveQuery(() => db.cards.where("state").equals("inbox").count(), [], 0);
   const cardCount = useLiveQuery(() => db.cards.filter((card) => isVisibleCard(card)).count(), [], 0);
   const boardCount = useLiveQuery(() => db.boards.count(), [], 0);
   const setView = useAppStore((state) => state.setView);

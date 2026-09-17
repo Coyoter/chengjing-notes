@@ -26,7 +26,7 @@ import {
   db,
   deleteBoardPermanently,
   deleteCardPermanently,
-  deleteFragmentPermanently,
+  finishOrganizingCard,
   deleteTag,
   moveCardToTrash,
   restoreCardFromTrash,
@@ -47,11 +47,13 @@ import { getContentEditCopy } from "../lib/contentEditCopy";
 import { createUnscheduledContentTask } from "../lib/contentTask";
 import { getContentTaskCopy } from "../lib/contentTaskCopy";
 import { getTaskHierarchyCopy } from "../lib/taskHierarchyCopy";
+import { resolveFleetingCard } from "../lib/migrateFragments";
+import { getFleetingCopy } from "../lib/fleetingCopy";
+import { OrganizeCardDialog } from "./OrganizeCardDialog";
 import { useMobileBack } from "../lib/mobileBack";
 
 type ContentEditDialog =
   | { kind: "task"; id: string; draft: string }
-  | { kind: "fragment"; id: string; draft: string }
   | { kind: "highlight"; id: string; draft: string; noteDraft: string };
 
 function escapeHtml(value: string) {
@@ -69,6 +71,7 @@ async function copyText(value: string) {
 }
 
 export function GlobalContextMenu() {
+  const [organizingId, setOrganizingId] = useState<string | null>(null);
   const [request, setRequest] = useState<ContextMenuRequest | null>(null);
   const [renameDialog, setRenameDialog] = useState<{ id: string; name: string } | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
@@ -86,18 +89,17 @@ export function GlobalContextMenu() {
   const childComposing = useRef(false);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openedAt = useRef(0);
-  const cardId = request?.target.kind === "card" ? request.target.id : null;
+  const cardId = request?.target.kind === "card" || request?.target.kind === "fragment" ? request.target.id : null;
   const taskId = request?.target.kind === "task" ? request.target.id : null;
   const highlightId = request?.target.kind === "highlight" ? request.target.id : null;
-  const fragmentId = request?.target.kind === "fragment" ? request.target.id : null;
   const boardId = request?.target.kind === "board" ? request.target.id : null;
   const tagId = request?.target.kind === "tag" ? request.target.id : null;
-  const card = useLiveQuery(() => cardId ? db.cards.get(cardId) : undefined, [cardId]);
+  const card = useLiveQuery(() => cardId ? (request?.target.kind === "fragment" ? resolveFleetingCard(cardId) : db.cards.get(cardId)) : undefined, [cardId, request?.target.kind]);
   const highlight = useLiveQuery(() => highlightId ? db.highlights.get(highlightId) : undefined, [highlightId]);
-  const fragment = useLiveQuery(() => fragmentId ? db.fragments.get(fragmentId) : undefined, [fragmentId]);
   const board = useLiveQuery(() => boardId ? db.boards.get(boardId) : undefined, [boardId]);
   const tag = useLiveQuery(() => tagId ? db.tags.get(tagId) : undefined, [tagId]);
   const { language, t } = useI18n();
+  const fleetingCopy = getFleetingCopy(language);
   const taskCopy = getTaskEnhancementCopy(language);
   const kanbanCopy = getKanbanCopy(language);
   const editCopy = getContentEditCopy(language);
@@ -157,7 +159,7 @@ export function GlobalContextMenu() {
       x: Math.max(8, Math.min(request.x, window.innerWidth - rect.width - 8)),
       y: Math.max(8, Math.min(request.y, window.innerHeight - rect.height - 8)),
     });
-  }, [request, card, task, highlight, fragment, board, tag]);
+  }, [request, card, task, highlight, board, tag]);
 
   function run(action: () => unknown | Promise<unknown>) {
     setRequest(null);
@@ -173,12 +175,6 @@ export function GlobalContextMenu() {
   async function addCardAsTask() {
     if (!card) return;
     const result = await createUnscheduledContentTask({ title: card.title, sourceKey: `card:${card.id}`, cardId: card.id });
-    showNotice(result.created ? contentTaskCopy.added : contentTaskCopy.alreadyExists);
-  }
-
-  async function addFragmentAsTask() {
-    if (!fragment) return;
-    const result = await createUnscheduledContentTask({ title: fragment.text, sourceKey: `fragment:${fragment.id}` });
     showNotice(result.created ? contentTaskCopy.added : contentTaskCopy.alreadyExists);
   }
 
@@ -216,39 +212,6 @@ export function GlobalContextMenu() {
     const escaped = escapeHtml(text).replace(/\r?\n/g, "<br>");
     const next = await createCard({ title: text.split(/\r?\n/)[0].slice(0, 80), plainText: text, contentHtml: `<p>${escaped}</p>`, state: "active" });
     useAppStore.getState().openCard(next.id);
-  }
-
-  async function cardFromFragment() {
-    if (!fragment) return null;
-    return createCard({ title: fragment.text.slice(0, 34), plainText: fragment.text, contentHtml: `<p>${escapeHtml(fragment.text)}</p>`, state: "active", tagIds: [...fragment.tagIds] });
-  }
-
-  async function sendFragmentToBoard() {
-    const card = await cardFromFragment();
-    if (!card) return;
-    let board = useAppStore.getState().selectedBoardId ? await db.boards.get(useAppStore.getState().selectedBoardId!) : undefined;
-    if (!board) board = (await db.boards.orderBy("updatedAt").reverse().first()) || undefined;
-    if (!board) {
-      const timestamp = Date.now();
-      board = { id: crypto.randomUUID(), title: t("common.untitledBoard"), description: "", favorite: false, tagIds: [], createdAt: timestamp, updatedAt: timestamp };
-      await db.boards.add(board);
-    }
-    const count = await db.boardNodes.where("boardId").equals(board.id).count();
-    await db.boardNodes.add({ id: crypto.randomUUID(), boardId: board.id, kind: "card", cardId: card.id, x: 100 + (count % 3) * 315, y: 100 + Math.floor(count / 3) * 215, width: 265, height: 190 });
-    await touchBoard(board.id);
-    useAppStore.getState().openBoard(board.id);
-  }
-
-  async function sendFragmentToKanban() {
-    const card = await cardFromFragment();
-    if (!card) return;
-    let board = useAppStore.getState().selectedKanbanBoardId ? await db.kanbanBoards.get(useAppStore.getState().selectedKanbanBoardId!) : undefined;
-    if (!board) board = (await db.kanbanBoards.orderBy("updatedAt").reverse().first()) || undefined;
-    if (!board) board = await createKanbanBoard(kanbanCopy.untitledBoard, [...kanbanCopy.defaultLists]);
-    let list = await db.kanbanLists.where("boardId").equals(board.id).sortBy("order").then((items) => items[0]);
-    if (!list) list = await createKanbanList(board.id, kanbanCopy.defaultLists[0]);
-    if (list) await placeCardOnKanban(board.id, list.id, card.id);
-    useAppStore.getState().openKanbanBoard(board.id);
   }
 
   async function duplicateBoard() {
@@ -304,7 +267,6 @@ export function GlobalContextMenu() {
     if (!value) return;
     try {
       if (editDialog.kind === "task") await updateTaskEverywhere(editDialog.id, { title: value });
-      if (editDialog.kind === "fragment") await db.fragments.update(editDialog.id, { text: value, updatedAt: Date.now() });
       if (editDialog.kind === "highlight") await db.highlights.update(editDialog.id, { text: value, note: editDialog.noteDraft.trim() });
       setEditDialog(null);
     } catch (error) {
@@ -324,10 +286,11 @@ export function GlobalContextMenu() {
     }
   }
 
-  if (!request && !renameDialog && !dueDialog && !editDialog && !childDialog && !notice) return null;
+  if (!request && !renameDialog && !dueDialog && !editDialog && !childDialog && !notice && !organizingId) return null;
 
   return (
     <>
+    {organizingId && <OrganizeCardDialog cardId={organizingId} onClose={() => setOrganizingId(null)} />}
     {request &&
     <div
       ref={ref}
@@ -342,9 +305,11 @@ export function GlobalContextMenu() {
       {card && <>
         <header><span>{t("context.cardActions")}</span><b>{card.title}</b></header>
         <button type="button" role="menuitem" data-menu-action="edit" onClick={() => run(() => useAppStore.getState().openCard(card.id, { allowInactive: card.state === "archived" || card.state === "trash" }))}><Pencil size={15} />{editCopy.edit}</button>
+        {(card.state === "inbox" || card.state === "active") && <button type="button" role="menuitem" data-menu-action="organize" onClick={() => { setRequest(null); setOrganizingId(card.id); }}><FolderOpen size={15} />{fleetingCopy.organize}</button>}
+        {card.state === "inbox" && <button type="button" role="menuitem" data-menu-action="finish-organizing" onClick={() => run(() => finishOrganizingCard(card.id))}><CheckCircle2 size={15} />{fleetingCopy.finish}</button>}
         {card.sourceUrl && <button type="button" role="menuitem" onClick={() => run(() => window.open(card.sourceUrl, "_blank", "noopener,noreferrer"))}><ArrowUpRight size={15} />{t("context.openOriginal")}</button>}
         {card.state !== "trash" && <button type="button" role="menuitem" data-menu-action="convert-board" onClick={() => run(() => { useAppStore.getState().openCard(card.id, { allowInactive: card.state === "archived" || card.state === "trash" }); useAppStore.getState().openAIWithAction(t("card.convertToBoardPrompt")); })}><PanelsTopLeft size={15} />{t("card.convertToBoard")}</button>}
-        {card.state !== "trash" && <button type="button" role="menuitem" data-menu-action="to-task" onClick={() => run(addCardAsTask)}><ListTodo size={15} />{contentTaskCopy.menuLabel}</button>}
+        {(card.state === "active" || card.state === "inbox") && <button type="button" role="menuitem" data-menu-action="to-task" onClick={() => run(addCardAsTask)}><ListTodo size={15} />{contentTaskCopy.menuLabel}</button>}
         <button type="button" role="menuitem" onClick={() => run(() => db.cards.update(card.id, { favorite: !card.favorite, updatedAt: Date.now() }))}>{card.favorite ? <PinOff size={15} /> : <Pin size={15} />}{card.favorite ? t("context.unpinCard") : t("context.pinCard")}</button>
         <button type="button" role="menuitem" data-menu-action="duplicate" onClick={() => run(duplicateCard)}><FilePlus2 size={15} />{t("context.duplicate")}</button>
         <button type="button" role="menuitem" onClick={() => run(() => writeAppClipboard({ kind: "card-ref", cardId: card.id }, `${card.title}\n\n${card.plainText}`))}><Copy size={15} />{t("context.copyCard")}</button>
@@ -381,19 +346,6 @@ export function GlobalContextMenu() {
         <button type="button" role="menuitem" className="is-danger" onClick={() => run(() => db.highlights.delete(highlight.id))}><Trash2 size={15} />{t("context.deleteHighlight")}</button>
       </>}
 
-      {fragment && <>
-        <header><span>{t("context.fragmentActions")}</span><b>{fragment.text.slice(0, 42)}</b></header>
-        <button type="button" role="menuitem" data-menu-action="edit" onClick={() => { setRequest(null); setEditDialog({ kind: "fragment", id: fragment.id, draft: fragment.text }); }}><Pencil size={15} />{editCopy.edit}</button>
-        <button type="button" role="menuitem" onClick={() => run(() => db.fragments.update(fragment.id, { pinned: !fragment.pinned, updatedAt: Date.now() }))}>{fragment.pinned ? <PinOff size={15} /> : <Pin size={15} />}{fragment.pinned ? t("context.unpin") : t("context.pin")}</button>
-        <button type="button" role="menuitem" onClick={() => run(async () => { const card = await cardFromFragment(); if (card) useAppStore.getState().openCard(card.id, { allowInactive: card.state === "archived" || card.state === "trash" }); })}><FilePlus2 size={15} />{t("context.toCard")}</button>
-        <button type="button" role="menuitem" onClick={() => run(sendFragmentToBoard)}><PanelsTopLeft size={15} />{t("context.toBoard")}</button>
-        <button type="button" role="menuitem" onClick={() => run(sendFragmentToKanban)}><SquareKanban size={15} />{t("context.toKanban")}</button>
-        <button type="button" role="menuitem" data-menu-action="to-task" onClick={() => run(addFragmentAsTask)}><ListTodo size={15} />{contentTaskCopy.menuLabel}</button>
-        <button type="button" role="menuitem" onClick={() => run(() => writeAppClipboard({ kind: "fragment-ref", fragmentId: fragment.id }, fragment.text))}><Copy size={15} />{t("context.copyText")}</button>
-        <i className="context-separator" />
-        <button type="button" role="menuitem" className="is-danger" onClick={() => run(() => deleteFragmentPermanently(fragment.id))}><Trash2 size={15} />{t("context.deleteFragment")}</button>
-      </>}
-
       {board && <>
         <header><span>{t("context.boardActions")}</span><b>{board.title}</b></header>
         <button type="button" role="menuitem" data-menu-action="edit" onClick={() => run(() => useAppStore.getState().openBoard(board.id))}><Pencil size={15} />{editCopy.edit}</button>
@@ -426,15 +378,15 @@ export function GlobalContextMenu() {
     {editDialog && <div className="tag-rename-backdrop content-edit-backdrop" onMouseDown={() => setEditDialog(null)}>
       <form className="tag-rename-dialog content-edit-dialog" data-content-edit={editDialog.kind} role="dialog" aria-modal="true" aria-labelledby="content-edit-title" onSubmit={submitContentEdit} onMouseDown={(event) => event.stopPropagation()}>
         <header>
-          <span>{editDialog.kind === "task" ? editCopy.taskEyebrow : editDialog.kind === "fragment" ? editCopy.fragmentEyebrow : editCopy.highlightEyebrow}</span>
-          <h2 id="content-edit-title">{editDialog.kind === "task" ? editCopy.taskTitle : editDialog.kind === "fragment" ? editCopy.fragmentTitle : editCopy.highlightTitle}</h2>
+          <span>{editDialog.kind === "task" ? editCopy.taskEyebrow : editCopy.highlightEyebrow}</span>
+          <h2 id="content-edit-title">{editDialog.kind === "task" ? editCopy.taskTitle : editCopy.highlightTitle}</h2>
         </header>
         <div className="content-edit-fields">
           <label>
-            <span>{editDialog.kind === "task" ? editCopy.taskLabel : editDialog.kind === "fragment" ? editCopy.fragmentLabel : editCopy.highlightTextLabel}</span>
+            <span>{editDialog.kind === "task" ? editCopy.taskLabel : editCopy.highlightTextLabel}</span>
             {editDialog.kind === "task"
               ? <input autoFocus maxLength={240} value={editDialog.draft} onChange={(event) => setEditDialog({ ...editDialog, draft: event.target.value })} onCompositionStart={() => { editComposing.current = true; }} onCompositionEnd={(event) => { editComposing.current = false; setEditDialog({ ...editDialog, draft: event.currentTarget.value }); }} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setEditDialog(null); } if (event.key === "Enter" && ((event.nativeEvent as KeyboardEvent).isComposing || editComposing.current)) event.preventDefault(); }} />
-              : <textarea autoFocus rows={editDialog.kind === "highlight" ? 4 : 6} maxLength={editDialog.kind === "fragment" ? 500 : 2000} value={editDialog.draft} onChange={(event) => setEditDialog({ ...editDialog, draft: event.target.value })} onCompositionStart={() => { editComposing.current = true; }} onCompositionEnd={(event) => { editComposing.current = false; setEditDialog({ ...editDialog, draft: event.currentTarget.value }); }} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setEditDialog(null); } if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && !editComposing.current && !(event.nativeEvent as KeyboardEvent).isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />}
+              : <textarea autoFocus rows={4} maxLength={2000} value={editDialog.draft} onChange={(event) => setEditDialog({ ...editDialog, draft: event.target.value })} onCompositionStart={() => { editComposing.current = true; }} onCompositionEnd={(event) => { editComposing.current = false; setEditDialog({ ...editDialog, draft: event.currentTarget.value }); }} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setEditDialog(null); } if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && !editComposing.current && !(event.nativeEvent as KeyboardEvent).isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />}
           </label>
           {editDialog.kind === "highlight" && <label>
             <span>{editCopy.highlightNoteLabel}</span>

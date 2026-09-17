@@ -38,10 +38,10 @@ export function MobileChrome() {
       if (activeImport.current) return; activeImport.current = true;
       try {
         const queue = await androidCall<Array<{ id: string; text: string; files: Array<{ path: string; name: string }> }>>("share.pending");
-        const { db } = await import("../db");
+        const { db, createFleetingCard } = await import("../db");
         const { importFile } = await import("../lib/importers");
         for (const item of queue) {
-          if (item.text && !await db.fragments.get(item.id)) { const now = Date.now(); await db.fragments.add({ id: item.id, text: item.text, pinned: false, tagIds: [], createdAt: now, updatedAt: now }); }
+          if (item.text) await createFleetingCard(item.text, [], item.id);
           for (const file of item.files) await importFile(file.name, new Blob(), file.path);
           await androidCall("share.ack", { id: item.id });
         }
