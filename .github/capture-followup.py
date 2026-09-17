@@ -19,3 +19,11 @@ replace('src/lib/captureCards.test.ts', 'describe("舊片語安全搬移", () =>
     await pruneCardVersions(item.id);
     expect((await db.cardVersions.where("cardId").equals(item.id).toArray()).filter((v) => v.legacyFragment)).toHaveLength(3);
   });''')
+
+# Dexie adds computed index keys to inserted fixtures; compare all six user data fields.
+p = Path("src/lib/captureCards.test.ts")
+s = p.read_text()
+old = 'expect(cardAsFragment(await card(old.id))).toEqual(old);'
+new = 'expect(cardAsFragment(await card(old.id))).toEqual({ id: old.id, text: old.text, pinned: old.pinned, tagIds: old.tagIds, createdAt: old.createdAt, updatedAt: old.updatedAt });'
+assert s.count(old) == 2
+p.write_text(s.replace(old, new))
