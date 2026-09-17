@@ -1,6 +1,6 @@
 {
   "name": "chengjing",
-  "version": "0.10.9",
+  "version": "0.10.10",
   "private": true,
   "author": "Techtarian",
   "description": "澄境 ChengJing — 本機優先的繁體中文視覺筆記與 AI 研究桌面應用",
@@ -77,7 +77,8 @@
     "icons": "node scripts/build-icon.mjs",
     "prepare:ort": "node scripts/copy-ort-assets.mjs",
     "typecheck": "tsc -b --pretty false",
-    "qa:capture-cards": "node scripts/qa-capture-cards.mjs"
+    "qa:capture-cards": "node scripts/qa-capture-cards.mjs",
+    "qa:library-tag-colors": "node scripts/qa-library-tag-colors.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/node": "^2.0.0",
