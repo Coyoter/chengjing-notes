@@ -9,18 +9,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Audit archive and navigation queries
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          for p in sorted(Path('src').rglob('*')):
-              if p.suffix not in ('.ts','.tsx') or '.test.' in p.name or p.name == 'i18n.ts':
-                  continue
-              lines=p.read_text().splitlines()
-              matches=[i for i,l in enumerate(lines) if re.search(r'\.state\s*[!=]=|where\([\"\x27]state|[\"\x27]database[\"\x27]|DatabaseView|function.*archiv|function.*Archive|function.*openCard|openCard:',l)]
-              if matches:
-                  print('\n### '+str(p))
-                  for i in matches:
-                      print(f'{i+1}: {lines[i]}')
-          PY
+      - run: git archive --format=tar HEAD > /tmp/chengjing-source.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chengjing-source
+          path: /tmp/chengjing-source.tar
+          retention-days: 1
