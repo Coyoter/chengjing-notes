@@ -1,3 +1,4 @@
+import { isActiveCard, hiddenTaskIds } from "./cardVisibility";
 import type {
   BoardNodeRecord,
   BoardRecord,
@@ -352,7 +353,7 @@ export function buildBrainGraph(input: {
   }
   const drafts: Array<Omit<BrainNodeView, "weight" | "radius" | "position">> = [];
 
-  input.cards.filter((card) => card.state !== "trash" && isMaterializedCard(card)).forEach((card) => {
+  input.cards.filter((card) => isActiveCard(card) && isMaterializedCard(card)).forEach((card) => {
     const semanticTitle = card.kind === "journal" ? journalBrainTitle(card, language) : card.title;
     const tagText = card.tagIds.map((id) => tagMap.get(id)).filter(Boolean).join(" ");
     const text = `${semanticTitle}\n${card.plainText}\n${tagText}`.trim();
@@ -368,9 +369,11 @@ export function buildBrainGraph(input: {
     const tagText = fragment.tagIds.map((id) => tagMap.get(id)).filter(Boolean).join(" ");
     drafts.push({ key: `fragment:${fragment.id}`, type: "fragment", id: fragment.id, title: fragment.text.slice(0, 36), text: fragment.text, sourceKind: "fragment", keywords: extractKeywords(`${fragment.text}\n${tagText}`, 16, language), createdAt: fragment.createdAt, observedAt: fragment.createdAt, updatedAt: fragment.updatedAt });
   });
+  const hiddenTasks = hiddenTaskIds(input.tasks, new Set(input.cards.filter((card) => !isActiveCard(card)).map((card) => card.id)));
   input.tasks.forEach((task) => {
+    if (hiddenTasks.has(task.id)) return;
     const sourceCard = task.cardId ? cardMap.get(task.cardId) : undefined;
-    if (task.cardId && (!sourceCard || sourceCard.state === "trash")) return;
+    if (task.cardId && (!isActiveCard(sourceCard))) return;
     const tagText = sourceCard?.tagIds.map((id) => tagMap.get(id)).filter(Boolean).join(" ") || "";
     const due = task.dueAt ? dueDateFormatter.format(task.dueAt) : "";
     const details = [task.done ? taskCopy.taskDone : taskCopy.taskOpen, sourceCard ? `${taskCopy.source}: ${sourceCard.title}` : "", due ? taskCopyFormat(taskCopy.due, { date: due }) : taskCopy.noDue].filter(Boolean);

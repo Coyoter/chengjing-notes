@@ -1,3 +1,8 @@
+import { LibraryTags } from "../components/LibraryTags";
+import { LibraryStructuredView } from "../components/LibraryStructuredView";
+import { isActiveCard, matchesCardCollection } from "../lib/cardVisibility";
+import { getLibraryIntegrationCopy } from "../lib/libraryIntegrationCopy";
+import { Table2, Columns3 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Archive, ArrowUpRight, FileStack, Folder, FolderOpen, FolderTree, Grid2X2, List, LoaderCircle, MoreHorizontal, Pencil, Pin, Plus, Search, Trash2, X } from "lucide-react";
@@ -22,8 +27,9 @@ export function LibraryView() {
   const [organizerOpen,setOrganizerOpen]=useState(false);
   useMobileBack(organizerOpen,()=>setOrganizerOpen(false));
   const [query, setQuery] = useState("");
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [kind, setKind] = useState("all");
-  const [layout, setLayout] = useState<"grid" | "list">("grid");
+  const [layout, setLayout] = useState<"grid" | "list" | "table" | "stages">("grid");
   const [collection, setCollection] = useState<"library" | "archive" | "trash">("library");
   const [selectedGroup, setSelectedGroup] = useState<SelectedGroup>("all");
   const [groupForm, setGroupForm] = useState<GroupForm | null>(null);
@@ -35,6 +41,8 @@ export function LibraryView() {
   const [visibleLimit, setVisibleLimit] = useState(120);
   const composing = useRef(false);
   const { language, t } = useI18n();
+  const tags = useLiveQuery(() => db.tags.orderBy("name").toArray(), [], []);
+  const integrationCopy = getLibraryIntegrationCopy(language);
   const groups = useLiveQuery(() => db.knowledgeGroups.orderBy("order").toArray(), [], []);
   const openCard = useAppStore((state) => state.openCard);
   const setCreateCardOpen = useAppStore((state) => state.setCreateCardOpen);
@@ -47,33 +55,34 @@ export function LibraryView() {
     if (!selected) return null;
     return new Set(selected.kind === "area" ? topics.filter((topic) => topic.parentId === selected.id).map((topic) => topic.id) : [selected.id]);
   }, [groupById, selectedGroup, topics]);
-  function matchesCurrent(card: CardRecord) {
-    const collectionMatches = collection === "library" ? card.state !== "archived" && card.state !== "trash" : card.state === collection.replace("archive", "archived");
+  function matchesSource(card: CardRecord) {
+    const collectionMatches = matchesCardCollection(card, collection);
     const groupMatches = selectedGroup === "all"
       || (selectedGroup === "pinned" && card.favorite)
       || (selectedGroup === "unassigned" && !card.collectionId)
       || Boolean(card.collectionId && selectedTopicIds?.has(card.collectionId));
-    return isMaterializedCard(card) && collectionMatches && groupMatches && (kind === "all" || card.kind === kind) && includesQuery(`${card.title} ${card.plainText}`, query, language);
+    return isMaterializedCard(card) && collectionMatches && groupMatches && (kind === "all" || card.kind === kind) && (!selectedTagId || card.tagIds.includes(selectedTagId));
   }
+  function matchesCurrent(card: CardRecord) { return matchesSource(card) && includesQuery(`${card.title} ${card.plainText}`, query, language); }
   const cards = useLiveQuery(async () => {
     if (query.trim()) return (await searchRecords(db.cards, query, language, matchesCurrent, visibleLimit)).sort((left, right) => Number(right.favorite) - Number(left.favorite) || right.updatedAt - left.updatedAt);
     const recent = await db.cards.orderBy("updatedAt").reverse().filter(matchesCurrent).limit(visibleLimit).toArray();
     if (selectedGroup === "pinned") return recent;
     const pinned = await db.cards.filter((card) => card.favorite && matchesCurrent(card)).limit(visibleLimit).toArray();
     return [...new Map([...pinned, ...recent].map((card) => [card.id, card])).values()].sort((left, right) => Number(right.favorite) - Number(left.favorite) || right.updatedAt - left.updatedAt).slice(0, visibleLimit);
-  }, [collection, kind, language, query, selectedGroup, [...(selectedTopicIds || [])].join("|"), visibleLimit], []);
+  }, [collection, kind, language, query, selectedTagId, selectedGroup, [...(selectedTopicIds || [])].join("|"), visibleLimit], []);
   const filteredTotal = useLiveQuery(async () => {
     return db.cards.orderBy("updatedAt").filter(matchesCurrent).count();
-  }, [collection, kind, language, query, selectedGroup, [...(selectedTopicIds || [])].join("|")], 0);
+  }, [collection, kind, language, query, selectedTagId, selectedGroup, [...(selectedTopicIds || [])].join("|")], 0);
   const counts = useLiveQuery(async () => {
-    const topicCounts = await Promise.all(topics.map(async (topic) => [topic.id, await db.cards.where("collectionId").equals(topic.id).filter((card) => card.state !== "trash" && isMaterializedCard(card)).count()] as const));
+    const topicCounts = await Promise.all(topics.map(async (topic) => [topic.id, await db.cards.where("collectionId").equals(topic.id).filter((card) => matchesCardCollection(card, collection) && isMaterializedCard(card)).count()] as const));
     const [all, pinned, unassigned] = await Promise.all([
-      db.cards.filter((card) => card.state !== "trash" && isMaterializedCard(card)).count(),
-      db.cards.filter((card) => card.state !== "trash" && card.favorite && isMaterializedCard(card)).count(),
-      db.cards.filter((card) => card.state !== "trash" && !card.collectionId && isMaterializedCard(card)).count(),
+      db.cards.filter((card) => matchesCardCollection(card, collection) && isMaterializedCard(card)).count(),
+      db.cards.filter((card) => matchesCardCollection(card, collection) && card.favorite && isMaterializedCard(card)).count(),
+      db.cards.filter((card) => matchesCardCollection(card, collection) && !card.collectionId && isMaterializedCard(card)).count(),
     ]);
     return { all, pinned, unassigned, topics: Object.fromEntries(topicCounts) as Record<string, number> };
-  }, [topics.map((topic) => topic.id).join("|")], { all: 0, pinned: 0, unassigned: 0, topics: {} as Record<string, number> });
+  }, [collection, topics.map((topic) => topic.id).join("|")], { all: 0, pinned: 0, unassigned: 0, topics: {} as Record<string, number> });
 
   useEffect(() => {
     const close = () => setGroupMenu(null);
@@ -82,8 +91,10 @@ export function LibraryView() {
   }, []);
 
   const displayed = cards;
+  const filterKey = JSON.stringify([collection, kind, query, selectedGroup, selectedTagId, [...(selectedTopicIds || [])]]);
+  useEffect(() => { if (selectedTagId && !tags.some((tag) => tag.id === selectedTagId)) setSelectedTagId(null); }, [tags, selectedTagId]);
 
-  useEffect(() => { setVisibleLimit(120); }, [collection, kind, query, selectedGroup]);
+  useEffect(() => { setVisibleLimit(120); }, [collection, kind, query, selectedGroup, selectedTagId]);
 
   function topicCount(topicId: string) { return counts.topics[topicId] || 0; }
   function areaCount(areaId: string) { return topics.filter((topic) => topic.parentId === areaId).reduce((sum, topic) => sum + (counts.topics[topic.id] || 0), 0); }
@@ -113,7 +124,7 @@ export function LibraryView() {
     return <button type="button" key={id} className={`${selectedGroup === id ? "is-active" : ""} ${dragTarget === id ? "is-drop-target" : ""} knowledge-${depth}`} onClick={() => setSelectedGroup(id)} onContextMenu={(event) => { event.preventDefault(); setGroupMenu({ id, x: event.clientX, y: event.clientY }); }} onDragOver={(event) => { event.preventDefault(); if (depth === "topic") setDragTarget(id); }} onDragLeave={() => setDragTarget(null)} onDrop={(event) => { if (depth === "topic") void dropCard(event, id); }}>{depth === "area" ? <FolderOpen size={15} /> : <Folder size={14} />}<span>{name}</span><b>{count}</b></button>;
   }
 
-  function activateCard(card: (typeof cards)[number]) { if (card.state !== "trash" && card.kind === "web" && card.sourceUrl) window.open(card.sourceUrl, "_blank", "noopener,noreferrer"); else openCard(card.id); }
+  function activateCard(card: CardRecord) { if (isActiveCard(card) && card.kind === "web" && card.sourceUrl) window.open(card.sourceUrl, "_blank", "noopener,noreferrer"); else openCard(card.id, collection); }
 
   const selectedForCreate = selectedGroup !== "all" && selectedGroup !== "pinned" && selectedGroup !== "unassigned" && groupById.get(selectedGroup)?.kind === "topic" ? selectedGroup : null;
   const currentGroup = selectedGroup === "all" ? copy.allCards : selectedGroup === "pinned" ? t("library.pinned") : selectedGroup === "unassigned" ? copy.unassigned : groupById.get(selectedGroup)?.name || copy.allCards;
@@ -130,18 +141,20 @@ export function LibraryView() {
       {groupForm?.mode === "create" && groupForm.kind === "area" && <form className="knowledge-group-form" onSubmit={submitGroupForm}><input autoFocus value={groupForm.value} placeholder={copy.areaPlaceholder} onChange={(event) => setGroupForm({ ...groupForm, value: event.target.value })} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} /><button type="submit">{copy.save}</button><button type="button" onClick={() => setGroupForm(null)}><X size={13} /></button></form>}
       <div className="knowledge-tree">{areas.map((area) => <section key={area.id}><div>{groupButton(area.id, area.name, areaCount(area.id), "area")}<button type="button" className="knowledge-add-topic" aria-label={`${copy.addTopic} · ${area.name}`} onClick={() => setGroupForm({ mode: "create", kind: "topic", parentId: area.id, value: "" })}><Plus size={13} /></button></div>{topics.filter((topic) => topic.parentId === area.id).map((topic) => groupButton(topic.id, topic.name, topicCount(topic.id), "topic"))}{groupForm?.mode === "create" && groupForm.kind === "topic" && groupForm.parentId === area.id && <form className="knowledge-group-form is-topic" onSubmit={submitGroupForm}><input autoFocus value={groupForm.value} placeholder={copy.topicPlaceholder} onChange={(event) => setGroupForm({ ...groupForm, value: event.target.value })} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} /><button type="submit">{copy.save}</button><button type="button" onClick={() => setGroupForm(null)}><X size={13} /></button></form>}</section>)}</div>
       {topics.some((topic) => !topic.parentId) && <><h3>{copy.orphanTopics}</h3>{topics.filter((topic) => !topic.parentId).map((topic) => groupButton(topic.id, topic.name, topicCount(topic.id), "topic"))}</>}
+      <LibraryTags collection={collection} selectedId={selectedTagId} onSelect={(id) => { setSelectedTagId(id); setOrganizerOpen(false); }} />
       <p className="knowledge-drop-hint">{copy.dropHint}</p>
     </aside>
 
     <div className="page-scroll standard-page library-content">
-      <header className="page-intro compact-intro"><div><span>{selectedForCreate ? breadcrumb(selectedForCreate) : copy.organizer}</span><h2>{currentGroup} · {collection === "trash" ? t("library.deletedCount", { count: filteredTotal }) : collection === "archive" ? t("library.archivedCount", { count: filteredTotal }) : t("library.count", { count: filteredTotal })}</h2><p>{collection === "trash" ? t("library.trashDescription") : t("library.description")}</p></div><button type="button" className="primary-button" onClick={() => setCreateCardOpen(true, selectedForCreate)}><Plus size={16} />{t("today.newCard")}</button></header>
+      <header className="page-intro compact-intro"><div><span>{selectedForCreate ? breadcrumb(selectedForCreate) : copy.organizer}</span><h2>{currentGroup}{selectedTagId ? ` / ${tags.find((tag) => tag.id === selectedTagId)?.name || ""}` : ""} · {collection === "trash" ? t("library.deletedCount", { count: filteredTotal }) : collection === "archive" ? t("library.archivedCount", { count: filteredTotal }) : t("library.count", { count: filteredTotal })}</h2><p>{collection === "trash" ? t("library.trashDescription") : t("library.description")}</p></div><button type="button" className="primary-button" onClick={() => setCreateCardOpen(true, selectedForCreate)}><Plus size={16} />{t("today.newCard")}</button></header>
       <form className="url-capture-bar" onSubmit={captureUrl}><ArrowUpRight size={17} /><input type="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder={t("library.urlPlaceholder")} /><button type="submit" disabled={urlBusy || !url.trim()}>{urlBusy ? <LoaderCircle size={15} className="spin" /> : <ArrowUpRight size={15} />}{urlBusy ? t("library.capture") : t("library.saveUrl")}</button></form>
       {urlStatus && <div className="url-capture-status" role="status">{urlStatus}</div>}
       <div className="collection-tabs" aria-label={t("library.categories")}><button type="button" className={collection === "library" ? "is-active" : ""} onClick={() => setCollection("library")}><FileStack size={15} />{t("nav.library")}</button><button type="button" className={collection === "archive" ? "is-active" : ""} onClick={() => setCollection("archive")}><Archive size={15} />{t("library.archive")}</button><button type="button" className={collection === "trash" ? "is-active" : ""} onClick={() => setCollection("trash")}><Trash2 size={15} />{t("library.trash")}</button></div>
-      <div className="filter-bar"><label className="inline-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("library.search")} /></label><div className="view-toggle"><button type="button" className={layout === "grid" ? "is-active" : ""} onClick={() => setLayout("grid")} aria-label={t("library.grid")}><Grid2X2 size={16} /></button><button type="button" className={layout === "list" ? "is-active" : ""} onClick={() => setLayout("list")} aria-label={t("library.list")}><List size={16} /></button></div></div>
+      <div className="filter-bar"><label className="inline-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("library.search")} /></label><div className="view-toggle"><button type="button" className={layout === "grid" ? "is-active" : ""} onClick={() => setLayout("grid")} aria-label={t("library.grid")}><Grid2X2 size={16} /></button><button type="button" className={layout === "list" ? "is-active" : ""} onClick={() => setLayout("list")} aria-label={t("library.list")}><List size={16} /></button><button type="button" className={layout === "table" ? "is-active" : ""} onClick={() => setLayout("table")} aria-label={t("database.table")}><Table2 size={16} /></button><button type="button" className={layout === "stages" ? "is-active" : ""} onClick={() => setLayout("stages")} aria-label={integrationCopy.stages}><Columns3 size={16} /></button></div></div>
       <div className="kind-filter-strip" aria-label={t("library.allTypes")}><button type="button" className={kind === "all" ? "is-active" : ""} onClick={() => setKind("all")}>{t("library.allTypes")}</button>{cardKinds.map((value) => <button type="button" key={value} className={kind === value ? "is-active" : ""} onClick={() => setKind(value)}>{localizedKindLabel(value, language)}</button>)}</div>
-      <section className={`library-grid ${layout === "list" ? "is-list" : ""}`}>{displayed.map((card) => <article key={card.id} className="library-card" role="button" tabIndex={0} draggable={card.state !== "trash"} data-card-kind={card.kind} data-pinned={card.favorite || undefined} onDragStart={(event) => { event.dataTransfer.setData("application/x-chengjing-card", card.id); event.dataTransfer.effectAllowed = "move"; }} onClick={() => activateCard(card)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activateCard(card); } }} onContextMenu={(event) => showContextMenuFromPointer(event, { kind: "card", id: card.id })} aria-label={card.kind === "web" && card.sourceUrl ? t("library.openWeb", { title: card.title }) : t("library.openCard", { title: card.title })}><header><span>{localizedKindLabel(card.kind, language)}</span><time>{relativeTime(card.updatedAt, language)}</time></header><button type="button" className="library-card-menu" aria-label={t("library.more", { title: card.title })} onClick={(event) => showContextMenuFromButton(event, { kind: "card", id: card.id })}><MoreHorizontal size={16} /></button><h3>{card.title}</h3><p>{truncate(card.plainText, layout === "grid" ? 145 : 220) || t("common.noContent")}</p><footer><span>{breadcrumb(card.collectionId)}</span>{card.kind === "web" && card.sourceUrl ? <ArrowUpRight size={13} /> : card.favorite && <b><Pin size={12} />{t("library.pinned")}</b>}</footer></article>)}{displayed.length === 0 && <div className="empty-state library-empty"><FileStack size={28} /><h3>{collection === "trash" ? t("library.trashEmpty") : t("library.empty")}</h3><p>{collection === "trash" ? t("library.trashEmptyDescription") : t("library.emptyDescription")}</p></div>}</section>
-      {displayed.length < filteredTotal && <button type="button" className="content-load-more" onClick={() => setVisibleLimit((value) => value + 120)}>{copy.loadMore(Math.min(120, filteredTotal - displayed.length))}</button>}
+      {(layout === "grid" || layout === "list") && <section className={`library-grid ${layout === "list" ? "is-list" : ""}`}>{displayed.map((card) => <article key={card.id} className="library-card" role="button" tabIndex={0} draggable={isActiveCard(card)} data-card-kind={card.kind} data-pinned={card.favorite || undefined} onDragStart={(event) => { event.dataTransfer.setData("application/x-chengjing-card", card.id); event.dataTransfer.effectAllowed = "move"; }} onClick={() => activateCard(card)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activateCard(card); } }} onContextMenu={(event) => showContextMenuFromPointer(event, { kind: "card", id: card.id })} aria-label={isActiveCard(card) && card.kind === "web" && card.sourceUrl ? t("library.openWeb", { title: card.title }) : t("library.openCard", { title: card.title })}><header><span>{localizedKindLabel(card.kind, language)}</span><time>{relativeTime(card.updatedAt, language)}</time></header><button type="button" className="library-card-menu" aria-label={t("library.more", { title: card.title })} onClick={(event) => showContextMenuFromButton(event, { kind: "card", id: card.id })}><MoreHorizontal size={16} /></button><h3>{card.title}</h3><p>{truncate(card.plainText, layout === "grid" ? 145 : 220) || t("common.noContent")}</p><footer><span>{breadcrumb(card.collectionId)}</span><span className="library-card-tags">{card.tagIds.map((id) => tags.find((tag) => tag.id === id)?.name).filter(Boolean).join("、")}</span>{card.kind === "web" && card.sourceUrl ? <ArrowUpRight size={13} /> : card.favorite && <b><Pin size={12} />{t("library.pinned")}</b>}</footer></article>)}{displayed.length === 0 && <div className="empty-state library-empty"><FileStack size={28} /><h3>{collection === "trash" ? t("library.trashEmpty") : t("library.empty")}</h3><p>{collection === "trash" ? t("library.trashEmptyDescription") : t("library.emptyDescription")}</p></div>}</section>}
+      {(layout === "grid" || layout === "list") && displayed.length < filteredTotal && <button type="button" className="content-load-more" onClick={() => setVisibleLimit((value) => value + 120)}>{copy.loadMore(Math.min(120, filteredTotal - displayed.length))}</button>}
+      {(layout === "table" || layout === "stages") && <LibraryStructuredView cards={cards} totalCards={filteredTotal} tags={tags} collection={collection} layout={layout} query={query} filterKey={filterKey} matchesSource={matchesSource} allowStandaloneTasks={selectedGroup === "all" && !selectedTagId && kind === "all"} onLoadMore={() => setVisibleLimit((value) => value + 120)} />}
     </div>
 
     {groupMenu && (() => { const group = groupById.get(groupMenu.id); return group ? <div className="knowledge-context-menu" role="menu" style={{ left: groupMenu.x, top: groupMenu.y }} onPointerDown={(event) => event.stopPropagation()}><header><span>{group.kind === "area" ? copy.area : copy.topic}</span><b>{group.name}</b></header>{group.kind === "area" && <button type="button" role="menuitem" onClick={() => { setGroupForm({ mode: "create", kind: "topic", parentId: group.id, value: "" }); setGroupMenu(null); }}><Plus size={14} />{copy.addTopic}</button>}<button type="button" role="menuitem" onClick={() => { setGroupForm({ mode: "rename", kind: group.kind, parentId: group.parentId, id: group.id, value: group.name }); setGroupMenu(null); }}><Pencil size={14} />{copy.rename}</button><button type="button" role="menuitem" className="is-danger" onClick={() => void removeGroup(group.id)}><Trash2 size={14} />{copy.remove}</button></div> : null; })()}

@@ -1,3 +1,4 @@
+import { getHiddenCardIds } from "../lib/visibleContent";
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Highlighter, MessageSquareText, Quote } from "lucide-react";
@@ -8,8 +9,8 @@ import { useI18n } from "../hooks/useI18n";
 
 export function HighlightsView() {
   const [visibleLimit, setVisibleLimit] = useState(160);
-  const highlights = useLiveQuery(() => db.highlights.orderBy("createdAt").reverse().limit(visibleLimit).toArray(), [visibleLimit], []);
-  const totalCount = useLiveQuery(() => db.highlights.count(), [], 0);
+  const highlights = useLiveQuery(async () => { const hidden = await getHiddenCardIds(); return db.highlights.orderBy("createdAt").reverse().filter((item) => !hidden.has(item.cardId)).limit(visibleLimit).toArray(); }, [visibleLimit], []);
+  const totalCount = useLiveQuery(async () => { const hidden = await getHiddenCardIds(); return db.highlights.filter((item) => !hidden.has(item.cardId)).count(); }, [], 0);
   const openCard = useAppStore((state) => state.openCard);
   const cardIds = useMemo(() => [...new Set(highlights.map((item) => item.cardId))], [highlights]);
   const cardMap = useLiveQuery(async () => new Map((await db.cards.bulkGet(cardIds)).filter(Boolean).map((card) => [card!.id, card!])), [cardIds.join("|")], new Map());

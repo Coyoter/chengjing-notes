@@ -1,3 +1,4 @@
+import { isActiveCard } from "../lib/cardVisibility";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -24,7 +25,7 @@ export function CommandPalette() {
   const [active, setActive] = useState(0);
   const cards = useLiveQuery(async () => {
     if (!open) return [];
-    return searchRecords(db.cards, query, language, (card) => card.state !== "trash" && isMaterializedCard(card) && includesQuery(`${card.title} ${card.plainText}`, query, language), 6);
+    return searchRecords(db.cards, query, language, (card) => isActiveCard(card) && isMaterializedCard(card) && includesQuery(`${card.title} ${card.plainText}`, query, language), 6);
   }, [language, open, query], []);
   const boards = useLiveQuery(() => open ? searchRecords(db.boards, query, language, (board) => includesQuery(`${board.title} ${board.description}`, query, language), 4) : [], [language, open, query], []);
   const kanbanBoards = useLiveQuery(() => open ? searchRecords(db.kanbanBoards, query, language, (board) => includesQuery(`${board.title} ${board.description}`, query, language), 4) : [], [language, open, query], []);

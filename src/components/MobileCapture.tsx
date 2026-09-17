@@ -1,3 +1,4 @@
+import { getHiddenTaskIds } from "../lib/visibleContent";
 import { useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -12,7 +13,7 @@ export function MobileCapture() {
   const [text,setText]=useState(()=>localStorage.getItem("chengjing-mobile-draft-fragment")||""); const [kind,setKind]=useState<"fragment"|"task">("fragment");
   const [saving,setSaving]=useState(false);const [error,setError]=useState("");const input=useRef<HTMLTextAreaElement>(null);const reduced=useReducedMotion();
   const fragments=useLiveQuery(()=>db.fragments.orderBy("createdAt").reverse().limit(40).toArray(),[],[]);
-  const tasks=useLiveQuery(()=>db.tasks.where("doneKey").equals("active").count(),[],0);
+  const tasks=useLiveQuery(async()=>{const hidden=await getHiddenTaskIds();return db.tasks.where("doneKey").equals("active").filter(task=>!hidden.has(task.id)).count();},[],0);
   async function capture() {
     if(!text.trim()||saving)return;setSaving(true);setError("");
     try{const now=Date.now();const id=crypto.randomUUID();if(kind==="fragment")await db.fragments.add({id,text:text.trim(),pinned:false,tagIds:[],createdAt:now,updatedAt:now});else await db.tasks.add({id,title:text.trim(),done:false,createdAt:now,updatedAt:now});localStorage.removeItem(`chengjing-mobile-draft-${kind}`);setText("");input.current?.focus()}

@@ -1,3 +1,5 @@
+import { getHiddenTaskIds } from "../lib/visibleContent";
+import { isActiveCard } from "../lib/cardVisibility";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import dayjs from "dayjs";
@@ -19,12 +21,14 @@ export function JournalView() {
   const [highlightNotice, setHighlightNotice] = useState("");
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const journal = useLiveQuery(() => journalId ? db.cards.get(journalId) : undefined, [journalId]);
-  const tasks = useLiveQuery(() => db.tasks.orderBy("dueAt").filter((task) => !task.done && !task.parentTaskId).limit(6).toArray(), [], []);
+  const tasks = useLiveQuery(async () => { const hidden = await getHiddenTaskIds(); return db.tasks.orderBy("dueAt").filter((task) => !hidden.has(task.id) && !task.done && !task.parentTaskId).limit(6).toArray(); }, [], []);
   const { dayjsLocale, intlLocale, t } = useI18n();
 
   useEffect(() => {
-    getOrCreateJournal(journalDate).then((card) => setJournalId(card.id));
-  }, [journalDate]);
+    let cancelled = false;
+    getOrCreateJournal(journalDate).then((card) => { if (!cancelled) setJournalId(card.id); });
+    return () => { cancelled = true; };
+  }, [journalDate, journal?.state]);
 
   useEffect(() => () => {
     if (highlightTimer.current) clearTimeout(highlightTimer.current);
@@ -32,7 +36,7 @@ export function JournalView() {
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => dayjs(journalDate).add(index - 3, "day")), [journalDate]);
 
-  if (!journal) return <div className="workspace-loading">{t("journal.opening")}</div>;
+  if (!isActiveCard(journal) || journal.journalDate !== journalDate) return <div className="workspace-loading">{t("journal.opening")}</div>;
   const currentJournalId = journal.id;
 
   function showHighlightNotice(message: string) {

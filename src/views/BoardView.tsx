@@ -1,3 +1,4 @@
+import { isActiveCard } from "../lib/cardVisibility";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -224,7 +225,7 @@ function BoardCanvas({ boardId, focusNodeId, onFocusConsumed }: { boardId: strin
   const boardRecords = boardRecordsQuery || emptyBoardNodes;
   const edgeRecords = edgeRecordsQuery || emptyBoardEdges;
   const boardCardIds = useMemo(() => [...new Set(boardRecords.map((record) => record.cardId).filter(Boolean) as string[])], [boardRecords]);
-  const cardsQuery = useLiveQuery(async () => (await db.cards.bulkGet(boardCardIds)).filter((card) => card && card.state !== "trash") as CardRecord[], [boardCardIds.join("|")]);
+  const cardsQuery = useLiveQuery(async () => (await db.cards.bulkGet(boardCardIds)).filter((card) => card && isActiveCard(card)) as CardRecord[], [boardCardIds.join("|")]);
   const cards = cardsQuery || emptyBoardCards;
   const cardMap = useMemo(() => new globalThis.Map(cards.map((card) => [card.id, card])), [cards]);
   const recordMap = useMemo(() => new globalThis.Map(boardRecords.map((record) => [record.id, record])), [boardRecords]);
@@ -937,13 +938,13 @@ export function BoardView() {
   const boardTitleComposing = useRef(false);
   const existingCardIds = useMemo(() => [...new Set(existingNodes.map((node) => node.cardId).filter(Boolean) as string[])], [existingNodes]);
   const allCards = useLiveQuery(async () => {
-    const current = (await db.cards.bulkGet(existingCardIds)).filter((card) => card && card.state !== "trash") as CardRecord[];
+    const current = (await db.cards.bulkGet(existingCardIds)).filter((card) => card && isActiveCard(card)) as CardRecord[];
     if (!cardPickerOpen) return current;
     const terms = searchQueryTerms(cardQuery, language);
     const candidates = terms.length
-      ? await db.cards.where("searchTerms").anyOf(terms).distinct().limit(120).toArray()
-      : await db.cards.orderBy("updatedAt").reverse().filter((card) => card.state !== "trash" && isMaterializedCard(card)).limit(120).toArray();
-    return [...new Map([...current, ...candidates.filter((card) => card.state !== "trash" && isMaterializedCard(card))].map((card) => [card.id, card])).values()];
+      ? await db.cards.where("searchTerms").anyOf(terms).distinct().filter((card) => isActiveCard(card) && isMaterializedCard(card)).limit(120).toArray()
+      : await db.cards.orderBy("updatedAt").reverse().filter((card) => isActiveCard(card) && isMaterializedCard(card)).limit(120).toArray();
+    return [...new Map([...current, ...candidates.filter((card) => isActiveCard(card) && isMaterializedCard(card))].map((card) => [card.id, card])).values()];
   }, [cardPickerOpen, cardQuery, existingCardIds.join("|"), language], []);
   const cardMap = useMemo(() => new globalThis.Map(allCards.map((card) => [card.id, card])), [allCards]);
 

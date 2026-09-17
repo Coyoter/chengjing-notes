@@ -1,3 +1,4 @@
+import { isActiveCard } from "../lib/cardVisibility";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -80,7 +81,7 @@ export function KanbanView() {
   const boards = useLiveQuery(() => db.kanbanBoards.toArray(), [], []);
   const lists = useLiveQuery<KanbanListRecord[], KanbanListRecord[]>(() => selectedBoardId ? db.kanbanLists.where("boardId").equals(selectedBoardId).sortBy("order") : Promise.resolve([]), [selectedBoardId], []);
   const placements = useLiveQuery<KanbanPlacementRecord[], KanbanPlacementRecord[]>(() => selectedBoardId ? db.kanbanPlacements.where("boardId").equals(selectedBoardId).sortBy("order") : Promise.resolve([]), [selectedBoardId], []);
-  const cards = useLiveQuery(async () => (await db.cards.where("state").notEqual("trash").toArray()).filter(isMaterializedCard), [], []);
+  const cards = useLiveQuery(async () => (await db.cards.where("state").anyOf("active", "inbox").toArray()).filter(isMaterializedCard), [], []);
   const tags = useLiveQuery(() => db.tags.orderBy("name").toArray(), [], []);
   const attachmentIds = useMemo(() => {
     const cardById = new Map(cards.map((card) => [card.id, card]));
@@ -136,8 +137,8 @@ export function KanbanView() {
   }, []);
 
   useEffect(() => {
-    if (selectedPlacementId && !placements.some((placement) => placement.id === selectedPlacementId)) setSelectedPlacementId(null);
-  }, [placements, selectedPlacementId]);
+    if (selectedPlacementId && !placements.some((placement) => placement.id === selectedPlacementId && cardMap.has(placement.cardId))) setSelectedPlacementId(null);
+  }, [placements, cardMap, selectedPlacementId]);
 
   useEffect(() => {
     setInspectorTitleDraft(selectedCard?.title || "");

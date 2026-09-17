@@ -1,3 +1,4 @@
+import { matchesCardCollection, isActiveCard } from "../lib/cardVisibility";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -59,6 +60,7 @@ function AttachmentPreview({ attachment, downloadLabel, onRemove }: { attachment
 export function CardEditorPanel() {
   const cardId = useAppStore((state) => state.selectedCardId);
   const view = useAppStore((state) => state.view);
+  const sourceCollection = useAppStore((state) => state.cardOpenCollection);
   const close = useAppStore((state) => state.closeCard);
   const openAI = useAppStore((state) => state.openAI);
   const openAIWithAction = useAppStore((state) => state.openAIWithAction);
@@ -73,8 +75,8 @@ export function CardEditorPanel() {
   const backlinks = useLiveQuery(async () => {
     if (!card?.title) return [];
     const terms = searchQueryTerms(card.title, language);
-    const cards = terms.length ? await db.cards.where("searchTerms").anyOf(terms).distinct().limit(500).toArray() : [];
-    return cards.filter((item) => item.state !== "trash" && isMaterializedCard(item) && item.id !== card.id && (item.plainText.includes(card.title) || item.contentHtml.includes(`data-card-id=\"${card.id}\"`)));
+    const cards = terms.length ? await db.cards.where("searchTerms").anyOf(terms).distinct().filter(isActiveCard).limit(500).toArray() : [];
+    return cards.filter((item) => isActiveCard(item) && isMaterializedCard(item) && item.id !== card.id && (item.plainText.includes(card.title) || item.contentHtml.includes(`data-card-id=\"${card.id}\"`)));
   }, [card?.id, card?.title, language], []);
   const highlights = useLiveQuery(() => cardId ? db.highlights.where("cardId").equals(cardId).toArray() : [], [cardId], []);
   const versions = useLiveQuery(() => cardId ? db.cardVersions.where("cardId").equals(cardId).reverse().sortBy("createdAt") : [], [cardId], []);
@@ -120,6 +122,9 @@ export function CardEditorPanel() {
     return () => {flush();window.removeEventListener("chengjing:flush-editors",flush);};
   }, [cardId]);
 
+  const allowed = card && matchesCardCollection(card, sourceCollection);
+  useEffect(() => { if (card && !allowed) close(); }, [card?.id, card?.state, allowed, close]);
+  if (card && !allowed) return null;
   if (!card) return <div className="panel-loading">{t("card.loading")}</div>;
   const activeCard = card;
 

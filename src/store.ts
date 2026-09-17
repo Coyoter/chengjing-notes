@@ -1,3 +1,4 @@
+import type { CardCollection } from "./lib/cardVisibility";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import dayjs from "dayjs";
@@ -8,6 +9,7 @@ interface AppState {
   selectedBoardId: string | null;
   selectedKanbanBoardId: string | null;
   selectedCardId: string | null;
+  cardOpenCollection: CardCollection;
   journalDate: string;
   rightPanel: "none" | "ai" | "wish";
   commandOpen: boolean;
@@ -33,7 +35,7 @@ interface AppState {
   setView: (view: AppView) => void;
   openBoard: (id: string) => void;
   openKanbanBoard: (id: string) => void;
-  openCard: (id: string) => void;
+  openCard: (id: string, collection?: CardCollection) => void;
   closeCard: () => void;
   closeRightPanel: () => void;
   openAI: () => void;
@@ -93,6 +95,7 @@ export const useAppStore = create<AppState>()(
       selectedBoardId: "board-welcome",
       selectedKanbanBoardId: null,
       selectedCardId: null,
+      cardOpenCollection: "library",
       journalDate: dayjs().format("YYYY-MM-DD"),
       rightPanel: "none",
       commandOpen: false,
@@ -115,10 +118,10 @@ export const useAppStore = create<AppState>()(
       language: initialLanguage(),
       aiDraft: "",
       aiActionRequest: null,
-      setView: (view) => set({ view, selectedCardId: null, rightPanel: "none" }),
+      setView: (view) => set({ view: view === "database" ? "library" : view, selectedCardId: null, rightPanel: "none" }),
       openBoard: (selectedBoardId) => set({ view: "boards", selectedBoardId, selectedCardId: null, rightPanel: "none" }),
       openKanbanBoard: (selectedKanbanBoardId) => set({ view: "kanban", selectedKanbanBoardId, selectedCardId: null, rightPanel: "none" }),
-      openCard: (selectedCardId) => set((state) => ({ selectedCardId, rightPanel: state.rightPanel === "ai" ? "ai" : "none" })),
+      openCard: (selectedCardId, cardOpenCollection = "library") => set((state) => ({ selectedCardId, cardOpenCollection, rightPanel: state.rightPanel === "ai" ? "ai" : "none" })),
       closeCard: () => set({ selectedCardId: null }),
       closeRightPanel: () => set({ rightPanel: "none" }),
       openAI: () => set({ rightPanel: "ai", aiDraft: "" }),

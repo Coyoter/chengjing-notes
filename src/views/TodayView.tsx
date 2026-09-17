@@ -1,3 +1,5 @@
+import { getHiddenTaskIds } from "../lib/visibleContent";
+import { isActiveCard } from "../lib/cardVisibility";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ArrowRight, CalendarClock, Check, Circle, Feather, FilePlus2, Sparkles } from "lucide-react";
 import { db } from "../db";
@@ -9,11 +11,11 @@ import { isMaterializedCard } from "../lib/journalVisibility";
 import { setTaskDone } from "../lib/taskSync";
 
 export function TodayView() {
-  const recentCards = useLiveQuery(() => db.cards.orderBy("updatedAt").reverse().filter((card) => card.state !== "trash" && isMaterializedCard(card)).limit(4).toArray(), [], []);
-  const tasks = useLiveQuery(() => db.tasks.orderBy("dueAt").filter((task) => !task.done && !task.parentTaskId).limit(4).toArray(), [], []);
+  const recentCards = useLiveQuery(() => db.cards.orderBy("updatedAt").reverse().filter((card) => isActiveCard(card) && isMaterializedCard(card)).limit(4).toArray(), [], []);
+  const tasks = useLiveQuery(async () => { const hidden = await getHiddenTaskIds(); return db.tasks.orderBy("dueAt").filter((task) => !hidden.has(task.id) && !task.done && !task.parentTaskId).limit(4).toArray(); }, [], []);
   const boards = useLiveQuery(() => db.boards.orderBy("updatedAt").reverse().limit(3).toArray(), [], []);
   const fragmentCount = useLiveQuery(() => db.fragments.count(), [], 0);
-  const cardCount = useLiveQuery(() => db.cards.filter((card) => card.state !== "trash" && isMaterializedCard(card)).count(), [], 0);
+  const cardCount = useLiveQuery(() => db.cards.filter((card) => isActiveCard(card) && isMaterializedCard(card)).count(), [], 0);
   const boardCount = useLiveQuery(() => db.boards.count(), [], 0);
   const setView = useAppStore((state) => state.setView);
   const openBoard = useAppStore((state) => state.openBoard);

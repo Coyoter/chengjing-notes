@@ -1,3 +1,4 @@
+import { isActiveCard } from "./lib/cardVisibility";
 import Dexie, { type EntityTable, type Transaction } from "dexie";
 import { markBackupChanged } from "./lib/backupChanges";
 import { installSyncJournal } from "./lib/syncJournal";
@@ -545,7 +546,7 @@ export async function createCard(input: Partial<CardRecord> & Pick<CardRecord, "
 }
 
 export async function getOrCreateJournal(date: string): Promise<CardRecord> {
-  const existing = (await db.cards.where("journalDate").equals(date).toArray()).find((card) => card.state !== "trash");
+  const existing = (await db.cards.where("journalDate").equals(date).toArray()).find(isActiveCard);
   if (existing) return existing;
   const language = useAppStore.getState().language || "zh-TW";
   const localDate = new Date(`${date}T12:00:00`);
