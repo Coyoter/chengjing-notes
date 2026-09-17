@@ -685,7 +685,7 @@ export async function restoreCardVersion(versionId: string) {
   await updateCardWithHistory(version.cardId, { title: version.title, contentHtml: version.contentHtml, plainText: version.plainText, ...(version.captureSnapshot || {}) });
 }
 
-export async function createFleetingCard(text: string, tagIds: string[] = [], id = crypto.randomUUID()): Promise<CardRecord> {
+export async function createFleetingCard(text: string, tagIds: string[] = [], id: string = crypto.randomUUID()): Promise<CardRecord> {
   const value = text.trim();
   if (!value) throw new Error(translate(useAppStore.getState().language || "zh-TW", "db.fragmentEmpty"));
   return db.transaction("rw", db.cards, async () => {
