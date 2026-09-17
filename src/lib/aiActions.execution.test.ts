@@ -1,8 +1,9 @@
 import "fake-indexeddb/auto";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { db, seedDatabase } from "../db";
+import { db, seedDatabase, createCard, restoreCardFromTrash, deleteCardPermanently } from "../db";
 import { applyAIActionPlan, parseAIActionPlan } from "./aiActions";
 import * as taskSync from "./taskSync";
+import { buildBrainGraph } from "./brain";
 import { initializeGlobalHistory, clearGlobalHistory, undoGlobalAction } from "./globalHistory";
 
 describe("AI batches commit together", () => {
@@ -63,11 +64,20 @@ describe("AI batches commit together", () => {
     expect((await db.tasks.get("existing"))?.done).toBe(false);
   });
 
-  it("deleting fragments removes their graph links", async () => {
+  it("trashing a legacy fragment hides its canonical graph links, preserves restoration and cleans permanent deletion", async () => {
+    const other = await createCard({ title: "Connected note", plainText: "Related content" });
     await db.fragments.add({ id: "fragment", text: "test", tagIds: [], pinned: false, createdAt: 1, updatedAt: 1 });
-    await db.brainEdges.add({ id: "edge", sourceType: "fragment", sourceId: "fragment", targetType: "card", targetId: "other", origin: "manual", relationType: "sequence", createdAt: 1 });
+    await db.brainEdges.add({ id: "edge", sourceType: "fragment", sourceId: "fragment", targetType: "card", targetId: other.id, origin: "manual", relationType: "sequence", createdAt: 1 });
+    const graph = async () => buildBrainGraph({ cards: await db.cards.toArray(), fragments: [], boards: [], boardNodes: [], tasks: [], tags: [], storedEdges: await db.brainEdges.toArray() });
     await applyAIActionPlan({ summary: "delete", actions: [{ type: "delete_fragment", targetId: "fragment", description: "delete" }] }, {});
-    expect(await db.brainEdges.count()).toBe(0);
+    expect((await db.cards.get("fragment"))?.state).toBe("trash");
+    expect(await db.brainEdges.get("edge")).toMatchObject({ sourceType: "card", sourceId: "fragment" });
+    expect((await graph()).edges).toHaveLength(0);
     expect(await db.fragments.count()).toBe(0);
+    await restoreCardFromTrash("fragment");
+    expect((await graph()).edges).toHaveLength(1);
+    await deleteCardPermanently("fragment");
+    expect(await db.brainEdges.count()).toBe(0);
+    expect(await db.cards.get(other.id)).toBeDefined();
   });
 });

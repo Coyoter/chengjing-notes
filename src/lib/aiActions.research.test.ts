@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db";
+import { migrateLegacyFragments } from "./captureCards";
 import { planAIActions, parseAIActionPlan } from "./aiActions";
 import { runAI } from "./ai";
 
@@ -15,20 +16,26 @@ describe("workspace research is paginated and read-only", () => {
     model.mockReset();
     await db.transaction("rw", db.tables, () => Promise.all(db.tables.map(table => table.clear())));
     await db.fragments.bulkAdd(Array.from({ length: 130 }, (_, i) => ({ id: String(i).padStart(3, "0"), text: `Fragment ${i}`, tagIds: [], pinned: false, createdAt: 1, updatedAt: 1 })));
+    // Startup upgrades the legacy fixture before a read-only research session.
+    await migrateLegacyFragments();
   });
   it("continues past the first page and performs no writes during research", async () => {
+    const before = await db.cards.orderBy("id").toArray();
     model.mockResolvedValueOnce(response({ summary: "Read", queries: [{ tool: "chengjing_list_records", arguments: { table: "fragments", limit: 100 } }], actions: [] }));
     model.mockResolvedValueOnce(response({ summary: "Continue", researchNotes: "Read 100 records", queries: [{ tool: "chengjing_list_records", arguments: { table: "fragments", after: "099", limit: 100 } }], actions: [] }));
     model.mockResolvedValueOnce(response({ summary: "Analyzed 130 fragments", actions: [] }));
     const result = await planAIActions(options);
     expect(result.summary).toBe("Analyzed 130 fragments");
     expect(model.mock.calls[2][0].prompt).toContain("Fragment 129");
-    expect(await db.fragments.count()).toBe(130);
+    expect(await db.cards.orderBy("id").toArray()).toEqual(before);
+    expect(await db.fragments.count()).toBe(0);
+    expect(await db.cards.count()).toBe(130);
   });
   it("rejects a read-only response proposing writes", async () => {
     model.mockResolvedValueOnce(response({ summary: "Wrong", actions: [{ type: "delete_fragment", targetId: "000" }] }));
     await expect(planAIActions(options)).rejects.toThrow("ai-unrequested-changes");
-    expect(await db.fragments.count()).toBe(130);
+    expect(await db.fragments.count()).toBe(0);
+    expect(await db.cards.count()).toBe(130);
   });
   it("stops repeated queries and respects cancellation", async () => {
     const query = response({ summary: "Read", queries: [{ tool: "chengjing_status", arguments: {} }], actions: [] });
