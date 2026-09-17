@@ -20,7 +20,7 @@ jobs:
           python3 - <<'PY'
           import base64, gzip, hashlib, json
           from pathlib import Path
-          parts = [Path('scripts/fleeting-update.part1'), Path('scripts/fleeting-update.part2'), Path('scripts/fleeting-update.b64')]
+          parts = sorted(Path('scripts').glob('fleeting-update.part*')) + [Path('scripts/fleeting-update.b64')]
           encoded = ''.join(p.read_text().strip() for p in parts if p.exists())
           changes = json.loads(gzip.decompress(base64.b64decode(encoded, validate=True)))
           pending = []
