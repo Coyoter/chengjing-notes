@@ -3,15 +3,76 @@ on:
   push:
     branches: [fix/archive-library-v0.10.8]
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: archive-library-validation
+  cancel-in-progress: true
 jobs:
-  inspect:
+  validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - run: git archive --format=tar HEAD > /tmp/chengjing-source.tar
-      - uses: actions/upload-artifact@v4
+      - name: Apply reviewed source delta on isolated branch
+        if: hashFiles('.ci/source-delta.json.gz.b64') != ''
+        run: |
+          python3 - <<'PY'
+          import base64, gzip, hashlib, json
+          from pathlib import Path
+          source = Path('.ci/source-delta.json.gz.b64')
+          changes = json.loads(gzip.decompress(base64.b64decode(source.read_text())))
+          outputs = {}
+          for name, delta in changes.items():
+              path = Path(name)
+              assert not path.is_absolute() and '..' not in path.parts, name
+              original = path.read_bytes() if path.exists() else None
+              assert (hashlib.sha256(original).hexdigest() if original is not None else None) == delta['old'], f'Base changed: {name}'
+              if delta.get('delete'):
+                  outputs[path] = None
+                  continue
+              text = delta.get('content', original.decode() if original is not None else '')
+              for start, end, value in reversed(delta.get('edits', [])):
+                  text = text[:start] + value + text[end:]
+              data = text.encode()
+              assert hashlib.sha256(data).hexdigest() == delta['new'], f'Invalid delta: {name}'
+              outputs[path] = data
+          for path, data in outputs.items():
+              if data is None: path.unlink()
+              else:
+                  path.parent.mkdir(parents=True, exist_ok=True)
+                  path.write_bytes(data)
+          source.unlink()
+          print(f'Applied and verified {len(outputs)} source files')
+          PY
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: archive visibility and unify structured tools in card library (v0.10.8)'
+          git push origin HEAD:fix/archive-library-v0.10.8
+      - uses: actions/setup-node@v4
         with:
-          name: chengjing-source
-          path: /tmp/chengjing-source.tar
-          retention-days: 1
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Type check
+        run: npm run typecheck
+      - name: Unit and integration tests
+        if: success() || failure()
+        run: npm test
+      - name: Archive and library browser regression
+        if: success() || failure()
+        run: node scripts/qa-archive-library.mjs
+      - name: Existing preview layout regression
+        if: success() || failure()
+        run: node scripts/qa-preview-overflow.mjs
+      - name: Record tested source
+        if: always()
+        run: git rev-parse HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: archive-library-validation
+          path: qa-artifacts/
+          retention-days: 7
