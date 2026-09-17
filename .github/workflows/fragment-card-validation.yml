@@ -31,19 +31,21 @@ jobs:
               s = s.replace(old, new)
           p.write_text(s)
           PY
+          python3 .github/capture-followup.py
           git diff --check
+          mkdir -p qa-artifacts
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Typecheck
+        run: npm run typecheck 2>&1 | tee qa-artifacts/typecheck.log
+      - name: Unit tests
+        run: npm test 2>&1 | tee qa-artifacts/unit-tests.log
       - name: Install browser
         run: npx playwright install --with-deps chromium
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Unit tests
-        run: npm test
       - name: Existing overflow regression
         run: node scripts/qa-preview-overflow.mjs
       - name: Existing archive and library regression
@@ -58,7 +60,7 @@ jobs:
           retention-days: 7
       - name: Prepare clean tested commit without changing main
         run: |
-          rm .github/workflows/fragment-card-validation.yml .github/capture-patch-{1,2,3}.txt
+          rm .github/workflows/fragment-card-validation.yml .github/capture-patch-{1,2,3}.txt .github/capture-followup.py
           git add -A
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
