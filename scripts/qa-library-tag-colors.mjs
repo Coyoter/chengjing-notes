@@ -36,7 +36,10 @@ async function openOrganizer(page, mobile) {
 async function snapshot(page) {
   return page.evaluate(async () => {
     const { db } = await import("/src/db.ts");
-    return { tags: await db.tags.orderBy("id").toArray(), cards: await db.cards.orderBy("id").toArray() };
+    // Startup reconciliation may settle the internal task sync marker on reload.
+    // Compare every user-data field, but not this derived worker bookkeeping flag.
+    const cards = (await db.cards.orderBy("id").toArray()).map(({ taskSyncState, ...card }) => card);
+    return { tags: await db.tags.orderBy("id").toArray(), cards };
   });
 }
 
