@@ -42,12 +42,13 @@ for (const target of packages) {
   }
   const machine = await peMachine(executable);
   const uninstallerMachine = await peMachine(uninstaller);
-  // ASAR uses path.join internally, so native Windows listings contain backslashes.
+  // ASAR listings use host separators; match portable paths, but extract native paths.
   const files = listPackage(asarPath).map((file) => file.replaceAll("\\", "/"));
-  const packagedMetadata = JSON.parse(extractFile(asarPath, "package.json").toString("utf8"));
-  const mainSource = extractFile(asarPath, "electron/main.cjs").toString("utf8");
+  const readArchiveText = (file) => extractFile(asarPath, path.normalize(file)).toString("utf8");
+  const packagedMetadata = JSON.parse(readArchiveText("package.json"));
+  const mainSource = readArchiveText("electron/main.cjs");
   const transformersBundle = files.find((file) => /^\/dist\/assets\/transformers\.web-.*\.js$/.test(file));
-  const transformersSource = transformersBundle ? extractFile(asarPath, transformersBundle.slice(1)).toString("utf8") : "";
+  const transformersSource = transformersBundle ? readArchiveText(transformersBundle.slice(1)) : "";
   const checks = {
     nativeArchitecture: machine === target.machine,
     nativeUninstallerArchitecture: uninstallerMachine === target.machine,
