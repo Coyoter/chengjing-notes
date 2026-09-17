@@ -1,0 +1,135 @@
+name: Finalize verified v0.10.11 draft by release ID
+
+on:
+  push:
+    branches: [ci/finalize-v0.10.11-390575878]
+    paths: [.github/workflows/finalize-v0.10.11.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chengjing-finalize-release-390575878
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 8a6d630c0b6f99a80796fe49b3e5e5889dbabbab
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          github-token: ${{ github.token }}
+          repository: Coyoter/chengjing-notes
+          run-id: 35198975358
+          pattern: stable-*
+          path: release
+          merge-multiple: true
+      - name: Recheck all five original build artifacts
+        run: python3 scripts/release-integrity.py --assemble
+      - name: Verify original signatures, remote hashes and source before publishing by ID
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess, sys
+          repo = 'Coyoter/chengjing-notes'
+          source = '8a6d630c0b6f99a80796fe49b3e5e5889dbabbab'
+          tag = 'v0.10.11'
+          release_id = 390575878
+          build_run = 35198975358
+          out = pathlib.Path('release')
+
+          def require(value, message):
+              if not value:
+                  raise RuntimeError(message)
+
+          def api(path, method='GET', payload=None):
+              args = ['gh', 'api', '--method', method, f'repos/{repo}/{path}']
+              if payload is not None:
+                  args += ['--input', '-']
+              result = subprocess.run(args, input=json.dumps(payload) if payload is not None else None,
+                                      text=True, capture_output=True, check=True)
+              return json.loads(result.stdout)
+
+          require(os.environ['GITHUB_REPOSITORY'] == repo, 'Unexpected repository')
+          run = api(f'actions/runs/{build_run}')
+          require(run['head_sha'] == source and run['status'] == 'completed', 'Source build is not complete')
+          jobs = api(f'actions/runs/{build_run}/jobs?filter=latest&per_page=100')
+          required = {'prepare', 'test', 'macos', 'windows', 'android', 'android-check'}
+          for name in required:
+              matches = [j for j in jobs['jobs'] if j['name'] == name]
+              require(len(matches) == 1 and matches[0]['conclusion'] == 'success', f'Build gate not passed: {name}')
+          signing = json.loads((out / 'android-signing.json').read_text())
+          require(signing.get('verified') is True and signing.get('version') == '0.10.11'
+                  and signing.get('versionCode') == 15
+                  and signing.get('applicationId') == 'tw.techtarian.chengjing'
+                  and signing.get('certificateSha1') == '78:E9:EE:9B:9D:31:54:09:A7:59:D8:00:0C:0F:EA:F0:23:A5:33:68'
+                  and signing.get('apkV2Signature') is True and signing.get('aabJarSignature') is True,
+                  'Original Android signing verification is missing or inconsistent')
+          names = (out / 'release-assets.txt').read_text().splitlines()
+          expected = {}
+          for name in names:
+              file = out / name
+              h = hashlib.sha256()
+              with file.open('rb') as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                      h.update(chunk)
+              expected[name] = (file.stat().st_size, 'sha256:' + h.hexdigest())
+
+          def verify_remote(value):
+              require(value['id'] == release_id and value['tag_name'] == tag
+                      and value['target_commitish'] == source and value['prerelease'] is False,
+                      'Unexpected release identity')
+              assets = value['assets']
+              require(len(assets) == len(expected) and {a['name'] for a in assets} == set(expected),
+                      'Remote asset list is incomplete or unexpected')
+              for asset in assets:
+                  require(asset['state'] == 'uploaded'
+                          and (asset['size'], asset.get('digest')) == expected[asset['name']],
+                          'Remote checksum mismatch: ' + asset['name'])
+              return {a['name']: a['id'] for a in assets}
+
+          remote = api(f'releases/{release_id}')
+          original_ids = verify_remote(remote)
+          require(api('git/ref/heads/main')['object']['sha'] == source,
+                  'Main changed; refusing to publish a stale source')
+          if remote['draft']:
+              (out / 'remote-release.json').write_text(json.dumps(remote))
+              subprocess.run([sys.executable, 'scripts/release-integrity.py', '--remote',
+                              str(out / 'remote-release.json')], check=True)
+              refs = api(f'git/matching-refs/tags/{tag}')
+              exact = [r for r in refs if r['ref'] == f'refs/tags/{tag}']
+              require(not exact or (len(exact) == 1 and exact[0]['object']['type'] == 'commit'
+                                    and exact[0]['object']['sha'] == source),
+                      'An incompatible release tag already exists')
+              current = api(f'releases/{release_id}')
+              require(current['draft'] is True and verify_remote(current) == original_ids,
+                      'Draft changed during verification')
+              api(f'releases/{release_id}', 'PATCH',
+                  {'draft': False, 'prerelease': False, 'make_latest': 'true'})
+
+          published = api(f'releases/{release_id}')
+          require(published['draft'] is False and verify_remote(published) == original_ids,
+                  'Publication was not verified or original assets changed')
+          ref = api(f'git/ref/tags/{tag}')
+          require(ref['object']['type'] == 'commit' and ref['object']['sha'] == source,
+                  'Published tag points to a different source')
+          require(api('releases/latest')['id'] == release_id, 'Stable release is not latest')
+          print('PASS: original APK/AAB signatures, five packages, one source, all seven remote SHA-256 checks')
+          print('PASS: original draft published by ID without replacing any uploaded asset')
+          print(published['html_url'])
+          for asset in published['assets']:
+              print(asset['name'], asset['size'], asset['digest'])
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write(f"## Published {tag}\n\n{published['html_url']}\n\nSource: `{source}`\n\n")
+              summary.write('Reused and verified all five build packages; preserved original Android signer. No app source changes, no new key, no Play Console upload.\n')
+          PY
