@@ -7,7 +7,7 @@ permissions:
   actions: read
 concurrency:
   group: recover-v0.10.13-assets
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   recover:
     runs-on: ubuntu-latest
@@ -61,6 +61,8 @@ jobs:
               value=api('releases/'+str(release_id))
               assert value['id']==release_id and value['tag_name']==tag and value['target_commitish']==source
               assert value['prerelease'] is False
+              # The embedded release assets omit unfinished starter records.
+              value['assets']=api('releases/'+str(release_id)+'/assets?per_page=100')
               assets={item['name']:item for item in value['assets']}
               assert len(assets)==len(value['assets']) and set(assets)<=set(expected), 'Unexpected draft assets; refusing to modify'
               return value,assets
