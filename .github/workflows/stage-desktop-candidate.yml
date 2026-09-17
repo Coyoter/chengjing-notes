@@ -1,0 +1,100 @@
+name: Stage verified desktop packages while Android signing is unavailable
+on:
+  push:
+    branches: [ci/stage-v0.10.11-desktop-candidate]
+    paths: [.github/workflows/stage-desktop-candidate.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: 4630ad643eb52edf862145cab8b9455708ca2f26
+      BUILD_RUN: '35197118790'
+      VERSION: 0.10.11
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 4630ad643eb52edf862145cab8b9455708ca2f26
+          fetch-depth: 0
+      - name: Require successful shared tests, both desktop builds and Android compilation
+        run: |
+          python3 - <<'PY'
+          import os,json,subprocess,time
+          repo=os.environ['GITHUB_REPOSITORY']; run=os.environ['BUILD_RUN']
+          def get(endpoint): return json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/{endpoint}'],text=True))
+          info=get(f'actions/runs/{run}')
+          assert info['head_sha']==os.environ['SOURCE_SHA']
+          required={'prepare','test','macos','windows','android-check'}
+          for attempt in range(80):
+              jobs={j['name']:j for j in get(f'actions/runs/{run}/jobs?per_page=100')['jobs']}
+              failures=[n for n in required if n in jobs and jobs[n]['status']=='completed' and jobs[n]['conclusion']!='success']
+              if failures: raise SystemExit('Do not publish: required checks failed: '+', '.join(sorted(failures)))
+              if all(n in jobs and jobs[n]['conclusion']=='success' for n in required): break
+              print('Waiting for: '+', '.join(sorted(n for n in required if n not in jobs or jobs[n]['conclusion']!='success')),flush=True)
+              time.sleep(15)
+          else: raise SystemExit('Required builds did not finish; no draft created')
+          print('PASS: verified source and five required jobs')
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 35197118790
+          name: stable-macos
+          path: release
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 35197118790
+          name: stable-windows
+          path: release
+      - name: Verify original bytes and record the incomplete release scope
+        run: |
+          python3 - <<'PY'
+          import json,pathlib,os,sys
+          sys.path.insert(0,'scripts')
+          from importlib import import_module
+          integrity=import_module('release-integrity')
+          records=[]
+          for stage in ('macos','windows'):
+              report=json.loads(pathlib.Path(f'release/build-{stage}.json').read_text())
+              assert report['sourceSha']==os.environ['SOURCE_SHA'] and report['version']==os.environ['VERSION']
+              current=[integrity.record(name) for name in integrity.FILES[stage]]
+              assert current==report['files']
+              records.extend(current)
+          assert len(records)==3
+          pathlib.Path('release/desktop-manifest.json').write_text(json.dumps({'version':os.environ['VERSION'],'sourceSha':os.environ['SOURCE_SHA'],'files':records,'missing':['signed Android APK','signed Play AAB'],'complete':False},indent=2)+'\n')
+          pathlib.Path('release/desktop-SHA256SUMS').write_text(''.join(f"{r['sha256']}  {r['name']}\n" for r in records))
+          pathlib.Path('release/draft-notes.md').write_text('# 澄境筆記 0.10.11：桌面包已建置，尚未完成全平台正式發布\n\n這是暫存草稿，不是正式版，也不取代目前公開版本。\n\n已包含同一來源提交的 macOS Apple Silicon DMG、Windows x64 EXE、Windows ARM64 EXE，以及桌面檔案校驗資料。來源：'+os.environ['SOURCE_SHA']+'。\n\n共用功能回歸測試、桌面封裝驗證及 Android 編譯／原生單元測試已通過。Android 正式 APK／Play AAB 尚缺原有簽章輸入，沒有以 debug APK、不同金鑰或舊檔改名替代。這個草稿不代表 Android 已發布或 Google Play 已更新。\n\n待原簽章輸入補齊並通過完整五件安裝檔檢查，主要發布流程才會建立 v0.10.11 正式版。\n')
+          PY
+      - name: Upload draft without marking an incomplete release stable
+        run: |
+          TAG='v0.10.11-desktop-candidate'
+          gh release create "$TAG" release/*.dmg release/*-Installer.exe release/desktop-manifest.json release/desktop-SHA256SUMS --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --title '澄境筆記 0.10.11 — 桌面包暫存，等待 Android 原簽章' --notes-file release/draft-notes.md --draft
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json databaseId > release/draft-id.json
+          ID=$(python3 -c 'import json; print(json.load(open("release/draft-id.json"))["databaseId"])')
+          gh api "repos/$GITHUB_REPOSITORY/releases/$ID" > release/remote-draft.json
+          python3 - <<'PY'
+          import json,pathlib,os,hashlib
+          draft=json.loads(pathlib.Path('release/remote-draft.json').read_text())
+          manifest=json.loads(pathlib.Path('release/desktop-manifest.json').read_text())
+          assert draft['draft'] is True and draft['prerelease'] is False and draft['target_commitish']==os.environ['SOURCE_SHA']
+          expected={r['name']:r for r in manifest['files']}
+          for name in ('desktop-manifest.json','desktop-SHA256SUMS'):
+              data=pathlib.Path('release',name).read_bytes();expected[name]={'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}
+          actual={a['name']:a for a in draft['assets']}
+          assert set(actual)==set(expected)
+          for name,row in expected.items():
+              asset=actual[name]
+              assert asset['state']=='uploaded' and asset['size']==row['bytes'] and asset['digest']=='sha256:'+row['sha256']
+          print('PASS: all three desktop installers and verification files are uploaded to an incomplete draft')
+          print(draft['html_url'])
+          PY
+      - name: Fast-forward main to the tested unified source without overwriting concurrent work
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor origin/main "$SOURCE_SHA"
+          git push origin "$SOURCE_SHA:refs/heads/main"
