@@ -4,6 +4,7 @@ on:
     branches: [fix/fleeting-cards-v0.10.9]
     paths:
       - scripts/fleeting-update.b64
+      - .github/workflows/fleeting-cards-validation.yml
 permissions:
   contents: write
 concurrency:
