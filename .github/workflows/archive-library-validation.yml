@@ -1,0 +1,26 @@
+name: Archive and library validation
+on:
+  push:
+    branches: [fix/archive-library-v0.10.8]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit archive and navigation queries
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          for p in sorted(Path('src').rglob('*')):
+              if p.suffix not in ('.ts','.tsx') or '.test.' in p.name or p.name == 'i18n.ts':
+                  continue
+              lines=p.read_text().splitlines()
+              matches=[i for i,l in enumerate(lines) if re.search(r'\.state\s*[!=]=|where\([\"\x27]state|[\"\x27]database[\"\x27]|DatabaseView|function.*archiv|function.*Archive|function.*openCard|openCard:',l)]
+              if matches:
+                  print('\n### '+str(p))
+                  for i in matches:
+                      print(f'{i+1}: {lines[i]}')
+          PY
