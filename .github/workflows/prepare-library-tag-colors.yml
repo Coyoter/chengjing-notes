@@ -1,0 +1,69 @@
+name: Prepare and verify library tag color hotfix
+
+on:
+  push:
+    branches:
+      - fix/library-tag-colors-v0.10.10
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium
+      - name: Prove the regression test detects the released bug
+        run: |
+          git show 0e05cf493006acf48e9cfc9ec69dd28b264f9642:src/library.css > src/library.css
+          set +e
+          CHENGJING_TAG_COLOR_QA_OUTPUT=qa-artifacts/library-tag-colors-before node scripts/qa-library-tag-colors.mjs > before.log 2>&1
+          STATUS=$?
+          set -e
+          git restore --source="$GITHUB_SHA" -- src/library.css
+          cat before.log
+          test "$STATUS" -ne 0
+          grep -q TAG_COLOR_MISMATCH before.log
+      - name: Verify the fixed colors and interactions
+        run: node scripts/qa-library-tag-colors.mjs
+      - name: Save color regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: library-tag-colors-preflight
+          path: qa-artifacts/
+          retention-days: 14
+      - name: Prepare version metadata without changing dependencies
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import assert from 'node:assert/strict';
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          assert.equal(pkg.version, '0.10.9');
+          assert.equal(lock.version, '0.10.9');
+          assert.equal(lock.packages[''].version, '0.10.9');
+          pkg.version = lock.version = lock.packages[''].version = '0.10.10';
+          pkg.scripts['qa:library-tag-colors'] = 'node scripts/qa-library-tag-colors.mjs';
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          fs.writeFileSync('package-lock.json', JSON.stringify(lock, null, 2) + '\n');
+          const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+          assert.ok(changelog.startsWith('# 更新紀錄\n'));
+          const entry = '\n## 0.10.10 — 2026-09-17\n\n- 修正卡片庫「依標籤」色點，與隻言片語及標籤選擇器共用配色，不再誤用灰色預設值。\n- 保留既有標籤色彩與資料，涵蓋三種主題及桌面／行動版面，新增實際瀏覽器比色回歸測試。\n- [完整更新說明與發布範圍](docs/releases/v0.10.10.md)。\n';
+          fs.writeFileSync('CHANGELOG.md', '# 更新紀錄\n' + entry + changelog.slice('# 更新紀錄\n'.length));
+          NODE
+          git add package.json package-lock.json CHANGELOG.md
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore: prepare verified v0.10.10 release metadata'
+          git push origin HEAD:fix/library-tag-colors-v0.10.10
