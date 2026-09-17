@@ -1,3 +1,4 @@
+import { getHiddenTaskIds } from "../lib/activeContent";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import Dexie from "dexie";
@@ -24,17 +25,18 @@ export function TasksView() {
   const todayStart = todayReference - 12 * 3_600_000;
   const tomorrowStart = todayReference + 12 * 3_600_000;
   const tasks = useLiveQuery(async () => {
+    const hidden = await getHiddenTaskIds();
     const [today, overdue, future, completed] = await Promise.all([
-      db.tasks.where("[doneKey+scheduleKey]").between(["active", todayStart], ["active", tomorrowStart], true, false).filter((task) => !task.parentTaskId).limit(displayLimit).toArray(),
-      db.tasks.where("[doneKey+scheduleKey]").between(["active", Dexie.minKey], ["active", todayStart], true, false).reverse().filter((task) => !task.parentTaskId).limit(displayLimit).toArray(),
-      db.tasks.where("[doneKey+scheduleKey]").between(["active", tomorrowStart], ["active", Number.MAX_SAFE_INTEGER], true, true).filter((task) => !task.parentTaskId).limit(displayLimit).toArray(),
-      db.tasks.where("doneKey").equals("done").filter((task) => !task.parentTaskId).toArray().then((items) => items.sort((left, right) => right.updatedAt - left.updatedAt).slice(0, displayLimit)),
+      db.tasks.where("[doneKey+scheduleKey]").between(["active", todayStart], ["active", tomorrowStart], true, false).filter((task) => !hidden.has(task.id) && !task.parentTaskId).limit(displayLimit).toArray(),
+      db.tasks.where("[doneKey+scheduleKey]").between(["active", Dexie.minKey], ["active", todayStart], true, false).reverse().filter((task) => !hidden.has(task.id) && !task.parentTaskId).limit(displayLimit).toArray(),
+      db.tasks.where("[doneKey+scheduleKey]").between(["active", tomorrowStart], ["active", Number.MAX_SAFE_INTEGER], true, true).filter((task) => !hidden.has(task.id) && !task.parentTaskId).limit(displayLimit).toArray(),
+      db.tasks.where("doneKey").equals("done").filter((task) => !hidden.has(task.id) && !task.parentTaskId).toArray().then((items) => items.sort((left, right) => right.updatedAt - left.updatedAt).slice(0, displayLimit)),
     ]);
     const roots = [...new Map([...today, ...overdue, ...future, ...completed].map((task) => [task.id, task])).values()];
     const all = new Map(roots.map((task) => [task.id, task]));
     let frontier = roots.map((task) => task.id);
     while (frontier.length) {
-      const children = await db.tasks.where("parentTaskId").anyOf(frontier).toArray();
+      const children = await db.tasks.where("parentTaskId").anyOf(frontier).filter((task) => !hidden.has(task.id)).toArray();
       const next: string[] = [];
       children.forEach((task) => { if (!all.has(task.id)) { all.set(task.id, task); next.push(task.id); } });
       frontier = next;
@@ -42,12 +44,13 @@ export function TasksView() {
     return [...all.values()];
   }, [displayLimit, todayStart, tomorrowStart], []);
   const taskCounts = useLiveQuery(async () => {
+    const hidden = await getHiddenTaskIds();
     const [active, completed, today, overdue, noDate] = await Promise.all([
-      db.tasks.where("doneKey").equals("active").filter((task) => !task.parentTaskId).count(),
-      db.tasks.where("doneKey").equals("done").filter((task) => !task.parentTaskId).count(),
-      db.tasks.where("[doneKey+scheduleKey]").between(["active", todayStart], ["active", tomorrowStart], true, false).filter((task) => !task.parentTaskId).count(),
-      db.tasks.where("[doneKey+scheduleKey]").between(["active", Dexie.minKey], ["active", todayStart], true, false).filter((task) => !task.parentTaskId).count(),
-      db.tasks.where("[doneKey+scheduleKey]").equals(["active", Number.MAX_SAFE_INTEGER]).filter((task) => !task.parentTaskId).count(),
+      db.tasks.where("doneKey").equals("active").filter((task) => !hidden.has(task.id) && !task.parentTaskId).count(),
+      db.tasks.where("doneKey").equals("done").filter((task) => !hidden.has(task.id) && !task.parentTaskId).count(),
+      db.tasks.where("[doneKey+scheduleKey]").between(["active", todayStart], ["active", tomorrowStart], true, false).filter((task) => !hidden.has(task.id) && !task.parentTaskId).count(),
+      db.tasks.where("[doneKey+scheduleKey]").between(["active", Dexie.minKey], ["active", todayStart], true, false).filter((task) => !hidden.has(task.id) && !task.parentTaskId).count(),
+      db.tasks.where("[doneKey+scheduleKey]").equals(["active", Number.MAX_SAFE_INTEGER]).filter((task) => !hidden.has(task.id) && !task.parentTaskId).count(),
     ]);
     const future = Math.max(0, active - today - overdue - noDate);
     return { active, completed, today, overdue, future, noDate };

@@ -31,8 +31,8 @@ const taskInspectorVisible = await page.locator(".brain-inspector").getByText("�
 const taskNeuronCount = await page.locator('[data-brain-node-key^="task:"]').count();
 await page.screenshot({ path: path.join(output, "01-task-neurons.png"), fullPage: true });
 
-await page.getByRole("button", { name: "資料庫", exact: true }).click();
-const sidebar = page.locator(".database-sidebar");
+await page.getByRole("button", { name: "卡片庫", exact: true }).first().click();
+const sidebar = page.locator(".library-tag-section");
 await sidebar.getByRole("button", { name: /待辦/ }).click();
 await page.locator(".database-header h2").getByText("待辦", { exact: true }).waitFor();
 const directRow = page.locator(".database-task-row").filter({ hasText: "直接建立的神經元待辦" });

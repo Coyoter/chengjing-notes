@@ -8,6 +8,7 @@ interface AppState {
   selectedBoardId: string | null;
   selectedKanbanBoardId: string | null;
   selectedCardId: string | null;
+  inactiveCardAccessId: string | null;
   journalDate: string;
   rightPanel: "none" | "ai" | "wish";
   commandOpen: boolean;
@@ -33,7 +34,7 @@ interface AppState {
   setView: (view: AppView) => void;
   openBoard: (id: string) => void;
   openKanbanBoard: (id: string) => void;
-  openCard: (id: string) => void;
+  openCard: (id: string, options?: { allowInactive?: boolean }) => void;
   closeCard: () => void;
   closeRightPanel: () => void;
   openAI: () => void;
@@ -93,6 +94,7 @@ export const useAppStore = create<AppState>()(
       selectedBoardId: "board-welcome",
       selectedKanbanBoardId: null,
       selectedCardId: null,
+      inactiveCardAccessId: null,
       journalDate: dayjs().format("YYYY-MM-DD"),
       rightPanel: "none",
       commandOpen: false,
@@ -115,11 +117,11 @@ export const useAppStore = create<AppState>()(
       language: initialLanguage(),
       aiDraft: "",
       aiActionRequest: null,
-      setView: (view) => set({ view, selectedCardId: null, rightPanel: "none" }),
+      setView: (view) => set({ view: view === "database" ? "library" : view, selectedCardId: null, inactiveCardAccessId: null, rightPanel: "none" }),
       openBoard: (selectedBoardId) => set({ view: "boards", selectedBoardId, selectedCardId: null, rightPanel: "none" }),
       openKanbanBoard: (selectedKanbanBoardId) => set({ view: "kanban", selectedKanbanBoardId, selectedCardId: null, rightPanel: "none" }),
-      openCard: (selectedCardId) => set((state) => ({ selectedCardId, rightPanel: state.rightPanel === "ai" ? "ai" : "none" })),
-      closeCard: () => set({ selectedCardId: null }),
+      openCard: (selectedCardId, options) => set((state) => ({ selectedCardId, inactiveCardAccessId: options?.allowInactive ? selectedCardId : null, rightPanel: state.rightPanel === "ai" ? "ai" : "none" })),
+      closeCard: () => set({ selectedCardId: null, inactiveCardAccessId: null }),
       closeRightPanel: () => set({ rightPanel: "none" }),
       openAI: () => set({ rightPanel: "ai", aiDraft: "" }),
       openWishPool: () => set({ rightPanel: "wish" }),

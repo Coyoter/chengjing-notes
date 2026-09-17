@@ -1,6 +1,6 @@
 {
   "name": "chengjing",
-  "version": "0.10.7",
+  "version": "0.10.8",
   "private": true,
   "author": "Techtarian",
   "description": "澄境 ChengJing — 本機優先的繁體中文視覺筆記與 AI 研究桌面應用",
@@ -21,6 +21,7 @@
     "pretest": "node scripts/patch-transformers-gemma4.mjs",
     "test": "node scripts/patch-transformers-gemma4.mjs --check && vitest run src --environment jsdom && node --test electron/*.node.cjs",
     "qa": "node scripts/qa.mjs",
+    "qa:archive-library": "node scripts/qa-archive-library.mjs",
     "qa:functional": "node scripts/qa-functional.mjs",
     "qa:regressions": "node scripts/qa-regressions.mjs",
     "qa:typography": "node scripts/qa-typography.mjs",

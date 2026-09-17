@@ -1,0 +1,33 @@
+.library-unified-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.library-unified-tools > label { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.library-unified-tools select { max-width: 100%; color: var(--text-1); background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 7px; }
+.library-tag-section { margin-top: 16px; }
+.library-tag-section header, .library-tag-section h3 { display: flex; align-items: center; gap: 6px; }
+.library-tag-section header { justify-content: space-between; }
+.library-tag-section > button { width: 100%; display: flex; align-items: center; gap: 8px; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text-2); text-align: left; }
+.library-tag-section > button.is-active { background: var(--surface-2); color: var(--text-1); }
+.library-tag-section > button > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-tag-section > button > i { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--text-muted); }
+.library-tag-section > button > b { font-size: 11px; font-weight: 500; }
+.library-structured-content { min-width: 0; overflow: auto; }
+.library-structured-content .data-table { min-width: 650px; }
+.library-structured-content .kanban-board { min-height: 280px; }
+.library-content .filter-bar { flex-wrap: wrap; }
+.library-content .view-toggle { flex-shrink: 0; }
+.library-content .database-bulk-bar { flex-wrap: wrap; }
+.library-content .library-card.is-selected { outline: 2px solid var(--text-2); outline-offset: -2px; }
+.library-card header > span { display: inline-flex; align-items: center; gap: 5px; }
+.library-task-card h3 > button { border: 0; background: transparent; color: inherit; font: inherit; text-align: left; overflow-wrap: anywhere; }
+.library-task-card .database-task-state { margin-top: 12px; }
+.library-layout .library-content { min-width: 0; }
+@media (max-width: 700px) { .library-unified-tools { gap: 6px; } .library-content .view-toggle { margin-left: auto; } }
+
+.library-tag-section > button > i.tone-amber { background: var(--warning); }
+.library-tag-section > button > i.tone-blue { background: var(--info); }
+.library-tag-section > button > i.tone-mint { background: var(--accent); }
+.library-tag-section > button > i.tone-violet { background: var(--violet); }
+.library-tag-section > button > i.tone-rose { background: var(--rose); }
+.library-tag-section .sidebar-tag-form { display: flex; gap: 5px; min-width: 0; }
+.library-tag-section .sidebar-tag-form input { min-width: 0; width: 100%; }
+.library-task-card footer { display: flex; justify-content: space-between; gap: 8px; }
+.library-task-card footer time { flex-shrink: 0; }

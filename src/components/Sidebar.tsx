@@ -1,7 +1,7 @@
+import { getHiddenTaskIds } from "../lib/activeContent";
 import { useEffect, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
-  Archive,
   BrainCircuit,
   BookOpenText,
   CalendarDays,
@@ -30,7 +30,7 @@ import { getWishPoolCopy } from "../lib/wishPoolCopy";
 import { primaryShortcut } from "../lib/platform";
 import { preloadWorkspaceView } from "./Workspace";
 
-const nav: Array<{ view: AppView; label: MessageKey; icon: typeof Archive; badge?: "tasks" }> = [
+const nav: Array<{ view: AppView; label: MessageKey; icon: typeof FileStack; badge?: "tasks" }> = [
   { view: "today", label: "nav.today", icon: LayoutDashboard },
   { view: "fragments", label: "nav.fragments", icon: Feather },
   { view: "journal", label: "nav.journal", icon: CalendarDays },
@@ -38,7 +38,6 @@ const nav: Array<{ view: AppView; label: MessageKey; icon: typeof Archive; badge
   { view: "kanban", label: "nav.kanban", icon: SquareKanban },
   { view: "brain", label: "nav.brain", icon: BrainCircuit },
   { view: "library", label: "nav.library", icon: FileStack },
-  { view: "database", label: "nav.database", icon: Archive },
   { view: "tasks", label: "nav.tasks", icon: CircleCheckBig, badge: "tasks" },
   { view: "highlights", label: "nav.highlights", icon: Highlighter },
 ];
@@ -46,8 +45,8 @@ const nav: Array<{ view: AppView; label: MessageKey; icon: typeof Archive; badge
 export function Sidebar() {
   const boards = useLiveQuery(() => db.boards.orderBy("updatedAt").reverse().limit(5).toArray(), [], []);
   const taskCount = useLiveQuery(async () => {
-    const trash = new Set(await db.cards.where("state").equals("trash").primaryKeys());
-    return db.tasks.where("doneKey").equals("active").filter((task) => !task.cardId || !trash.has(task.cardId)).count();
+    const hidden = await getHiddenTaskIds();
+    return db.tasks.where("doneKey").equals("active").filter((task) => !hidden.has(task.id)).count();
   }, [], 0);
   const view = useAppStore((state) => state.view);
   const selectedBoardId = useAppStore((state) => state.selectedBoardId);

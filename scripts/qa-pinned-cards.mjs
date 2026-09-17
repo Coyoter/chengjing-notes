@@ -38,8 +38,8 @@ await pinnedSeedCard.waitFor();
 const repinRestoresCollection = true;
 await page.screenshot({ path: path.join(output, "01-library-pinned.png"), fullPage: true });
 
-await page.getByRole("button", { name: "資料庫", exact: true }).click();
-const pinnedDatabaseButton = page.locator(".database-sidebar").getByRole("button", { name: /已置頂/ });
+await page.getByRole("button", { name: "卡片庫", exact: true }).first().click();
+const pinnedDatabaseButton = page.locator(".library-tag-section").getByRole("button", { name: /已置頂/ });
 await pinnedDatabaseButton.click();
 await page.locator(".data-table tbody tr").filter({ hasText: "AI 吵架王：產品研究" }).waitFor();
 const databasePinnedRows = await page.locator(".data-table tbody tr:not(.database-task-row)").evaluateAll((rows) => rows.filter((row) => !row.querySelector(".database-empty-row")).map((row) => row.textContent || ""));

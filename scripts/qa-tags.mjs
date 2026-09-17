@@ -88,8 +88,8 @@ const cardTagAssociationRemoved = !(await cardTags.innerText()).includes("Resear
 await page.getByRole("button", { name: "返回卡片庫", exact: true }).click();
 
 // 資料庫：全域標籤可見，右鍵重新命名並同步所有引用
-await page.getByRole("button", { name: "資料庫", exact: true }).click();
-const databaseTags = page.locator(".database-sidebar > button");
+await page.getByRole("button", { name: "卡片庫", exact: true }).first().click();
+const databaseTags = page.locator(".library-tag-section > button");
 await databaseTags.filter({ hasText: "ResearchTag" }).waitFor();
 const sourceTag = databaseTags.filter({ hasText: "共同日誌" });
 await sourceTag.click({ button: "right" });
@@ -105,7 +105,7 @@ await renameInput.fill("共同主題");
 await renameInput.dispatchEvent("compositionend", { data: "共同主題" });
 await renameInput.press("Enter");
 await databaseTags.filter({ hasText: "共同主題" }).waitFor();
-const tagRenamed = !(await page.locator(".database-sidebar").innerText()).includes("共同日誌");
+const tagRenamed = !(await page.locator(".library-tag-section").innerText()).includes("共同日誌");
 await page.waitForTimeout(180);
 await page.screenshot({ path: path.join(output, "01-database-tag-renamed.png"), fullPage: true });
 
@@ -117,14 +117,14 @@ await page.locator(".fragment-stream").getByText("共同主題", { exact: true }
 const fragmentRenameSynced = (await page.locator(".fragment-stream").innerText()).includes("共同主題");
 
 // 資料庫右鍵移除，全域引用同步清除
-await page.getByRole("button", { name: "資料庫", exact: true }).click();
+await page.getByRole("button", { name: "卡片庫", exact: true }).first().click();
 const deleteTarget = databaseTags.filter({ hasText: "片語標籤" });
 await deleteTarget.click({ button: "right" });
 await page.locator('[data-context-menu="tag"]').waitFor();
 page.once("dialog", (dialog) => dialog.accept());
 await page.locator('[data-context-menu="tag"]').getByRole("menuitem", { name: "移除標籤", exact: true }).click();
 await deleteTarget.waitFor({ state: "detached" });
-const tagDeleted = !(await page.locator(".database-sidebar").innerText()).includes("片語標籤");
+const tagDeleted = !(await page.locator(".library-tag-section").innerText()).includes("片語標籤");
 
 await page.getByRole("button", { name: /^隻言片語/ }).click();
 const fragmentDeleteSynced = !(await page.locator(".fragment-stream").innerText()).includes("片語標籤");
@@ -140,11 +140,11 @@ await page.reload({ waitUntil: "networkidle" });
 await page.getByRole("button", { name: "日誌", exact: true }).click();
 await page.locator(".journal-tags").getByText("共同主題", { exact: true }).waitFor();
 const reloadCursor = await page.locator(".journal-paper .prose-editor").evaluate((element) => getComputedStyle(element).cursor);
-await page.getByRole("button", { name: "資料庫", exact: true }).click();
-await page.locator(".database-sidebar").getByText("共同主題", { exact: true }).waitFor();
-await page.locator(".database-sidebar").getByText("ResearchTag", { exact: true }).waitFor();
-await page.locator(".database-sidebar").getByText("白板標籤", { exact: true }).waitFor();
-const databaseTextAfterReload = await page.locator(".database-sidebar").innerText();
+await page.getByRole("button", { name: "卡片庫", exact: true }).first().click();
+await page.locator(".library-tag-section").getByText("共同主題", { exact: true }).waitFor();
+await page.locator(".library-tag-section").getByText("ResearchTag", { exact: true }).waitFor();
+await page.locator(".library-tag-section").getByText("白板標籤", { exact: true }).waitFor();
+const databaseTextAfterReload = await page.locator(".library-tag-section").innerText();
 const persistedAfterReload = databaseTextAfterReload.includes("共同主題") && databaseTextAfterReload.includes("ResearchTag") && databaseTextAfterReload.includes("白板標籤") && !databaseTextAfterReload.includes("片語標籤");
 await page.waitForTimeout(180);
 await page.screenshot({ path: path.join(output, "03-tags-persisted.png"), fullPage: true });

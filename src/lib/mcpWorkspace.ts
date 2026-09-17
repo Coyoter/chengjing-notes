@@ -1,4 +1,6 @@
 import { createCard, db } from "../db";
+import { isActiveCard, isVisibleCard } from "./cardVisibility";
+import { getHiddenTaskIds } from "./activeContent";
 import { useAppStore } from "../store";
 import type { BrainContentType, BrainRelationType, CardRecord, TaskRecord } from "../types";
 import { richHtmlFromPlainText } from "./boardContent";
@@ -42,8 +44,9 @@ function nextUpdatedAt(current: number) { return Math.max(Date.now(), current + 
 function requireText(value: unknown, code: string, maximum: number) { const result = text(value, maximum); if (!result) throw new Error(code); return result; }
 
 async function workspaceStatus() {
+  const hiddenTasks = await getHiddenTaskIds();
   const [notes, whiteboards, kanban, tasks, fragments, relations] = await Promise.all([
-    db.cards.filter((card) => card.state !== "trash").count(), db.boards.count(), db.kanbanBoards.count(), db.tasks.count(), db.fragments.count(), db.brainEdges.count(),
+    db.cards.filter(isVisibleCard).count(), db.boards.count(), db.kanbanBoards.count(), db.tasks.filter((task) => !hiddenTasks.has(task.id)).count(), db.fragments.count(), db.brainEdges.count(),
   ]);
   return {
     app: "ChengJing", databaseVersion: db.verno, counts: { notes, whiteboards, kanban, tasks, fragments, relations },
@@ -60,11 +63,12 @@ async function workspaceSearch(args: Record<string, unknown>) {
   const language = useAppStore.getState().language || "zh-TW";
   const results: Array<Record<string, unknown>> = [];
   if (requested.has("note")) {
-    const values = await searchRecords(db.cards, query, language, (card) => card.state !== "trash" && matchesQuery(`${card.title} ${card.plainText}`, query, terms), limit + 1);
-    for (const card of values) if (card.state !== "trash" && matchesQuery(`${card.title} ${card.plainText}`, query, terms)) results.push({ ...compactCard(card, 700), excerpt: card.plainText.slice(0, 700) });
+    const values = await searchRecords(db.cards, query, language, (card) => isVisibleCard(card) && matchesQuery(`${card.title} ${card.plainText}`, query, terms), limit + 1);
+    for (const card of values) if (isVisibleCard(card) && matchesQuery(`${card.title} ${card.plainText}`, query, terms)) results.push({ ...compactCard(card, 700), excerpt: card.plainText.slice(0, 700) });
   }
   if (requested.has("task")) {
-    const values = await searchRecords(db.tasks, query, language, (task) => matchesQuery(task.title, query, terms), limit + 1);
+    const hidden = await getHiddenTaskIds();
+    const values = await searchRecords(db.tasks, query, language, (task) => !hidden.has(task.id) && matchesQuery(task.title, query, terms), limit + 1);
     for (const task of values) if (matchesQuery(task.title, query, terms)) results.push({ type: "task", id: task.id, title: task.title, done: task.done, cardId: task.cardId, parentTaskId: task.parentTaskId, dueAt: task.dueAt, createdAt: task.createdAt, updatedAt: task.updatedAt });
   }
   if (requested.has("fragment")) {
@@ -86,29 +90,34 @@ async function workspaceSearch(args: Record<string, unknown>) {
 async function getItem(args: Record<string, unknown>) {
   const type = text(args.type, 30); const id = identifier(args.id);
   if (!id) throw new Error("mcp-id-required");
-  if (type === "note") { const item = await db.cards.get(id); if (!item || item.state === "trash") throw new Error("mcp-item-not-found"); return compactCard(item, 100_000); }
-  if (type === "task") { const item = await db.tasks.get(id); if (!item) throw new Error("mcp-item-not-found"); const children = await db.tasks.where("parentTaskId").equals(id).toArray(); return { type, ...item, children: children.map((child) => ({ id: child.id, title: child.title, done: child.done, updatedAt: child.updatedAt })) }; }
+  if (type === "note") { const item = await db.cards.get(id); if (!isActiveCard(item)) throw new Error("mcp-item-not-found"); return compactCard(item, 100_000); }
+  if (type === "task") { const hidden = await getHiddenTaskIds(); const item = await db.tasks.get(id); if (!item || hidden.has(id)) throw new Error("mcp-item-not-found"); const children = await db.tasks.where("parentTaskId").equals(id).filter((task) => !hidden.has(task.id)).toArray(); return { type, ...item, children: children.map((child) => ({ id: child.id, title: child.title, done: child.done, updatedAt: child.updatedAt })) }; }
   if (type === "fragment") { const item = await db.fragments.get(id); if (!item) throw new Error("mcp-item-not-found"); return { type, ...item, searchTerms: undefined }; }
   if (type === "whiteboard") {
     const board = await db.boards.get(id); if (!board) throw new Error("mcp-item-not-found");
     const [nodes, edges] = await Promise.all([db.boardNodes.where("boardId").equals(id).toArray(), db.boardEdges.where("boardId").equals(id).toArray()]);
     const cardIds = [...new Set(nodes.map((node) => node.cardId).filter(Boolean) as string[])];
     const cards = await db.cards.bulkGet(cardIds);
-    const cardMap = new Map(cards.filter(Boolean).map((card) => [card!.id, compactCard(card!, 1_500)]));
-    return { type, ...board, nodes: nodes.slice(0, 300).map((node) => ({ ...node, note: node.cardId ? cardMap.get(node.cardId) : undefined })), edges: edges.slice(0, 500), truncated: nodes.length > 300 || edges.length > 500 };
+    const cardMap = new Map(cards.filter(isActiveCard).map((card) => [card.id, compactCard(card, 1_500)]));
+    const visibleNodes = nodes.filter((node) => !node.cardId || cardMap.has(node.cardId));
+    const ids = new Set(visibleNodes.map((node) => node.id));
+    const visibleEdges = edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
+    return { type, ...board, nodes: visibleNodes.slice(0, 300).map((node) => ({ ...node, note: node.cardId ? cardMap.get(node.cardId) : undefined })), edges: visibleEdges.slice(0, 500), truncated: visibleNodes.length > 300 || visibleEdges.length > 500 };
   }
   if (type === "kanban") {
     const board = await db.kanbanBoards.get(id); if (!board) throw new Error("mcp-item-not-found");
     const [lists, placements] = await Promise.all([db.kanbanLists.where("boardId").equals(id).sortBy("order"), db.kanbanPlacements.where("boardId").equals(id).sortBy("order")]);
     const cards = await db.cards.bulkGet([...new Set(placements.map((item) => item.cardId))]);
-    const cardMap = new Map(cards.filter(Boolean).map((card) => [card!.id, compactCard(card!, 1_000)]));
-    return { type, ...board, lists: lists.slice(0, 100), placements: placements.slice(0, 300).map((item) => ({ ...item, note: cardMap.get(item.cardId) })), truncated: lists.length > 100 || placements.length > 300 };
+    const cardMap = new Map(cards.filter(isActiveCard).map((card) => [card.id, compactCard(card, 1_000)]));
+    const visiblePlacements = placements.filter((item) => cardMap.has(item.cardId));
+    return { type, ...board, lists: lists.slice(0, 100), placements: visiblePlacements.slice(0, 300).map((item) => ({ ...item, note: cardMap.get(item.cardId) })), truncated: lists.length > 100 || visiblePlacements.length > 300 };
   }
   if (type === "neuron") {
     const neuronType = text(args.neuronType, 20) as BrainContentType;
     const entity = await brainEntity(neuronType, id); if (!entity) throw new Error("mcp-item-not-found");
     const [outgoing, incoming] = await Promise.all([db.brainEdges.where("[sourceType+sourceId]").equals([neuronType, id]).toArray(), db.brainEdges.where("[targetType+targetId]").equals([neuronType, id]).toArray()]);
-    return { type, neuronType, entity, relations: [...outgoing, ...incoming].slice(0, 200), truncated: outgoing.length + incoming.length > 200 };
+    const visible = (await Promise.all([...outgoing, ...incoming].map(async (edge) => (await brainEntity(edge.sourceType, edge.sourceId)) && (await brainEntity(edge.targetType, edge.targetId)) ? edge : null))).filter(Boolean);
+    return { type, neuronType, entity, relations: visible.slice(0, 200), truncated: visible.length > 200 };
   }
   throw new Error("mcp-item-type-invalid");
 }
@@ -243,9 +252,9 @@ async function updateKanban(args: Record<string, unknown>) {
 }
 
 async function brainEntity(type: BrainContentType, id: string) {
-  if (type === "card") { const value = await db.cards.get(id); return value && value.state !== "trash" ? compactCard(value, 6_000) : null; }
+  if (type === "card") { const value = await db.cards.get(id); return isActiveCard(value) ? compactCard(value, 6_000) : null; }
   if (type === "board") { const value = await db.boards.get(id); return value ? { type: "whiteboard", ...value } : null; }
-  if (type === "task") { const value = await db.tasks.get(id); return value ? { type: "task", ...value } : null; }
+  if (type === "task") { const value = await db.tasks.get(id); return value && !(await getHiddenTaskIds()).has(id) ? { type: "task", ...value } : null; }
   if (type === "fragment") { const value = await db.fragments.get(id); return value ? { type: "fragment", ...value, searchTerms: undefined } : null; }
   return null;
 }

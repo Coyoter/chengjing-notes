@@ -57,7 +57,7 @@ await page.keyboard.press("Enter");
 await page.waitForFunction((count) => document.querySelectorAll(".mindmap-node").length >= count + 3, before);
 const after = await page.locator(".mindmap-node").count();
 
-await page.getByRole("button", { name: "資料庫", exact: true }).click();
+await page.getByRole("button", { name: "卡片庫", exact: true }).first().click();
 const row = page.locator(".data-table tbody tr").filter({ hasText: "功能驗收卡片（已編輯）" });
 await row.waitFor();
 await row.locator("select").selectOption({ label: "進行中" });

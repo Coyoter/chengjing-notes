@@ -1,4 +1,4 @@
-# ChengJing Notes v0.10.0
+# ChengJing Notes v0.10.8
 
 <p align="center">
   <a href="README.md">繁體中文</a>
@@ -46,7 +46,7 @@ The macOS build is currently ad-hoc signed and is not notarized with an Apple De
 - Daily journals, cross-editor todos, a custom calendar, date timeline, due dates, source highlights, and restore
 - Interactive whiteboard with cards and files placed directly on the canvas, zooming, dragging, connections, minimap, and auto-layout
 - Project kanban boards with multiple boards and lists, drag-and-drop, dates, tags, checklists, attachments, search, filters, sorting, and favorites
-- Tag database with table, kanban, stage, and custom-tag views
+- Unified card library with folder/tag filters, grid/list/table/stage views, cards/tasks and batch operations
 - Import for PDF, DOCX, Markdown, plain text, HTML, images, audio, and video
 - Web article capture and YouTube source cards
 - OpenRouter integration with local AES-256-GCM key storage, curated models, model synchronization, and custom model names

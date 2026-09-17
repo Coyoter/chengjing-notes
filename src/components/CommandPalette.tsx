@@ -8,7 +8,7 @@ import { primaryShortcut } from "../lib/platform";
 import { useAppStore } from "../store";
 import { localizedKindLabel, truncate } from "../lib/utils";
 import { includesQuery, searchRecords } from "../lib/searchRecords";
-import { isMaterializedCard } from "../lib/journalVisibility";
+import { isVisibleCard } from "../lib/cardVisibility";
 
 export function CommandPalette() {
   const { language, t } = useI18n();
@@ -24,7 +24,7 @@ export function CommandPalette() {
   const [active, setActive] = useState(0);
   const cards = useLiveQuery(async () => {
     if (!open) return [];
-    return searchRecords(db.cards, query, language, (card) => card.state !== "trash" && isMaterializedCard(card) && includesQuery(`${card.title} ${card.plainText}`, query, language), 6);
+    return searchRecords(db.cards, query, language, (card) => isVisibleCard(card) && includesQuery(`${card.title} ${card.plainText}`, query, language), 6);
   }, [language, open, query], []);
   const boards = useLiveQuery(() => open ? searchRecords(db.boards, query, language, (board) => includesQuery(`${board.title} ${board.description}`, query, language), 4) : [], [language, open, query], []);
   const kanbanBoards = useLiveQuery(() => open ? searchRecords(db.kanbanBoards, query, language, (board) => includesQuery(`${board.title} ${board.description}`, query, language), 4) : [], [language, open, query], []);

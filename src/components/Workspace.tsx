@@ -13,7 +13,7 @@ const viewLoaders: Record<AppView, WorkspaceViewLoader> = {
   boards: () => import("../views/BoardView").then((module) => ({ default: module.BoardView })),
   kanban: () => import("../views/KanbanView").then((module) => ({ default: module.KanbanView })),
   library: () => import("../views/LibraryView").then((module) => ({ default: module.LibraryView })),
-  database: () => import("../views/DatabaseView").then((module) => ({ default: module.DatabaseView })),
+  database: () => import("../views/LibraryView").then((module) => ({ default: module.LibraryView })),
   tasks: () => import("../views/TasksView").then((module) => ({ default: module.TasksView })),
   highlights: () => import("../views/HighlightsView").then((module) => ({ default: module.HighlightsView })),
   fragments: () => window.chengjing?.platform === "android" ? import("./MobileCapture").then((module) => ({ default: module.MobileCapture })) : import("../views/FragmentsView").then((module) => ({ default: module.FragmentsView })),

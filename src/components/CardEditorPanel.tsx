@@ -33,7 +33,7 @@ import { KnowledgeGroupPicker } from "./KnowledgeGroupPicker";
 import { getCardPropertyCopy } from "../lib/cardPropertyCopy";
 import { attachmentUrl, removeStoredAttachment, shouldRevokeAttachmentUrl } from "../lib/attachments";
 import { searchQueryTerms } from "../lib/searchIndex";
-import { isMaterializedCard } from "../lib/journalVisibility";
+import { isActiveCard, isVisibleCard } from "../lib/cardVisibility";
 
 const PdfAttachmentViewer = lazy(() => import("./PdfAttachmentViewer").then((module) => ({ default: module.PdfAttachmentViewer })));
 
@@ -58,12 +58,15 @@ function AttachmentPreview({ attachment, downloadLabel, onRemove }: { attachment
 
 export function CardEditorPanel() {
   const cardId = useAppStore((state) => state.selectedCardId);
+  const inactiveAccess = useAppStore((state) => state.inactiveCardAccessId);
   const view = useAppStore((state) => state.view);
   const close = useAppStore((state) => state.closeCard);
   const openAI = useAppStore((state) => state.openAI);
   const openAIWithAction = useAppStore((state) => state.openAIWithAction);
   const { intlLocale, language, t } = useI18n();
   const card = useLiveQuery(() => cardId ? db.cards.get(cardId) : undefined, [cardId]);
+  const blocked = Boolean(card && !isActiveCard(card) && inactiveAccess !== card.id);
+  useEffect(() => { if (blocked) close(); }, [blocked, close]);
   const attachments = useLiveQuery(async () => card ? (await Promise.all(card.attachmentIds.map((id) => db.attachments.get(id)))).filter(Boolean) as AttachmentRecord[] : [], [card?.attachmentIds.join("|")], []);
   const locations = useLiveQuery(async () => {
     if (!cardId) return [];
@@ -73,8 +76,8 @@ export function CardEditorPanel() {
   const backlinks = useLiveQuery(async () => {
     if (!card?.title) return [];
     const terms = searchQueryTerms(card.title, language);
-    const cards = terms.length ? await db.cards.where("searchTerms").anyOf(terms).distinct().limit(500).toArray() : [];
-    return cards.filter((item) => item.state !== "trash" && isMaterializedCard(item) && item.id !== card.id && (item.plainText.includes(card.title) || item.contentHtml.includes(`data-card-id=\"${card.id}\"`)));
+    const cards = terms.length ? await db.cards.where("searchTerms").anyOf(terms).distinct().filter(isVisibleCard).limit(500).toArray() : [];
+    return cards.filter((item) => isVisibleCard(item) && item.id !== card.id && (item.plainText.includes(card.title) || item.contentHtml.includes(`data-card-id=\"${card.id}\"`)));
   }, [card?.id, card?.title, language], []);
   const highlights = useLiveQuery(() => cardId ? db.highlights.where("cardId").equals(cardId).toArray() : [], [cardId], []);
   const versions = useLiveQuery(() => cardId ? db.cardVersions.where("cardId").equals(cardId).reverse().sortBy("createdAt") : [], [cardId], []);
@@ -120,6 +123,7 @@ export function CardEditorPanel() {
     return () => {flush();window.removeEventListener("chengjing:flush-editors",flush);};
   }, [cardId]);
 
+  if (blocked) return null;
   if (!card) return <div className="panel-loading">{t("card.loading")}</div>;
   const activeCard = card;
 

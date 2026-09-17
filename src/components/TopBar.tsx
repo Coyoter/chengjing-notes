@@ -16,7 +16,7 @@ const titles: Record<AppView, { eyebrow: MessageKey; title: MessageKey }> = {
   boards: { eyebrow: "top.visualThinking", title: "nav.boards" },
   kanban: { eyebrow: "top.projectFlow", title: "nav.kanban" },
   library: { eyebrow: "top.allContent", title: "nav.library" },
-  database: { eyebrow: "top.structured", title: "nav.database" },
+  database: { eyebrow: "top.structured", title: "nav.library" },
   tasks: { eyebrow: "top.nextStep", title: "nav.tasks" },
   highlights: { eyebrow: "top.sourceExcerpts", title: "nav.highlights" },
   fragments: { eyebrow: "top.captureThoughts", title: "nav.fragments" },
