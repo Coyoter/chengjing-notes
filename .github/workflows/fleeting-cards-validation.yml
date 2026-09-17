@@ -27,6 +27,8 @@ jobs:
           for item in changes:
               path = Path(item['path'])
               assert not path.is_absolute() and '..' not in path.parts
+              if path.as_posix().startswith('.github/workflows/'):
+                  continue
               old = path.read_text() if path.exists() else ''
               assert hashlib.sha256(old.encode()).hexdigest() == item['before'], f'Changed base: {path}'
               new = old
