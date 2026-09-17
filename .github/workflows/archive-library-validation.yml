@@ -14,13 +14,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Apply reviewed source delta on isolated branch
-        if: hashFiles('.ci/source-delta.json.gz.b64') != ''
+        if: hashFiles('.ci/source-delta.part5') != ''
         run: |
           python3 - <<'PY'
           import base64, gzip, hashlib, json
           from pathlib import Path
-          source = Path('.ci/source-delta.json.gz.b64')
-          changes = json.loads(gzip.decompress(base64.b64decode(source.read_text())))
+          sources = sorted(Path('.ci').glob('source-delta.part*'))
+          assert len(sources) == 5
+          encoded = ''.join(source.read_text().strip() for source in sources)
+          for source in sources:
+              print(source, len(source.read_text().strip()), hashlib.sha256(source.read_bytes()).hexdigest())
+          assert hashlib.sha256(encoded.encode()).hexdigest() == '5acb87fbc97a8b1a3f82f2f7af7d51dda121472f5c9d9d7b8f9fad7b6f8df7ca', 'Transfer checksum mismatch'
+          changes = json.loads(gzip.decompress(base64.b64decode(encoded, validate=True)))
           outputs = {}
           for name, delta in changes.items():
               path = Path(name)
@@ -41,7 +46,7 @@ jobs:
               else:
                   path.parent.mkdir(parents=True, exist_ok=True)
                   path.write_bytes(data)
-          source.unlink()
+          for source in sources: source.unlink()
           print(f'Applied and verified {len(outputs)} source files')
           PY
           git diff --check
