@@ -1,0 +1,134 @@
+name: Recover v0.10.13 release uploads
+on:
+  push:
+    branches: [ci/recover-v0.10.13-assets]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: recover-v0.10.13-assets
+  cancel-in-progress: false
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: b1d470f8327d562a593f9b9dda59bce5ddee3ddf
+          fetch-depth: 0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          github-token: ${{ github.token }}
+          run-id: 35252341228
+          pattern: stable-*
+          path: release
+          merge-multiple: true
+      - name: Verify original packages without rebuilding or accessing signing keys
+        run: python3 scripts/release-integrity.py --assemble
+      - name: Resume only this draft, verify every upload, and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,socket,subprocess,time,urllib.error,urllib.parse,urllib.request
+          repo='Coyoter/chengjing-notes'
+          source='b1d470f8327d562a593f9b9dda59bce5ddee3ddf'
+          run_id=35252341228
+          release_id=390920713
+          tag='v0.10.13'
+          out=pathlib.Path('release')
+          names=(out/'release-assets.txt').read_text().splitlines()
+          assert len(names)==7 and len(set(names))==7
+          expected={name:((out/name).stat().st_size,'sha256:'+hashlib.sha256((out/name).read_bytes()).hexdigest()) for name in names}
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==source
+          def api(path,method='GET',data=None):
+              args=['gh','api','--method',method,'repos/'+repo+'/'+path]
+              if data is not None: args+=['--input','-']
+              result=subprocess.run(args,input=json.dumps(data) if data is not None else None,text=True,capture_output=True,timeout=90)
+              if result.returncode: raise RuntimeError('GitHub API failed: '+method+' '+path)
+              return json.loads(result.stdout) if result.stdout.strip() else None
+          run=api('actions/runs/'+str(run_id))
+          assert run['status']=='completed' and run['head_sha']=='5b0a232488a12b03e036e480c5eebf100f59dc26'
+          jobs=api('actions/runs/'+str(run_id)+'/jobs?filter=latest&per_page=100')['jobs']
+          passed={job['name'] for job in jobs if job['conclusion']=='success'}
+          assert {'prepare','test','macos','windows','android','android-check'}<=passed
+          signing=json.loads((out/'android-signing.json').read_text())
+          assert signing['verified'] and signing['version']=='0.10.13' and signing['versionCode']==17
+          assert signing['certificateSha1']=='78:E9:EE:9B:9D:31:54:09:A7:59:D8:00:0C:0F:EA:F0:23:A5:33:68'
+          assert signing['apkV2Signature'] and signing['aabJarSignature']
+          def read_release():
+              value=api('releases/'+str(release_id))
+              assert value['id']==release_id and value['tag_name']==tag and value['target_commitish']==source
+              assert value['prerelease'] is False
+              assets={item['name']:item for item in value['assets']}
+              assert len(assets)==len(value['assets']) and set(assets)<=set(expected), 'Unexpected draft assets; refusing to modify'
+              return value,assets
+          def matches(name,item):
+              return item.get('state')=='uploaded' and (item.get('size'),item.get('digest'))==expected[name]
+          value,assets=read_release()
+          if not value['draft']:
+              assert set(assets)==set(expected) and all(matches(name,assets[name]) for name in names)
+              print('PASS: the verified release is already published')
+              raise SystemExit(0)
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self,req,fp,code,msg,headers,newurl):
+                  return None
+          opener=urllib.request.build_opener(NoRedirect())
+          # Small files first; mobile packages before desktop packages. Never overwrite
+          # completed uploads or delete anything outside this exact new draft release.
+          for name in sorted(names,key=lambda item:expected[item][0]):
+              for attempt in range(4):
+                  value,assets=read_release()
+                  assert value['draft'] is True, 'Release was published concurrently; stopping writes'
+                  item=assets.get(name)
+                  if item and matches(name,item):
+                      print('PASS: uploaded bytes verified: '+name,flush=True)
+                      break
+                  if item:
+                      if item.get('state')=='uploaded':
+                          assert item.get('size')==expected[name][0] and item.get('digest') is None, 'Uploaded checksum mismatch; refusing to replace'
+                          time.sleep(5)
+                          continue
+                      assert item.get('state')=='starter', 'Unexpected asset state'
+                      api('releases/assets/'+str(item['id']),'DELETE')
+                  print('Uploading '+name+' (attempt '+str(attempt+1)+')',flush=True)
+                  url='https://uploads.github.com/repos/'+repo+'/releases/'+str(release_id)+'/assets?name='+urllib.parse.quote(name,safe='')
+                  request=urllib.request.Request(url,data=(out/name).read_bytes(),method='POST',headers={
+                      'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+                      'Accept':'application/vnd.github+json',
+                      'Content-Type':'application/octet-stream',
+                      'X-GitHub-Api-Version':'2022-11-28',
+                      'User-Agent':'ChengJing-Verified-Release-Recovery'})
+                  try:
+                      with opener.open(request,timeout=180) as response:
+                          uploaded=json.load(response)
+                      assert uploaded['name']==name
+                      value,assets=read_release()
+                      if name in assets and matches(name,assets[name]):
+                          print('PASS: uploaded bytes verified: '+name,flush=True)
+                          break
+                  except urllib.error.HTTPError as error:
+                      if error.code not in (408,409,422,429,500,502,503,504):
+                          raise RuntimeError('Non-retryable upload HTTP '+str(error.code)) from None
+                      print('Retryable upload HTTP '+str(error.code)+'; checking remote state before retry',flush=True)
+                  except (urllib.error.URLError,TimeoutError,ConnectionError,socket.timeout):
+                      print('Upload transport failed; checking remote state before retry',flush=True)
+                  time.sleep(5*(attempt+1))
+              else:
+                  raise RuntimeError('Upload did not verify after bounded retries: '+name)
+          value,assets=read_release()
+          assert value['draft'] is True
+          (out/'remote-release.json').write_text(json.dumps(value))
+          subprocess.run(['python3','scripts/release-integrity.py','--remote',str(out/'remote-release.json')],check=True)
+          subprocess.run(['git','fetch','origin','main'],check=True)
+          subprocess.run(['git','merge-base','--is-ancestor','origin/main','HEAD'],check=True)
+          subprocess.run(['git','push','origin','HEAD:main'],check=True)
+          value=api('releases/'+str(release_id),'PATCH',{'draft':False,'prerelease':False,'make_latest':'true'})
+          assert value['draft'] is False and value['prerelease'] is False and value['tag_name']==tag and value['target_commitish']==source
+          value,assets=read_release()
+          assert not value['draft'] and set(assets)==set(expected) and all(matches(name,assets[name]) for name in names)
+          latest=api('releases/latest')
+          assert latest['id']==release_id
+          print('PASS: published complete verified stable release '+value['html_url'])
+          PY
