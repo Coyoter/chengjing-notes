@@ -28,10 +28,12 @@ jobs:
           with open('preflight/signing-readiness.json','w') as f: json.dump(report,f,indent=2)
           print(json.dumps(report,indent=2))
           PY
-      - name: Preserve current and last Android source for release review
+      - name: Preserve public source history for three-way release reconciliation
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          git bundle create preflight/source-history.bundle HEAD refs/tags/v0.10.6 refs/remotes/origin/main
+          git bundle verify preflight/source-history.bundle
           git archive --format=zip 9fa643f9d976222d751cf811287eeecdcb5f11fb > preflight/current-source.zip
           git archive --format=zip v0.10.6 > preflight/android-v0.10.6-source.zip
           git diff --stat v0.10.6 9fa643f9d976222d751cf811287eeecdcb5f11fb > preflight/source-diff-stat.txt
