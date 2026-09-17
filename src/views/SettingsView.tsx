@@ -39,8 +39,6 @@ import { QuickCaptureSettingsPanel } from "../components/QuickCaptureSettings";
 import { AdvancedAIProviderSettings } from "../components/AdvancedAIProviderSettings";
 import { getAdvancedProviderCopy } from "../lib/advancedProviderCopy";
 import { McpSettingsPanel } from "../components/McpSettings";
-import { SyncSettings } from "../components/SyncSettings";
-import { CloudBackupImport } from "../components/CloudBackupImport";
 import { AndroidUpdateSettings } from "../components/AndroidUpdateSettings";
 import { SettingsJumpNav } from "../components/SettingsJumpNav";
 import { getSettingsDisclosureCopy } from "../lib/settingsAnchorCopy";
@@ -121,7 +119,8 @@ export function SettingsView() {
     setNotice(t("settings.testingNotice"));
     try {
       const result = await window.chengjing.ai.testOpenRouter();
-      const detail = result.limitRemaining === null ? result.label : `${result.label} · ${result.limitRemaining.toFixed(2)}`;
+      const remaining = Number(result.limitRemaining);
+      const detail = Number.isFinite(remaining) ? `${result.label} · ${remaining.toFixed(2)}` : result.label;
       setNotice(t("settings.connectionOk", { detail }));
     } catch (error) {
       setNotice(friendlyErrorMessage(error, t("settings.testFailed")));
@@ -238,7 +237,6 @@ export function SettingsView() {
         </div>
       </details>
 
-      {window.chengjing?.sync && <SyncSettings />}
       {window.chengjing?.platform !== "android" && <McpSettingsPanel />}
 
       {window.chengjing?.platform==="android"?<AndroidUpdateSettings />:<UpdateSettingsSection />}
@@ -256,7 +254,6 @@ export function SettingsView() {
 
       <section className="settings-section" id="backup-settings">
         <AutoBackupSettingsPanel />
-        {window.chengjing?.sync && <CloudBackupImport />}
       </section>
 
       <section className="settings-section support-author" id="support-author">

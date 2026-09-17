@@ -16,6 +16,7 @@ import { intlLocale, translate } from "../i18n";
 import { getTaskIntegrationCopy, taskCopyFormat } from "./taskIntegrationCopy";
 import { hiddenTaskIds, isActiveCard, isVisibleCard } from "./cardVisibility";
 import { getTaskHierarchyCopy } from "./taskHierarchyCopy";
+import { taskBrainOpacity } from "./taskCompletion";
 
 export interface BrainNodeView {
   key: string;
@@ -31,6 +32,7 @@ export interface BrainNodeView {
   createdAt: number;
   observedAt: number;
   updatedAt: number;
+  opacity?: number;
 }
 
 export interface BrainEdgeView {
@@ -338,6 +340,7 @@ export function buildBrainGraph(input: {
   tags: TagRecord[];
   storedEdges: BrainEdgeRecord[];
   language?: AppLanguage;
+  now?: number;
 }) {
   const language = input.language || "zh-TW";
   const taskCopy = getTaskIntegrationCopy(language);
@@ -371,13 +374,15 @@ export function buildBrainGraph(input: {
   const hiddenTasks = hiddenTaskIds(input.tasks, new Set(input.cards.filter((card) => !isActiveCard(card)).map((card) => card.id)));
   input.tasks.forEach((task) => {
     if (hiddenTasks.has(task.id)) return;
+    const opacity = taskBrainOpacity(task, input.now ?? Date.now());
+    if (opacity <= 0) return;
     const sourceCard = task.cardId ? cardMap.get(task.cardId) : undefined;
     if (task.cardId && !isActiveCard(sourceCard)) return;
     const tagText = sourceCard?.tagIds.map((id) => tagMap.get(id)).filter(Boolean).join(" ") || "";
     const due = task.dueAt ? dueDateFormatter.format(task.dueAt) : "";
     const details = [task.done ? taskCopy.taskDone : taskCopy.taskOpen, sourceCard ? `${taskCopy.source}: ${sourceCard.title}` : "", due ? taskCopyFormat(taskCopy.due, { date: due }) : taskCopy.noDue].filter(Boolean);
     const text = details.join("\n");
-    drafts.push({ key: `task:${task.id}`, type: "task", id: task.id, title: task.title, text, sourceKind: "task", keywords: extractKeywords(`${task.title}\n${sourceCard?.title || ""}\n${tagText}`, 16, language), createdAt: task.createdAt, observedAt: task.createdAt, updatedAt: task.updatedAt });
+    drafts.push({ key: `task:${task.id}`, type: "task", id: task.id, title: task.title, text, sourceKind: "task", opacity, keywords: extractKeywords(`${task.title}\n${sourceCard?.title || ""}\n${tagText}`, 16, language), createdAt: task.createdAt, observedAt: task.createdAt, updatedAt: task.updatedAt });
   });
 
   const frequencies = new Map<string, number>();

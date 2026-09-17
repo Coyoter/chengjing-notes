@@ -10,6 +10,17 @@ const copies = {
 
 export function getAiActionCopy(language: AppLanguage) { return copies[language] || copies.en; }
 
+export function getAiPermissionCopy(language: AppLanguage) {
+  const copy = {
+    "zh-TW": { preview: "先預覽", direct: "直接執行", hint: "切換為直接執行後，AI 可依你的指令批次新增、修改及刪除工作內容，不再逐次要求套用。復原取決於仍可用的歷史或備份。" },
+    "zh-CN": { preview: "先预览", direct: "直接执行", hint: "切换为直接执行后，AI 可按你的指令批量新增、修改和删除工作内容，不再逐次要求应用。恢复取决于仍可用的历史或备份。" },
+    en: { preview: "Preview first", direct: "Run directly", hint: "Direct mode lets AI create, edit and delete workspace content on your instructions without another Apply step. Recovery depends on available history or backups." },
+    ja: { preview: "先に確認", direct: "直接実行", hint: "直接実行では指示に応じて内容を一括追加・変更・削除し、適用確認を省略します。復元には利用可能な履歴やバックアップが必要です。" },
+    ko: { preview: "먼저 확인", direct: "바로 실행", hint: "바로 실행에서는 지시에 따라 내용을 일괄 추가, 수정, 삭제하며 적용 확인을 생략합니다. 복구하려면 사용 가능한 기록이나 백업이 필요합니다." },
+  };
+  return copy[language] || copy.en;
+}
+
 export function formatAiActionResult(language: AppLanguage, applied: number, skipped: number) {
   if (skipped === 0) return getAiActionCopy(language).applied(applied);
   if (language === "zh-TW") return `已完成 ${applied} 個變更；略過 ${skipped} 條無法辨識的關係線。白板其他內容已安全建立。`;

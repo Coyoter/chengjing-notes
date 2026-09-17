@@ -1,0 +1,706 @@
+{
+  "schema": 1,
+  "tables": [
+    "cards",
+    "boards",
+    "boardNodes",
+    "boardEdges",
+    "kanbanBoards",
+    "kanbanLists",
+    "kanbanPlacements",
+    "tags",
+    "tasks",
+    "highlights",
+    "attachments",
+    "fragments",
+    "knowledgeGroups",
+    "chatThreads",
+    "chatMessages",
+    "cardVersions",
+    "brainEdges",
+    "brainReports",
+    "brainShares"
+  ],
+  "cases": [
+    {
+      "name": "exact-calendar-days",
+      "now": 1788997800000,
+      "files": [
+        {
+          "id": "old",
+          "size": "2048",
+          "createdTime": "2026-09-01T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-01T08:00:00Z",
+            "day": "2026-09-01",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "id": "before",
+          "size": "2048",
+          "createdTime": "2026-09-07T00:01:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-07T00:01:00Z",
+            "day": "2026-09-07",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "id": "yesterday",
+          "size": "2048",
+          "createdTime": "2026-09-08T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-08T08:00:00Z",
+            "day": "2026-09-08",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "id": "today",
+          "size": "2048",
+          "createdTime": "2026-09-09T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-09T08:00:00Z",
+            "day": "2026-09-09",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ],
+      "protectedIds": [],
+      "expected": {
+        "status": {
+          "dayBasis": "UTC",
+          "today": {
+            "id": "today",
+            "day": "2026-09-09",
+            "snapshotAt": 1788940800000,
+            "size": 2048,
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "yesterday": {
+            "id": "yesterday",
+            "day": "2026-09-08",
+            "snapshotAt": 1788854400000,
+            "size": 2048,
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "dayBeforeYesterday": {
+            "id": "before",
+            "day": "2026-09-07",
+            "snapshotAt": 1788739260000,
+            "size": 2048,
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        "retainedIds": [
+          "before",
+          "yesterday",
+          "today"
+        ],
+        "expiredIds": [
+          "old"
+        ],
+        "pruneIds": [
+          "old"
+        ]
+      }
+    },
+    {
+      "name": "missing-yesterday",
+      "now": 1788997800000,
+      "files": [
+        {
+          "id": "before",
+          "size": "2048",
+          "createdTime": "2026-09-07T00:01:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-07T00:01:00Z",
+            "day": "2026-09-07",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ],
+      "protectedIds": [],
+      "expected": {
+        "status": {
+          "dayBasis": "UTC",
+          "today": null,
+          "yesterday": null,
+          "dayBeforeYesterday": {
+            "id": "before",
+            "day": "2026-09-07",
+            "snapshotAt": 1788739260000,
+            "size": 2048,
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        "retainedIds": [
+          "before"
+        ],
+        "expiredIds": [],
+        "pruneIds": []
+      }
+    },
+    {
+      "name": "empty",
+      "now": 1788997800000,
+      "files": [],
+      "protectedIds": [],
+      "expected": {
+        "status": {
+          "dayBasis": "UTC",
+          "today": null,
+          "yesterday": null,
+          "dayBeforeYesterday": null
+        },
+        "retainedIds": [],
+        "expiredIds": [],
+        "pruneIds": []
+      }
+    },
+    {
+      "name": "foreign-files-must-not-be-deleted",
+      "now": 1788997800000,
+      "files": [
+        {
+          "id": "today",
+          "size": "2048",
+          "createdTime": "2026-09-09T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-09T08:00:00Z",
+            "day": "2026-09-09",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "id": "foreign",
+          "size": "2048",
+          "createdTime": "2026-09-01T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-cloud-backup-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-01T08:00:00Z",
+            "day": "2026-09-01",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "id": "not-manifest",
+          "size": "2048",
+          "createdTime": "2026-09-01T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "asset",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-01T08:00:00Z",
+            "day": "2026-09-01",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "id": "old",
+          "size": "2048",
+          "createdTime": "2026-09-01T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-01T08:00:00Z",
+            "day": "2026-09-01",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ],
+      "protectedIds": [],
+      "expected": {
+        "status": {
+          "dayBasis": "UTC",
+          "today": {
+            "id": "today",
+            "day": "2026-09-09",
+            "snapshotAt": 1788940800000,
+            "size": 2048,
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "yesterday": null,
+          "dayBeforeYesterday": null
+        },
+        "retainedIds": [
+          "today"
+        ],
+        "expiredIds": [
+          "old"
+        ],
+        "pruneIds": [
+          "old"
+        ]
+      }
+    },
+    {
+      "name": "corrupt-metadata-is-not-a-snapshot",
+      "now": 1788997800000,
+      "files": [
+        {
+          "id": "invalid-hash",
+          "size": "2048",
+          "createdTime": "2026-09-08T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-08T08:00:00Z",
+            "day": "2026-09-08",
+            "contentHash": "invalid"
+          }
+        },
+        {
+          "id": "yesterday",
+          "size": "2048",
+          "createdTime": "2026-09-08T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-08T08:00:00Z",
+            "day": "2026-09-08",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ],
+      "protectedIds": [],
+      "expected": {
+        "status": {
+          "dayBasis": "UTC",
+          "today": null,
+          "yesterday": {
+            "id": "yesterday",
+            "day": "2026-09-08",
+            "snapshotAt": 1788854400000,
+            "size": 2048,
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "dayBeforeYesterday": null
+        },
+        "retainedIds": [
+          "yesterday"
+        ],
+        "expiredIds": [],
+        "pruneIds": []
+      }
+    },
+    {
+      "name": "concurrent-first-published-wins",
+      "now": 1788997800000,
+      "files": [
+        {
+          "id": "later",
+          "size": "2048",
+          "createdTime": "2026-09-08T09:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-08T09:00:00Z",
+            "day": "2026-09-08",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "id": "yesterday",
+          "size": "2048",
+          "createdTime": "2026-09-08T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-08T08:00:00Z",
+            "day": "2026-09-08",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ],
+      "protectedIds": [],
+      "expected": {
+        "status": {
+          "dayBasis": "UTC",
+          "today": null,
+          "yesterday": {
+            "id": "yesterday",
+            "day": "2026-09-08",
+            "snapshotAt": 1788854400000,
+            "size": 2048,
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "dayBeforeYesterday": null
+        },
+        "retainedIds": [
+          "yesterday",
+          "later"
+        ],
+        "expiredIds": [],
+        "pruneIds": []
+      }
+    },
+    {
+      "name": "equal-time-tie-is-independent-of-list-order",
+      "now": 1788997800000,
+      "files": [
+        {
+          "id": "zeta",
+          "size": "2048",
+          "createdTime": "2026-09-08T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-08T08:00:00Z",
+            "day": "2026-09-08",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "id": "alpha",
+          "size": "2048",
+          "createdTime": "2026-09-08T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-08T08:00:00Z",
+            "day": "2026-09-08",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ],
+      "protectedIds": [],
+      "expected": {
+        "status": {
+          "dayBasis": "UTC",
+          "today": null,
+          "yesterday": {
+            "id": "alpha",
+            "day": "2026-09-08",
+            "snapshotAt": 1788854400000,
+            "size": 2048,
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "dayBeforeYesterday": null
+        },
+        "retainedIds": [
+          "alpha",
+          "zeta"
+        ],
+        "expiredIds": [],
+        "pruneIds": []
+      }
+    },
+    {
+      "name": "future-points-neither-shown-nor-pruned",
+      "now": 1788997800000,
+      "files": [
+        {
+          "id": "future",
+          "size": "2048",
+          "createdTime": "2026-09-10T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-10T08:00:00Z",
+            "day": "2026-09-10",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "id": "today",
+          "size": "2048",
+          "createdTime": "2026-09-09T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-09T08:00:00Z",
+            "day": "2026-09-09",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ],
+      "protectedIds": [],
+      "expected": {
+        "status": {
+          "dayBasis": "UTC",
+          "today": {
+            "id": "today",
+            "day": "2026-09-09",
+            "snapshotAt": 1788940800000,
+            "size": 2048,
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "yesterday": null,
+          "dayBeforeYesterday": null
+        },
+        "retainedIds": [
+          "today"
+        ],
+        "expiredIds": [],
+        "pruneIds": []
+      }
+    },
+    {
+      "name": "protected-and-recent-old-points-survive",
+      "now": 1788997800000,
+      "files": [
+        {
+          "id": "today",
+          "size": "2048",
+          "createdTime": "2026-09-09T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-09T08:00:00Z",
+            "day": "2026-09-09",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "id": "old",
+          "size": "2048",
+          "createdTime": "2026-09-01T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-01T08:00:00Z",
+            "day": "2026-09-01",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "id": "recent-upload",
+          "size": "2048",
+          "createdTime": "2026-09-09T23:49:00.000Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-01T08:00:00Z",
+            "day": "2026-09-01",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ],
+      "protectedIds": [
+        "old"
+      ],
+      "expected": {
+        "status": {
+          "dayBasis": "UTC",
+          "today": {
+            "id": "today",
+            "day": "2026-09-09",
+            "snapshotAt": 1788940800000,
+            "size": 2048,
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "yesterday": null,
+          "dayBeforeYesterday": null
+        },
+        "retainedIds": [
+          "today"
+        ],
+        "expiredIds": [
+          "old",
+          "recent-upload"
+        ],
+        "pruneIds": []
+      }
+    },
+    {
+      "name": "no-current-point-means-no-pruning",
+      "now": 1788997800000,
+      "files": [
+        {
+          "id": "old",
+          "size": "2048",
+          "createdTime": "2026-09-01T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-01T08:00:00Z",
+            "day": "2026-09-01",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "id": "yesterday",
+          "size": "2048",
+          "createdTime": "2026-09-08T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2026-09-08T08:00:00Z",
+            "day": "2026-09-08",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ],
+      "protectedIds": [],
+      "expected": {
+        "status": {
+          "dayBasis": "UTC",
+          "today": null,
+          "yesterday": {
+            "id": "yesterday",
+            "day": "2026-09-08",
+            "snapshotAt": 1788854400000,
+            "size": 2048,
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "dayBeforeYesterday": null
+        },
+        "retainedIds": [
+          "yesterday"
+        ],
+        "expiredIds": [
+          "old"
+        ],
+        "pruneIds": []
+      }
+    },
+    {
+      "name": "leap-day-and-month-boundary",
+      "now": 1835481601000,
+      "files": [
+        {
+          "id": "march",
+          "size": "2048",
+          "createdTime": "2028-03-01T00:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2028-03-01T00:00:00Z",
+            "day": "2028-03-01",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "id": "leap",
+          "size": "2048",
+          "createdTime": "2028-02-29T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2028-02-29T08:00:00Z",
+            "day": "2028-02-29",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "id": "february",
+          "size": "2048",
+          "createdTime": "2028-02-28T08:00:00Z",
+          "appProperties": {
+            "app": "chengjing-sync-recovery-v1",
+            "kind": "manifest",
+            "schemaVersion": "1",
+            "snapshotAt": "2028-02-28T08:00:00Z",
+            "day": "2028-02-28",
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ],
+      "protectedIds": [],
+      "expected": {
+        "status": {
+          "dayBasis": "UTC",
+          "today": {
+            "id": "march",
+            "day": "2028-03-01",
+            "snapshotAt": 1835481600000,
+            "size": 2048,
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "yesterday": {
+            "id": "leap",
+            "day": "2028-02-29",
+            "snapshotAt": 1835424000000,
+            "size": 2048,
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "dayBeforeYesterday": {
+            "id": "february",
+            "day": "2028-02-28",
+            "snapshotAt": 1835337600000,
+            "size": 2048,
+            "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        "retainedIds": [
+          "february",
+          "leap",
+          "march"
+        ],
+        "expiredIds": [],
+        "pruneIds": []
+      }
+    }
+  ],
+  "payloads": [
+    {
+      "raw": "{\"format\":\"chengjing-sync-recovery\",\"version\":1,\"dayBasis\":\"UTC\",\"snapshotAt\":1788854400000,\"data\":{\"cards\":[],\"boards\":[],\"boardNodes\":[],\"boardEdges\":[],\"kanbanBoards\":[],\"kanbanLists\":[],\"kanbanPlacements\":[],\"tags\":[],\"tasks\":[],\"highlights\":[],\"attachments\":[],\"fragments\":[{\"id\":\"fixture\",\"text\":\"澄境跨裝置復原測試 🌿\",\"createdAt\":1,\"updatedAt\":2}],\"knowledgeGroups\":[],\"chatThreads\":[],\"chatMessages\":[],\"cardVersions\":[],\"brainEdges\":[],\"brainReports\":[],\"brainShares\":[]}}",
+      "contentHash": "7a376f7587f54034eccc1c513b6a9dc5112cf225c2d5dfd9e509fba0e15ebece",
+      "day": "2026-09-08",
+      "size": 493,
+      "assets": []
+    },
+    {
+      "raw": "{\"format\":\"chengjing-sync-recovery\",\"version\":1,\"dayBasis\":\"UTC\",\"snapshotAt\":1788854400000,\"data\":{\"cards\":[],\"boards\":[],\"boardNodes\":[],\"boardEdges\":[],\"kanbanBoards\":[],\"kanbanLists\":[],\"kanbanPlacements\":[],\"tags\":[],\"tasks\":[],\"highlights\":[],\"attachments\":[{\"id\":\"asset\",\"name\":\"示意圖片.png\",\"sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"size\":12}],\"fragments\":[{\"id\":\"fixture\",\"text\":\"澄境跨裝置復原測試 🌿\",\"createdAt\":1,\"updatedAt\":2}],\"knowledgeGroups\":[],\"chatThreads\":[],\"chatMessages\":[],\"cardVersions\":[],\"brainEdges\":[],\"brainReports\":[],\"brainShares\":[]}}",
+      "contentHash": "bba9d03c8279bd51178b15356a7f9445a733f61341eab2f172703f1ac37245ef",
+      "day": "2026-09-08",
+      "size": 619,
+      "assets": [
+        {
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "size": 12
+        }
+      ]
+    },
+    {
+      "raw": "{\n  \"format\": \"chengjing-sync-recovery\",\n  \"version\": 1,\n  \"dayBasis\": \"UTC\",\n  \"snapshotAt\": 1788854400000,\n  \"data\": {\n    \"cards\": [],\n    \"boards\": [],\n    \"boardNodes\": [],\n    \"boardEdges\": [],\n    \"kanbanBoards\": [],\n    \"kanbanLists\": [],\n    \"kanbanPlacements\": [],\n    \"tags\": [],\n    \"tasks\": [],\n    \"highlights\": [],\n    \"attachments\": [\n      {\n        \"id\": \"asset\",\n        \"name\": \"示意圖片.png\",\n        \"sha256\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\n        \"size\": 12\n      }\n    ],\n    \"fragments\": [\n      {\n        \"id\": \"fixture\",\n        \"text\": \"澄境跨裝置復原測試 🌿\",\n        \"createdAt\": 1,\n        \"updatedAt\": 2\n      }\n    ],\n    \"knowledgeGroups\": [],\n    \"chatThreads\": [],\n    \"chatMessages\": [],\n    \"cardVersions\": [],\n    \"brainEdges\": [],\n    \"brainReports\": [],\n    \"brainShares\": []\n  }\n}",
+      "contentHash": "607d3e24d9e0c6d894f2aadd81e0e19fdeadf15223330cff0ae03ea2ae1bb0ac",
+      "day": "2026-09-08",
+      "size": 875,
+      "assets": [
+        {
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "size": 12
+        }
+      ]
+    }
+  ]
+}

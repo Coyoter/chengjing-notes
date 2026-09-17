@@ -22,7 +22,7 @@ import java.time.ZoneOffset
 import androidx.documentfile.provider.DocumentFile
 
 class NativeServices(private val context: Context, private val backupApp: String = "chengjing-cloud-backup-v1", stateName: String = "settings", private val clock: () -> Long = { System.currentTimeMillis() }) {
-    companion object { private val syncUploadLock = Any() }
+    companion object { private val syncUploadLock = Any(); private val googleAuthLock = Any() }
     val store = SecureStore(context)
     private val inference by lazy { LocalInference(context) }
     private val prefs = context.getSharedPreferences(stateName, Context.MODE_PRIVATE)
@@ -73,6 +73,55 @@ class NativeServices(private val context: Context, private val backupApp: String
     }
     private fun providers() = objectValue("providers", "{\"selectedProfileId\":\"\",\"profiles\":[]}")
     private fun profile(id: String): JSONObject { val settings=providers(); val profiles=settings.getJSONArray("profiles"); return (0 until profiles.length()).map { profiles.getJSONObject(it) }.first { it.getString("id")==id.ifEmpty { settings.getString("selectedProfileId") } } }
+    private val syncRecoveryBridge = SyncRecoveryNativeBridge {
+        SyncRecoveryService(
+            stagingDirectory = File(context.filesDir, "sync-recovery-staging"),
+            attachmentsDirectory = files,
+            remote = SyncRecoveryDriveIO({ store.get("google-token") }),
+            mayWrite = {
+                prefs.getBoolean("sync-enabled", false) && store.get("google-token").isNotEmpty()
+            },
+            clock = clock
+        )
+    }
+
+    fun suspendSyncRecovery() { syncRecoveryBridge.invalidate() }
+
+    fun googleAuthorizationEpoch(): Long = prefs.getLong("google-auth-epoch", 0)
+
+    fun googleAuthorizationRequired(epoch: Long = googleAuthorizationEpoch()) = synchronized(googleAuthLock) {
+        if (epoch == googleAuthorizationEpoch()) check(prefs.edit().putString("google-auth-state", GoogleAuthorizationPolicy.AUTH_REQUIRED).commit())
+    }
+
+    fun acceptGoogleToken(value: String?, epoch: Long = googleAuthorizationEpoch()) = synchronized(googleAuthLock) {
+        check(epoch == googleAuthorizationEpoch()) { "Google connection changed; reconnect your account" }
+        val token = try { GoogleAuthorizationPolicy.requireToken(value) }
+            catch (error: IllegalStateException) { googleAuthorizationRequired(); throw error }
+        store.put("google-token", token)
+        check(prefs.edit().putString("google-auth-state", "AUTHORIZED").commit())
+    }
+
+    private fun disconnectGoogle(): JSONObject {
+        suspendSyncRecovery()
+        synchronized(googleAuthLock) {
+            check(prefs.edit().putBoolean("sync-enabled", false).putString("google-auth-state", "DISCONNECTED").putLong("google-auth-epoch", googleAuthorizationEpoch() + 1).commit())
+            store.put("google-token", "")
+        }
+        androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-upload")
+        androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-recovery")
+        return JSONObject().put("connected", false)
+    }
+
+    private fun googleConnected() = GoogleAuthorizationPolicy.connected(
+        store.get("google-token"), prefs.getString("google-auth-state", ""))
+
+    fun prepareSyncRecoveryCall(method: String, args: JSONObject): () -> JSONObject {
+        val target = if (method == "attachments.restoreFromBackup"
+            && args.optString("backupFilePath").startsWith(SyncRecoveryService.BACKUP_PREFIX))
+            "syncRecovery.restoreAttachment" else method
+        return syncRecoveryBridge.prepare(target, args)
+    }
+
     fun call(method: String, args: JSONObject): Any? = when(method) {
         "local.status" -> inference.status()
         "local.download" -> inference.download()
@@ -93,7 +142,7 @@ class NativeServices(private val context: Context, private val backupApp: String
         "ai.keyStatus" -> JSONObject().put("configured",store.get("openrouter").isNotEmpty()).put("encrypted",true).put("storage","android-keystore")
         "ai.setKey" -> { store.put("openrouter",args.getString("value")); call("ai.keyStatus",JSONObject()) }
         "ai.clearKey" -> { store.put("openrouter",""); call("ai.keyStatus",JSONObject()) }
-        "ai.testOpenRouter" -> { val result=json("https://openrouter.ai/api/v1/key",secret=store.get("openrouter")); JSONObject().put("ok",true).put("label",result.optJSONObject("data")?.optString("label") ?: "OpenRouter") }
+        "ai.testOpenRouter" -> { val result=json("https://openrouter.ai/api/v1/key",secret=store.get("openrouter")); JSONObject().put("ok",true).put("label",result.optJSONObject("data")?.optString("label") ?: "OpenRouter").put("limitRemaining",JSONObject.NULL).put("usage",JSONObject.NULL) }
         "ai.listModels" -> json("https://openrouter.ai/api/v1/models").getJSONArray("data")
         "ai.providerSettings" -> providers()
         "ai.upsertProvider" -> { val settings=providers(); val id=args.optString("id").ifEmpty{UUID.randomUUID().toString()}; val p=JSONObject(args.toString()); p.put("id",id); if(args.has("apiKey") && args.getString("apiKey").isNotEmpty()) store.put("provider-$id",args.getString("apiKey")); p.remove("apiKey"); p.put("keyConfigured",store.get("provider-$id").isNotEmpty()); p.put("updatedAt",System.currentTimeMillis()); val list=settings.getJSONArray("profiles"); val keep=JSONArray(); for(i in 0 until list.length()) if(list.getJSONObject(i).getString("id")!=id)keep.put(list.get(i)); keep.put(p); settings.put("profiles",keep); if(args.optBoolean("select",true))settings.put("selectedProfileId",id); save("providers",settings) }
@@ -102,10 +151,13 @@ class NativeServices(private val context: Context, private val backupApp: String
         "ai.listProviderModels", "ai.testProvider" -> { val p=profile(args.getString("id")); val models=json(p.getString("baseUrl").trimEnd('/')+"/models",secret=store.get("provider-${p.getString("id")}")).getJSONArray("data"); if(method=="ai.testProvider") JSONObject().put("ok",true).put("models",models).put("modelAvailable",true) else models }
         "ai.openRouterChat", "ai.providerChat" -> chat(args,method=="ai.openRouterChat")
         "web.fetch" -> { val url=args.getString("url"); require(Uri.parse(url).scheme=="https"); http.newCall(Request.Builder().url(url).build()).execute().use{ response->require(response.isSuccessful); JSONObject().put("html",response.body!!.string()).put("url",url) } }
-        "google.status" -> JSONObject().put("connected",store.get("google-token").isNotEmpty())
-        "google.disconnect" -> { store.put("google-token","");prefs.edit().putBoolean("sync-enabled",false).commit();androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-upload");androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-recovery");JSONObject().put("connected",false) }
-        "sync.pause" -> {prefs.edit().putBoolean("sync-enabled",false).commit();androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-upload");androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-recovery");JSONObject()}
+        "google.status" -> JSONObject().put("connected",googleConnected()).put("authorizationState",prefs.getString("google-auth-state", "UNKNOWN"))
+        "google.disconnect" -> disconnectGoogle()
+        "sync.pause" -> {suspendSyncRecovery();prefs.edit().putBoolean("sync-enabled",false).commit();androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-upload");androidx.work.WorkManager.getInstance(context).cancelUniqueWork("chengjing-sync-recovery");JSONObject()}
         "sync.resume" -> {prefs.edit().putBoolean("sync-enabled",true).commit();SyncUploadWorker.enqueue(context);JSONObject()}
+        "syncRecovery.setEnabled", "syncRecovery.getStatus", "syncRecovery.createDaily",
+        "syncRecovery.download", "syncRecovery.releaseDownload",
+        "syncRecovery.restoreAttachment" -> syncRecoveryBridge.call(method, args)
         "cloud.localStatus" -> cloudStatus(false)
         "cloud.status" -> cloudStatus(true)
         "cloud.init" -> { val status=cloudStatus(true);val settings=cloudSettings();settings.put("enabled",!status.optBoolean("needsDecision"));save("cloud-backup",settings);cloudStatus(true) }
@@ -116,16 +168,20 @@ class NativeServices(private val context: Context, private val backupApp: String
         "cloud.adopt" -> { val status=cloudStatus(true);save("cloud-backup",cloudSettings().put("lastKnownManifestId",status.optJSONObject("current")?.optString("id")?:"").put("conflict",false)) }
         "cloud.cancelRestore" -> {save("restore-staging",JSONObject());JSONObject().put("cleaned",true)}
         "attachments.restoreFromBackup" -> {
-            val hash=args.getString("sha256");require(hash.matches(Regex("[a-f0-9]{64}")))
-            val staged=objectValue("restore-staging").optString(hash)
-            val source=if(staged.isNotEmpty())safeFile(staged)else File(context.filesDir,"backups/assets/$hash")
-            if(!source.isFile){
-                val directory=objectValue("backup").optString("directory")
-                val document=if(directory.startsWith("content://"))DocumentFile.fromTreeUri(context,Uri.parse(directory))?.findFile("ChengJing-assets")?.findFile(hash)else null
-                require(document!=null){"The backup attachment is missing. Select the original backup folder."}
-                source.parentFile?.mkdirs();context.contentResolver.openInputStream(document.uri)!!.use{input->source.outputStream().use{output->input.copyTo(output)}}
+            if (args.optString("backupFilePath").startsWith(SyncRecoveryService.BACKUP_PREFIX)) {
+                syncRecoveryBridge.call("syncRecovery.restoreAttachment", args)
+            } else {
+                val hash=args.getString("sha256");require(hash.matches(Regex("[a-f0-9]{64}")))
+                val staged=objectValue("restore-staging").optString(hash)
+                val source=if(staged.isNotEmpty())safeFile(staged)else File(context.filesDir,"backups/assets/$hash")
+                if(!source.isFile){
+                    val directory=objectValue("backup").optString("directory")
+                    val document=if(directory.startsWith("content://"))DocumentFile.fromTreeUri(context,Uri.parse(directory))?.findFile("ChengJing-assets")?.findFile(hash)else null
+                    require(document!=null){"The backup attachment is missing. Select the original backup folder."}
+                    source.parentFile?.mkdirs();context.contentResolver.openInputStream(document.uri)!!.use{input->source.outputStream().use{output->input.copyTo(output)}}
+                }
+                val target=safeFile(UUID.randomUUID().toString());source.copyTo(target);val result=attachment(target,args);require(result.getString("sha256")==hash);result
             }
-            val target=safeFile(UUID.randomUUID().toString());source.copyTo(target);val result=attachment(target,args);require(result.getString("sha256")==hash);result
         }
         "sync.list" -> driveList(args.optString("kind","packet"))
         "sync.get" -> driveGet(args.getString("id"))
@@ -235,7 +291,7 @@ class NativeServices(private val context: Context, private val backupApp: String
         return (0 until files.length()).map{val file=files.getJSONObject(it);val p=file.getJSONObject("appProperties");JSONObject().put("id",file.getString("id")).put("size",file.optLong("size")).put("slot",p.optString("slot")).put("snapshotAt",Instant.parse(p.getString("snapshotAt")).toEpochMilli()).put("day",p.optString("day")).put("contentHash",p.optString("contentHash")).put("deviceId",p.optString("deviceId"))}.sortedByDescending{it.getLong("snapshotAt")}
     }
     @Synchronized private fun cloudStatus(remote: Boolean): JSONObject {
-        val settings=cloudSettings();val connected=store.get("google-token").isNotEmpty();val list=if(remote&&connected)snapshots()else emptyList()
+        val settings=cloudSettings();val connected=googleConnected();val list=if(remote&&connected)snapshots()else emptyList()
         val current=list.firstOrNull{it.optString("slot")=="current"};val previous=list.firstOrNull{it.optString("slot")=="previous"&&clock()-it.getLong("snapshotAt")<=172800000}
         val conflict=if(remote&&connected)current!=null&&current.optString("id")!=settings.optString("lastKnownManifestId")else settings.optBoolean("conflict")
         settings.put("conflict",conflict);if(conflict)settings.put("enabled",false);save("cloud-backup",settings)

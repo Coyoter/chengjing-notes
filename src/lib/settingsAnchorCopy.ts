@@ -1,11 +1,11 @@
 import type { AppLanguage } from "../types";
 
 const copy = {
-  "zh-TW": { label: "快速前往", language: "語言", ai: "AI", integrations: "外部整合", updates: "更新", quickCapture: "快速記錄", appearance: "外觀", backup: "備份", support: "打賞" },
-  "zh-CN": { label: "快速前往", language: "语言", ai: "AI", integrations: "外部集成", updates: "更新", quickCapture: "快速记录", appearance: "外观", backup: "备份", support: "赞赏" },
-  en: { label: "Jump to", language: "Language", ai: "AI", integrations: "Integrations", updates: "Updates", quickCapture: "Quick capture", appearance: "Appearance", backup: "Backup", support: "Support" },
-  ja: { label: "移動", language: "言語", ai: "AI", integrations: "外部連携", updates: "更新", quickCapture: "クイック記録", appearance: "外観", backup: "バックアップ", support: "支援" },
-  ko: { label: "바로가기", language: "언어", ai: "AI", integrations: "외부 연동", updates: "업데이트", quickCapture: "빠른 기록", appearance: "화면", backup: "백업", support: "후원" },
+  "zh-TW": { label: "快速前往", language: "語言", ai: "AI", integrations: "外部整合", updates: "更新", quickCapture: "快速記錄", appearance: "外觀", backup: "同步與備份", support: "打賞" },
+  "zh-CN": { label: "快速前往", language: "语言", ai: "AI", integrations: "外部集成", updates: "更新", quickCapture: "快速记录", appearance: "外观", backup: "同步与备份", support: "赞赏" },
+  en: { label: "Jump to", language: "Language", ai: "AI", integrations: "Integrations", updates: "Updates", quickCapture: "Quick capture", appearance: "Appearance", backup: "Sync & Backup", support: "Support" },
+  ja: { label: "移動", language: "言語", ai: "AI", integrations: "外部連携", updates: "更新", quickCapture: "クイック記録", appearance: "外観", backup: "同期とバックアップ", support: "支援" },
+  ko: { label: "바로가기", language: "언어", ai: "AI", integrations: "외부 연동", updates: "업데이트", quickCapture: "빠른 기록", appearance: "화면", backup: "동기화 및 백업", support: "후원" },
 } as const;
 
 export function getSettingsAnchorCopy(language: AppLanguage) { return copy[language] || copy.en; }

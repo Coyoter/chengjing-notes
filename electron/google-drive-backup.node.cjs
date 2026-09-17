@@ -6,7 +6,7 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const { writeCloudSettings, writeSecureToken } = require("./cloud-backup-settings.cjs");
+const { writeCloudSettings, writeSecureToken, hasSecureToken } = require("./cloud-backup-settings.cjs");
 const {
   APP_PROPERTY,
   PREVIOUS_MAX_AGE_MS,
@@ -22,6 +22,27 @@ const fakeSafeStorage = {
   async encryptStringAsync(value) { return Buffer.from(value, "utf8"); },
   async decryptStringAsync(value) { return { result: value.toString("utf8"), shouldReEncrypt: false }; },
 };
+
+test("解除本機 Google 綁定不呼叫撤銷授權，也不刪除雲端或本機內容", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "chengjing-unlink-"));
+  try {
+    const attachments = path.join(root, "attachments");
+    await fs.mkdir(attachments);
+    await fs.writeFile(path.join(attachments, "keep.txt"), "local content");
+    await writeSecureToken(root, fakeSafeStorage, { accessToken: "test-access", refreshToken: "test-refresh", expiresAt: Date.now() + 3600000 });
+    await writeCloudSettings(root, { enabled: true, accountEmail: "test@example.invalid" });
+    let networkCalls = 0;
+    const service = createGoogleDriveBackupService({ net: { fetch: async () => { networkCalls++; throw new Error("Unlink must work offline"); } }, safeStorage: fakeSafeStorage, shell: {}, userDataDirectory: root, attachmentsDirectory: attachments, clientId: "id", clientSecret: "test" });
+    const status = await service.disconnect();
+    assert.equal(status.connected, false);
+    assert.equal(networkCalls, 0);
+    assert.equal(await hasSecureToken(root), false);
+    assert.equal(await fs.readFile(path.join(attachments, "keep.txt"), "utf8"), "local content");
+    assert.equal((await service.getLocalStatus()).connected, false);
+    await service.disconnect();
+    assert.equal(networkCalls, 0);
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
+});
 
 function fakeDrive() {
   const files = new Map();

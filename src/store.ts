@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import dayjs from "dayjs";
+import { DEFAULT_SIDEBAR_ORDER, normalizeSidebarOrder } from "./lib/sidebarOrder";
 import type { AIEngine, AppLanguage, AppView, OpenRouterRoutingMode, ThemeMode } from "./types";
 
 interface AppState {
@@ -16,6 +17,7 @@ interface AppState {
   createCardCollectionId: string | null;
   importOpen: boolean;
   sidebarCollapsed: boolean;
+  sidebarOrder: AppView[];
   showMiniMap: boolean;
   theme: ThemeMode;
   aiEngine: AIEngine;
@@ -27,6 +29,7 @@ interface AppState {
   customProviderModel: string;
   temperature: number;
   spaceSearch: boolean;
+  aiAutoApply: boolean;
   fontScale: number;
   language: AppLanguage;
   aiDraft: string;
@@ -48,6 +51,7 @@ interface AppState {
   setCreateCardOpen: (open: boolean, collectionId?: string | null) => void;
   setImportOpen: (open: boolean) => void;
   setSidebarCollapsed: (value: boolean) => void;
+  setSidebarOrder: (value: AppView[]) => void;
   setShowMiniMap: (value: boolean) => void;
   setTheme: (theme: ThemeMode) => void;
   setAIEngine: (engine: AIEngine) => void;
@@ -57,6 +61,7 @@ interface AppState {
   setCustomProvider: (value: { id: string; name: string; model: string }) => void;
   setTemperature: (value: number) => void;
   setSpaceSearch: (value: boolean) => void;
+  setAIAutoApply: (value: boolean) => void;
   setFontScale: (value: number) => void;
   setLanguage: (language: AppLanguage) => void;
 }
@@ -102,6 +107,7 @@ export const useAppStore = create<AppState>()(
       createCardCollectionId: null,
       importOpen: false,
       sidebarCollapsed: false,
+      sidebarOrder: DEFAULT_SIDEBAR_ORDER,
       showMiniMap: false,
       theme: "system",
       aiEngine: "openrouter",
@@ -113,6 +119,7 @@ export const useAppStore = create<AppState>()(
       customProviderModel: "",
       temperature: 0.55,
       spaceSearch: true,
+      aiAutoApply: false,
       fontScale: 1,
       language: initialLanguage(),
       aiDraft: "",
@@ -134,6 +141,7 @@ export const useAppStore = create<AppState>()(
       setCreateCardOpen: (createCardOpen, createCardCollectionId = null) => set({ createCardOpen, createCardCollectionId }),
       setImportOpen: (importOpen) => set({ importOpen }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+      setSidebarOrder: (sidebarOrder) => set({ sidebarOrder: normalizeSidebarOrder(sidebarOrder) }),
       setShowMiniMap: (showMiniMap) => set({ showMiniMap }),
       setTheme: (theme) => set({ theme }),
       setAIEngine: (aiEngine) => set({ aiEngine }),
@@ -143,6 +151,7 @@ export const useAppStore = create<AppState>()(
       setCustomProvider: ({ id: customProviderId, name: customProviderName, model: customProviderModel }) => set({ customProviderId, customProviderName, customProviderModel }),
       setTemperature: (temperature) => set({ temperature }),
       setSpaceSearch: (spaceSearch) => set({ spaceSearch }),
+      setAIAutoApply: (aiAutoApply) => set({ aiAutoApply }),
       setFontScale: (fontScale) => set({ fontScale }),
       setLanguage: (language) => set({ language }),
     }),
@@ -150,6 +159,7 @@ export const useAppStore = create<AppState>()(
       name: "chengjing-ui",
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
+        sidebarOrder: state.sidebarOrder,
         showMiniMap: state.showMiniMap,
         theme: state.theme,
         aiEngine: state.aiEngine,
@@ -161,6 +171,7 @@ export const useAppStore = create<AppState>()(
         customProviderModel: state.customProviderModel,
         temperature: state.temperature,
         spaceSearch: state.spaceSearch,
+        aiAutoApply: state.aiAutoApply,
         fontScale: state.fontScale,
         language: state.language,
       }),

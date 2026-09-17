@@ -4,6 +4,7 @@ import { Canvas, type ThreeEvent, useFrame, useThree } from "@react-three/fiber"
 import { Html, Line, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import dayjs from "dayjs";
+import { taskBrainOpacity } from "../lib/taskCompletion";
 import {
   BrainCircuit,
   ExternalLink,
@@ -184,23 +185,24 @@ function BrainNeuron({
     if (selected || linking) invalidate();
   });
   const color = selected || linking ? "#a8c0af" : NODE_COLORS[node.type];
+  const opacity = node.opacity ?? 1;
   return (
     <group position={node.position} scale={densityScale}>
       {shared && <>
         <mesh scale={1.22}>
           <sphereGeometry args={[node.radius, 28, 20]} />
-          <meshBasicMaterial color="#63b69d" transparent opacity={selected || hovered ? 0.16 : 0.09} depthWrite={false} side={THREE.BackSide} />
+          <meshBasicMaterial color="#63b69d" transparent opacity={(selected || hovered ? 0.16 : 0.09) * opacity} depthWrite={false} side={THREE.BackSide} />
         </mesh>
         <mesh rotation={[Math.PI / 2.7, 0.25, 0]}>
           <torusGeometry args={[node.radius * 1.36, Math.max(0.012, node.radius * 0.024), 8, 54]} />
-          <meshBasicMaterial color="#76b7a3" transparent opacity={selected || hovered ? 0.62 : 0.34} depthWrite={false} />
+          <meshBasicMaterial color="#76b7a3" transparent opacity={(selected || hovered ? 0.62 : 0.34) * opacity} depthWrite={false} />
         </mesh>
       </>}
       {dendrites.map((dendrite, index) => <group key={index}>
-        <Line points={[dendrite.start, dendrite.end]} color={color} lineWidth={0.45} transparent opacity={selected || hovered ? 0.58 : 0.26} />
+        <Line points={[dendrite.start, dendrite.end]} color={color} lineWidth={0.45} transparent opacity={(selected || hovered ? 0.58 : 0.26) * opacity} />
         <mesh position={dendrite.end}>
           <sphereGeometry args={[Math.max(0.035, node.radius * 0.075), 10, 8]} />
-          <meshStandardMaterial color={color} roughness={0.9} transparent opacity={selected || hovered ? 0.9 : 0.58} />
+          <meshStandardMaterial color={color} roughness={0.9} transparent opacity={(selected || hovered ? 0.9 : 0.58) * opacity} depthWrite={false} />
         </mesh>
       </group>)}
       <mesh
@@ -212,11 +214,11 @@ function BrainNeuron({
         onPointerOut={() => { setHovered(false); document.body.style.cursor = "default"; }}
       >
         <sphereGeometry args={[node.radius, 28, 20]} />
-        <meshStandardMaterial color={color} roughness={0.82} metalness={0.04} emissive={selected || linking ? "#263b32" : "#111713"} emissiveIntensity={selected || linking ? 0.32 : 0.08} />
+        <meshStandardMaterial color={color} roughness={0.82} metalness={0.04} transparent={opacity < 1} opacity={opacity} depthWrite={opacity >= 1} emissive={selected || linking ? "#263b32" : "#111713"} emissiveIntensity={selected || linking ? 0.32 : 0.08} />
       </mesh>
       {(showAllLabels || hovered || selected || linking || (window.chengjing?.platform !== "android" && !dense && node.weight >= 1.9)) && (
         <Html center distanceFactor={window.chengjing?.platform === "android" ? undefined : 12} position={[0, node.radius + 0.42, 0]} zIndexRange={[8, 1]} className="brain-node-label-wrap" pointerEvents="none">
-          <span className={`brain-node-label type-${node.type} ${shared ? "is-own-shared" : ""}`}>{node.title}</span>
+          <span style={{ opacity: selected || hovered ? 1 : opacity }} className={`brain-node-label type-${node.type} ${shared ? "is-own-shared" : ""}`}>{node.title}</span>
         </Html>
       )}
     </group>
@@ -278,7 +280,7 @@ function BrainEdgeLine({ edge, nodes, onContext }: { edge: BrainEdgeView; nodes:
       color={color}
       lineWidth={edge.origin === "structure" ? 0.65 : 1.45}
       transparent
-      opacity={edge.origin === "structure" ? 0.2 : 0.58}
+      opacity={(edge.origin === "structure" ? 0.2 : 0.58) * Math.min(source.opacity ?? 1, target.opacity ?? 1)}
       dashed={edge.origin === "ai"}
       dashSize={0.18}
       gapSize={0.12}
@@ -405,7 +407,27 @@ export function SecondBrainView() {
   const setView = useAppStore((state) => state.setView);
 
   const taskCopy = useMemo(() => getTaskIntegrationCopy(language), [language]);
-  const graph = useMemo(() => buildBrainGraph({ cards, boards, fragments, tasks, boardNodes, tags, storedEdges, language }), [cards, boards, fragments, tasks, boardNodes, tags, storedEdges, language]);
+  const sourceGraph = useMemo(() => buildBrainGraph({ cards, boards, fragments, tasks, boardNodes, tags, storedEdges, language }), [cards, boards, fragments, tasks, boardNodes, tags, storedEdges, language]);
+  const [fadeClock, setFadeClock] = useState(Date.now);
+  const taskMap = useMemo(() => new Map(tasks.map(task => [task.id, task])), [tasks]);
+  useEffect(() => {
+    if (!tasks.some(task => task.done)) return;
+    const update = () => setFadeClock(Date.now());
+    const timer = window.setInterval(update, 60_000);
+    window.addEventListener("focus", update);
+    return () => { clearInterval(timer); window.removeEventListener("focus", update); };
+  }, [tasks]);
+  const graph = useMemo(() => {
+    // Update only visibility, not keyword extraction or layout, as time passes.
+    const nodes = sourceGraph.nodes.flatMap(node => {
+      const task = node.type === "task" ? taskMap.get(node.id) : undefined;
+      if (!task) return [node];
+      const opacity = taskBrainOpacity(task, Math.max(fadeClock, task.completedAt || 0));
+      return opacity > 0 ? [{ ...node, opacity }] : [];
+    });
+    const visible = new Set(nodes.map(node => node.key));
+    return { ...sourceGraph, nodes, edges: sourceGraph.edges.filter(edge => visible.has(edge.source) && visible.has(edge.target)) };
+  }, [sourceGraph, taskMap, fadeClock]);
   const semanticCopy = useMemo(() => getBrainSemanticCopy(language), [language]);
   const sharedCopy = useMemo(() => getSharedBrainCopy(language), [language]);
   const ownSharedKeys = useMemo(() => new Set(brainShares.filter((item) => item.status === "shared").map((item) => item.id)), [brainShares]);

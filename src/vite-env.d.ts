@@ -35,6 +35,7 @@ interface Window {
       write: (request: { data: string; reason: "scheduled" | "manual"; assets?: Array<{ relativePath: string; sha256: string; size: number }> }) => Promise<import("./types").AutoBackupWriteResult>;
       writeSafety: (request: { data: string; assets?: Array<{ relativePath: string; sha256: string; size: number }> }) => Promise<{ filePath: string; filename: string; bytes: number }>;
     };
+    syncRecovery?: import("./types").SyncRecoveryBridge;
     cloudBackups?: {
       onBeforeQuit?: (callback: () => Promise<void>) => () => void;
       getLocalStatus: () => Promise<import("./types").CloudBackupStatus>;

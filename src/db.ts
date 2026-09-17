@@ -7,6 +7,7 @@ import dayjs from "dayjs";
 import { intlLocale, translate } from "./i18n";
 import { useAppStore } from "./store";
 import { cardSearchTerms, fragmentSearchTerms, taskSearchTerms } from "./lib/searchIndex";
+import { taskCompletionPatch } from "./lib/taskCompletion";
 import { inferJournalTouched, isMaterializedCard } from "./lib/journalVisibility";
 import {
   isUntouchedLegacyDemoCard,
@@ -172,8 +173,8 @@ class ChengJingDatabase extends Dexie {
       }
       return patch;
     });
-    this.tasks.hook("creating", (_key, task) => { task.searchTerms = taskSearchTerms(task, useAppStore.getState().language || "zh-TW"); task.doneKey = task.done ? "done" : "active"; task.scheduleKey = task.dueAt || Number.MAX_SAFE_INTEGER; });
-    this.tasks.hook("updating", (modifications, _key, oldTask) => { const task = { ...oldTask, ...modifications } as TaskRecord; return { searchTerms: taskSearchTerms(task, useAppStore.getState().language || "zh-TW"), doneKey: task.done ? "done" : "active", scheduleKey: task.dueAt || Number.MAX_SAFE_INTEGER }; });
+    this.tasks.hook("creating", (_key, task) => { task.searchTerms = taskSearchTerms(task, useAppStore.getState().language || "zh-TW"); task.doneKey = task.done ? "done" : "active"; task.scheduleKey = task.dueAt || Number.MAX_SAFE_INTEGER; Object.assign(task, taskCompletionPatch(task, {})); });
+    this.tasks.hook("updating", (modifications, _key, oldTask) => { const task = { ...oldTask, ...modifications } as TaskRecord; return { searchTerms: taskSearchTerms(task, useAppStore.getState().language || "zh-TW"), doneKey: task.done ? "done" : "active", scheduleKey: task.dueAt || Number.MAX_SAFE_INTEGER, ...taskCompletionPatch(oldTask, modifications) }; });
     this.fragments.hook("creating", (_key, fragment) => { fragment.searchTerms = fragmentSearchTerms(fragment, useAppStore.getState().language || "zh-TW"); fragment.pinnedKey = fragment.pinned ? "pinned" : "normal"; });
     this.fragments.hook("updating", (modifications, _key, oldFragment) => { const fragment = { ...oldFragment, ...modifications } as FragmentRecord; return { searchTerms: fragmentSearchTerms(fragment, useAppStore.getState().language || "zh-TW"), pinnedKey: fragment.pinned ? "pinned" : "normal" }; });
     const committedMutations = new WeakMap<Transaction, Array<Record<string, unknown>>>();
@@ -315,7 +316,8 @@ export async function deleteTag(tagId: string) {
 }
 
 export async function seedDatabase() {
-  if ((await db.cards.count()) > 0) return;
+  if ((await db.preferences.get("demo-seed-complete"))?.value === true) return;
+  if ((await db.cards.count()) > 0) { await db.preferences.put({ key: "demo-seed-complete", value: true }); return; }
   if (typeof window !== "undefined" && window.chengjing?.platform === "android") return;
 
   const tagProduct = "tag-product";
@@ -458,7 +460,7 @@ export async function seedDatabase() {
     { id: "highlight-1", cardId: "card-welcome", text: "一張卡片可以出現在多個白板，但內容永遠只有一份。", note: "同一份內容可以在不同視覺脈絡中重用。", color: "amber", createdAt: now - day },
   ];
 
-  await db.transaction("rw", [db.cards, db.tags, db.boards, db.boardNodes, db.boardEdges, db.tasks, db.highlights, db.knowledgeGroups], async () => {
+  await db.transaction("rw", [db.cards, db.tags, db.boards, db.boardNodes, db.boardEdges, db.tasks, db.highlights, db.knowledgeGroups, db.preferences], async () => {
     await db.cards.bulkPut(cards);
     await db.tags.bulkPut(tags);
     await db.boards.put(board);
@@ -467,6 +469,7 @@ export async function seedDatabase() {
     await db.tasks.bulkPut(tasks);
     await db.highlights.bulkPut(highlights);
     await db.knowledgeGroups.bulkPut(knowledgeGroups);
+    await db.preferences.put({ key: "demo-seed-complete", value: true });
   });
 }
 
@@ -710,7 +713,7 @@ export async function restoreCardFromTrash(cardId: string) {
   return db.cards.update(cardId, { state: "active", deletedAt: undefined, updatedAt: Date.now() });
 }
 
-export async function deleteCardPermanently(cardId: string) {
+export async function deleteCardPermanently(cardId: string, retainAttachmentFiles = false) {
   const card = await db.cards.get(cardId);
   if (!card) return;
   const linkedTasks = await db.tasks.where("cardId").equals(cardId).toArray();
@@ -744,7 +747,9 @@ export async function deleteCardPermanently(cardId: string) {
       await db.cards.delete(cardId);
     },
   );
-  if (typeof window !== "undefined") await Promise.all(exclusiveAttachments.map((attachment) => attachment.storage === "file" && attachment.relativePath ? window.chengjing?.attachments?.remove(attachment.relativePath).catch(() => {}) : undefined));
+  // Transactional AI/MCP batches retain bytes for Undo; never perform file I/O
+  // before the enclosing database transaction has committed.
+  if (!retainAttachmentFiles && typeof window !== "undefined") await Promise.all(exclusiveAttachments.map((attachment) => attachment.storage === "file" && attachment.relativePath ? window.chengjing?.attachments?.remove(attachment.relativePath).catch(() => {}) : undefined));
 }
 
 export async function deleteFragmentPermanently(fragmentId: string) {

@@ -74,8 +74,8 @@ export interface AutoBackupCopy {
 
 const zhTW: AutoBackupCopy = {
   eyebrow: "資料守護",
-  title: "備份與復原",
-  description: "雲端與本地可以同時開啟，各自保護同一份澄境資料。",
+  title: "同步與備份",
+  description: "Google 同步讓內容在不同裝置間接續；本機備份則保留獨立的完整副本。",
   cloudTitle: "Google 雲端",
   cloudDescription: "登入 Google 帳號後自動備份；換電腦或換作業系統時，可以把資料完整帶回來。",
   cloudPrivacy: "澄境只能使用自己的隱藏備份空間，無法讀取你 Google Drive 裡的其他檔案。本機 AI 模型不會上傳。",
@@ -115,8 +115,8 @@ const zhTW: AutoBackupCopy = {
   restoreYesterday: "緊急復原前一天",
   restoreYesterdayConfirm: "最後確認：這不是一般復原。澄境會先建立本機安全副本，再用前一天的內容取代目前資料，並同步成新的目前版本。確定要執行緊急救援嗎？",
   safetyCopy: "覆蓋前會先在這台電腦保留一份安全副本。",
-  localTitle: "本地",
-  localDescription: "把完整備份放在你指定的資料夾；不必登入，也可以和雲端備份同時進行。",
+  localTitle: "本機備份",
+  localDescription: "把完整備份保存在你指定的資料夾；不必登入，並與 Google 同步彼此獨立。",
   folderLabel: "備份資料夾",
   noFolder: "尚未選擇資料夾",
   chooseFolder: "選擇資料夾",
