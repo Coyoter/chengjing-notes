@@ -20,8 +20,9 @@ jobs:
           python3 - <<'PY'
           import base64, gzip, hashlib, json
           from pathlib import Path
-          source = Path('scripts/fleeting-update.b64')
-          changes = json.loads(gzip.decompress(base64.b64decode(source.read_text(), validate=True)))
+          parts = [Path('scripts/fleeting-update.part1'), Path('scripts/fleeting-update.part2'), Path('scripts/fleeting-update.b64')]
+          encoded = ''.join(p.read_text().strip() for p in parts if p.exists())
+          changes = json.loads(gzip.decompress(base64.b64decode(encoded, validate=True)))
           pending = []
           for item in changes:
               path = Path(item['path'])
@@ -37,7 +38,8 @@ jobs:
               path.parent.mkdir(parents=True, exist_ok=True)
               path.write_text(new)
               print('UPDATED', path)
-          source.unlink()
+          for p in parts:
+              if p.exists(): p.unlink()
           PY
           git diff --check
           git config user.name 'github-actions[bot]'
