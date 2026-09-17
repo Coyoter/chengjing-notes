@@ -1,0 +1,20 @@
+name: Archive and library validation
+on:
+  push:
+    branches: [codex/archive-library-v0.10.8]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare source for isolated review
+        run: git archive --format=tar HEAD -o /tmp/chengjing-source.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chengjing-review-source
+          path: /tmp/chengjing-source.tar
+          retention-days: 1
