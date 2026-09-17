@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+defaults:
+  run:
+    shell: bash
 concurrency:
   group: archive-library-validation
   cancel-in-progress: true
