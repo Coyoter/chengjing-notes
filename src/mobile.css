@@ -65,9 +65,9 @@ html[data-platform="android"] .window-drag-region { display: none; }
 .mobile-stream-heading h2 { margin:0; font-size:calc(15px * var(--font-scale)); font-weight:620; letter-spacing:0.02em; }
 .mobile-stream-heading > span { font-size:calc(12px * var(--font-scale)); color:var(--text-muted); }
 .mobile-thought-stream article { padding:14px 0 20px; border-bottom:1px solid color-mix(in srgb,var(--text-muted) 16%,transparent); }
-.mobile-thought-stream article > div { display:flex; align-items:center; gap:8px; min-height:28px; }
+.mobile-thought-stream .mobile-thought-meta { display:flex; align-items:center; gap:8px; min-height:28px; }
 .mobile-thought-stream time { font-size:calc(11px * var(--font-scale)); color:var(--text-muted); }
-.mobile-thought-stream article button { margin-left:auto; width:44px; height:36px; display:grid; place-items:center; color:var(--text-muted); background:none; border:0; }
+.mobile-thought-stream .mobile-thought-meta > button { margin-left:auto; width:44px; height:36px; display:grid; place-items:center; color:var(--text-muted); background:none; border:0; }
 .mobile-thought-stream article p { margin:4px 0 0; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--text-1); font-size:calc(16px * var(--font-scale)); line-height:1.7; }
 .mobile-capture-empty { display:flex; align-items:center; gap:12px; padding:24px 0; color:var(--text-muted); font-size:calc(14px * var(--font-scale)); }
 @media (max-width: 799px) {

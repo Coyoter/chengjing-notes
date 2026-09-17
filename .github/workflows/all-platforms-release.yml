@@ -71,7 +71,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add package.json package-lock.json android/app/build.gradle.kts
           git diff --cached --check
-          if ! git diff --cached --quiet; then git commit -m 'release: reconcile complete platform history and align v0.10.11 metadata'; fi
+          if ! git diff --cached --quiet; then git commit -m 'release: reconcile complete platform history and align release metadata'; fi
           git merge-base --is-ancestor "$(python3 -c 'import json; print(json.load(open("release-version.json"))["previousStableCommit"])')" HEAD
           git push origin "HEAD:refs/heads/release/prepared-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -101,6 +101,7 @@ jobs:
           npm run qa:archive-library
           npm run qa:capture-cards
           npm run qa:library-tag-colors
+          npm run qa:tag-chip-layout
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -337,7 +338,18 @@ jobs:
           FILES=()
           for NAME in "${NAMES[@]}"; do FILES+=("release/$NAME"); done
           gh release create "$TAG" "${FILES[@]}" --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --title "澄境筆記 ${VERSION}" --notes-file "docs/releases/${TAG}.md" --draft
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > release/remote-release.json
+          # Drafts may not resolve through releases/tags; bind verification to one numeric ID.
+          RELEASE_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate --jq ".[] | select(.tag_name == \"$TAG\" and .target_commitish == \"$SOURCE_SHA\" and .draft == true) | .id")
+          [[ "$RELEASE_ID" =~ ^[0-9]+$ ]] || { echo '::error::Expected exactly one matching draft release'; exit 1; }
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > release/remote-release.json
           python3 scripts/release-integrity.py --remote release/remote-release.json
           git push origin HEAD:main
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false -F prerelease=false -f make_latest=true > release/published-release.json
+          python3 - <<'PY'
+          import json,os
+          release=json.load(open('release/published-release.json'))
+          assert release['tag_name']=='v'+os.environ['VERSION']
+          assert release['target_commitish']==os.environ['SOURCE_SHA']
+          assert release['draft'] is False and release['prerelease'] is False
+          print('PASS: published verified all-platform stable release '+release['html_url'])
+          PY

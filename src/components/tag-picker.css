@@ -1,0 +1,56 @@
+/* Shared tag geometry. Only the name truncates; dots and actions stay visible. */
+.shared-tag-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 6px;
+}
+.shared-tag-picker > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: min(100%, 18rem);
+  height: auto;
+  min-height: 26px;
+  margin: 0;
+  white-space: nowrap;
+}
+.shared-tag-picker .tag-chip-label {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shared-tag-picker :is(button > i, button > svg) { flex: 0 0 auto; }
+.shared-tag-picker > .tag-picker-wrap { flex: 0 0 auto; min-width: 0; max-width: 100%; }
+.shared-tag-picker .add-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: auto;
+  min-width: max-content;
+  height: auto;
+  min-height: 26px;
+  margin: 0;
+  white-space: nowrap;
+}
+.shared-tag-picker .tag-picker-options > button {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  height: auto;
+  white-space: nowrap;
+}
+/* Keep the existing compact, single-row whiteboard toolbar. */
+.shared-tag-picker.board-tags { flex-wrap: nowrap; }
+.shared-tag-picker.board-tags > button { max-width: 92px; }

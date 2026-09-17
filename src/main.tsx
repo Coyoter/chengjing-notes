@@ -10,6 +10,7 @@ import { initializeAndroid } from "./platform/android";
 import "./mobile.css";
 import "./preview-layout.css";
 import "./library.css";
+import "./components/tag-picker.css";
 
 dayjs.locale("zh-tw");
 
