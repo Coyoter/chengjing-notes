@@ -1,6 +1,6 @@
 {
-  "version": "0.10.12",
-  "androidVersionCode": 16,
+  "version": "0.10.13",
+  "androidVersionCode": 17,
   "previousStableCommit": "3b83e51d6a25ceff38ec7b9872bb0653b665dc39",
   "androidCertificateSha1": "78:E9:EE:9B:9D:31:54:09:A7:59:D8:00:0C:0F:EA:F0:23:A5:33:68"
 }
