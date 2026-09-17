@@ -12,13 +12,13 @@ jobs:
     timeout-minutes: 25
     env:
       GH_TOKEN: ${{ github.token }}
-      SOURCE_SHA: 4630ad643eb52edf862145cab8b9455708ca2f26
-      BUILD_RUN: '35197118790'
+      SOURCE_SHA: e918e84ef7f55525c8759906f09b454a964d2dda
+      BUILD_RUN: '35198170210'
       VERSION: 0.10.11
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 4630ad643eb52edf862145cab8b9455708ca2f26
+          ref: e918e84ef7f55525c8759906f09b454a964d2dda
           fetch-depth: 0
       - name: Require successful shared tests, both desktop builds and Android compilation
         run: |
@@ -42,13 +42,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 35197118790
+          run-id: 35198170210
           name: stable-macos
           path: release
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 35197118790
+          run-id: 35198170210
           name: stable-windows
           path: release
       - name: Verify original bytes and record the incomplete release scope
