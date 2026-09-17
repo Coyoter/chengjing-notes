@@ -4,7 +4,8 @@ import { dueDateInputToTimestamp, deleteTaskEverywhere, updateTaskEverywhere } f
 import { runAI } from "./ai";
 import { useAppStore } from "../store";
 import { normalizeBoardPlainText, richHtmlFromPlainText } from "./boardContent";
-import { isMaterializedCard } from "./journalVisibility";
+import { isActiveCard, isVisibleCard } from "./cardVisibility";
+import { getHiddenTaskIds } from "./activeContent";
 
 export type AIActionType =
   | "create_card" | "update_card" | "delete_card"
@@ -189,11 +190,12 @@ export const ACTION_RESPONSE_FORMAT = {
 } as const;
 
 export async function buildAIActionContext(contextType: "space" | "card" | "board", cardId?: string | null, boardId?: string | null, includeWorkspaceContent = true) {
+  const hiddenTasks = await getHiddenTaskIds();
   const [groups, boards, catalogCards, catalogTasks, fragments] = await Promise.all([
     db.knowledgeGroups.toArray(),
     db.boards.orderBy("updatedAt").reverse().limit(80).toArray(),
-    db.cards.filter((card) => card.state !== "trash" && isMaterializedCard(card)).limit(100).toArray(),
-    db.tasks.orderBy("updatedAt").reverse().limit(100).toArray(),
+    db.cards.filter((card) => isVisibleCard(card)).limit(100).toArray(),
+    db.tasks.orderBy("updatedAt").reverse().filter((task) => !hiddenTasks.has(task.id)).limit(100).toArray(),
     db.fragments.orderBy("updatedAt").reverse().limit(80).toArray(),
   ]);
   const workspaceCatalog = {
@@ -205,11 +207,15 @@ export async function buildAIActionContext(contextType: "space" | "card" | "boar
   };
   if (contextType === "board" && boardId) {
     const board = await db.boards.get(boardId); const nodes = await db.boardNodes.where("boardId").equals(boardId).toArray(); const edges = await db.boardEdges.where("boardId").equals(boardId).toArray();
-    const cards = new Map((await Promise.all(nodes.filter((node) => node.cardId).map((node) => db.cards.get(node.cardId!)))).filter(Boolean).map((card) => [card!.id, card!]));
-    return JSON.stringify({ context: "board", currentBoard: board, nodes: nodes.map((node) => ({ ...node, card: node.cardId ? { id: node.cardId, title: cards.get(node.cardId)?.title, content: cards.get(node.cardId)?.plainText.slice(0, 2_000) } : undefined })), edges, workspaceCatalog });
+    const cards = new Map((await Promise.all(nodes.filter((node) => node.cardId).map((node) => db.cards.get(node.cardId!)))).filter(isActiveCard).map((card) => [card.id, card]));
+    const visibleNodes = nodes.filter((node) => !node.cardId || cards.has(node.cardId));
+    const visibleIds = new Set(visibleNodes.map((node) => node.id));
+    return JSON.stringify({ context: "board", currentBoard: board, nodes: visibleNodes.map((node) => ({ ...node, card: node.cardId ? { id: node.cardId, title: cards.get(node.cardId)?.title, content: cards.get(node.cardId)?.plainText.slice(0, 2_000) } : undefined })), edges: edges.filter((edge) => visibleIds.has(edge.source) && visibleIds.has(edge.target)), workspaceCatalog });
   }
   if (contextType === "card" && cardId) {
-    const card = await db.cards.get(cardId); const tasks = await db.tasks.where("cardId").equals(cardId).toArray(); const highlights = await db.highlights.where("cardId").equals(cardId).toArray();
+    const card = await db.cards.get(cardId);
+    if (!card || (!isActiveCard(card) && useAppStore.getState().inactiveCardAccessId !== cardId)) return JSON.stringify({ context: "card", currentCard: null, tasks: [], highlights: [], workspaceCatalog });
+    const tasks = await db.tasks.where("cardId").equals(cardId).toArray(); const highlights = await db.highlights.where("cardId").equals(cardId).toArray();
     return JSON.stringify({ context: "card", currentCard: card ? { ...card, contentHtml: undefined, plainText: card.plainText.slice(0, 12_000) } : null, tasks, highlights, workspaceCatalog });
   }
   return JSON.stringify({ context: "space", workspaceCatalog });

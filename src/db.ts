@@ -545,7 +545,7 @@ export async function createCard(input: Partial<CardRecord> & Pick<CardRecord, "
 }
 
 export async function getOrCreateJournal(date: string): Promise<CardRecord> {
-  const existing = (await db.cards.where("journalDate").equals(date).toArray()).find((card) => card.state !== "trash");
+  const existing = (await db.cards.where("journalDate").equals(date).toArray()).find((card) => card.state !== "trash" && card.state !== "archived");
   if (existing) return existing;
   const language = useAppStore.getState().language || "zh-TW";
   const localDate = new Date(`${date}T12:00:00`);
@@ -622,7 +622,7 @@ export function cardVersionIdsToKeep(versions: CardVersionRecord[], now = Date.n
 
 export async function pruneUntouchedJournalDrafts(exceptJournalDate?: string) {
   const candidates = (await db.cards.where("kind").equals("journal").toArray()).filter((card) => {
-    if (card.journalDate === exceptJournalDate || isMaterializedCard(card)) return false;
+    if (card.state === "archived" || card.state === "trash" || card.journalDate === exceptJournalDate || isMaterializedCard(card)) return false;
     return !card.favorite
       && !card.collectionId
       && !card.startAt

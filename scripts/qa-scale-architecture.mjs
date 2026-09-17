@@ -125,7 +125,7 @@ const libraryInitialRendered = await page.locator(".library-card").count();
 await page.locator(".filter-bar input").fill("壓測神經元 1199");
 await page.locator(".library-card").filter({ hasText: "壓測神經元 1199" }).waitFor();
 const indexedLibrarySearchWorks = await page.locator(".library-card").filter({ hasText: "壓測神經元 1199" }).count() === 1;
-await page.getByRole("button", { name: "資料庫", exact: true }).click();
+await page.getByRole("button", { name: "卡片庫", exact: true }).first().click();
 await page.locator(".data-table").waitFor();
 const databaseInitialRendered = await page.locator(".data-table tbody tr").count();
 await page.getByRole("button", { name: "待辦", exact: true }).click();

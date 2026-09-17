@@ -44,7 +44,7 @@ import { dataUrlToBlob, truncate } from "../lib/utils";
 import { storeAttachment } from "../lib/importers";
 import { removeStoredAttachment } from "../lib/attachments";
 import { showContextMenuFromPointer } from "../lib/contextMenu";
-import { isMaterializedCard } from "../lib/journalVisibility";
+import { isVisibleCard } from "../lib/cardVisibility";
 import { setTaskDone } from "../lib/taskSync";
 import type { TaskRecord } from "../types";
 import { duplicateCardFromId, readAppClipboard, writeAppClipboard } from "../lib/appClipboard";
@@ -80,7 +80,7 @@ export function KanbanView() {
   const boards = useLiveQuery(() => db.kanbanBoards.toArray(), [], []);
   const lists = useLiveQuery<KanbanListRecord[], KanbanListRecord[]>(() => selectedBoardId ? db.kanbanLists.where("boardId").equals(selectedBoardId).sortBy("order") : Promise.resolve([]), [selectedBoardId], []);
   const placements = useLiveQuery<KanbanPlacementRecord[], KanbanPlacementRecord[]>(() => selectedBoardId ? db.kanbanPlacements.where("boardId").equals(selectedBoardId).sortBy("order") : Promise.resolve([]), [selectedBoardId], []);
-  const cards = useLiveQuery(async () => (await db.cards.where("state").notEqual("trash").toArray()).filter(isMaterializedCard), [], []);
+  const cards = useLiveQuery(async () => (await db.cards.where("state").notEqual("trash").toArray()).filter(isVisibleCard), [], []);
   const tags = useLiveQuery(() => db.tags.orderBy("name").toArray(), [], []);
   const attachmentIds = useMemo(() => {
     const cardById = new Map(cards.map((card) => [card.id, card]));
@@ -136,8 +136,8 @@ export function KanbanView() {
   }, []);
 
   useEffect(() => {
-    if (selectedPlacementId && !placements.some((placement) => placement.id === selectedPlacementId)) setSelectedPlacementId(null);
-  }, [placements, selectedPlacementId]);
+    if (selectedPlacementId && !placements.some((placement) => placement.id === selectedPlacementId && cardMap.has(placement.cardId))) setSelectedPlacementId(null);
+  }, [placements, selectedPlacementId, cardMap]);
 
   useEffect(() => {
     setInspectorTitleDraft(selectedCard?.title || "");

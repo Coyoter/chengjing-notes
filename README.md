@@ -1,4 +1,4 @@
-# 澄境筆記 ChengJing Notes v0.10.0
+# 澄境筆記 ChengJing Notes v0.10.8
 
 <p align="center">
   <a href="README.md"><strong>繁體中文</strong></a>
@@ -24,6 +24,8 @@
 
 ## 直接安裝
 
+**v0.10.8 為 macOS ARM64 更新**：封存可見性修正，以及卡片庫／資料庫整合。[更新內容與其他平台範圍](docs/releases/v0.10.8.md)。本次沒有新的 Windows 安裝檔或 Android APK；下方 v0.10.0 為先前跨平台版本。
+
 跨平台正式發布：[0.10.0 Android、Mac、Windows 與更新說明](https://github.com/Coyoter/chengjing-notes/releases/tag/v0.10.0)。可直接更新，不需移除。Google Play 上架另行處理；GitHub 發布不代表已通過 Play 審核。Google 雙向同步需各裝置使用本次相容同步版，舊桌面 v0.9.5 仍是備份功能。已測範圍與已知限制請見 [Android 說明](ANDROID.md)。
 
 目前正式安裝包支援 Apple Silicon Mac，以及 Windows ARM64／Intel、AMD x64：
@@ -47,7 +49,7 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 - 每日日誌、跨編輯器同步待辦、自製日期月曆、日期時間軸、ETA 期限、來源劃記與還原
 - 互動白板：卡片與檔案原地落在畫布、卡片／區段／心智圖自由縮放、拖曳、連線、既有卡片重用、小地圖與自動整理
 - 專案看板：多看板、多列表、卡片跨列表拖曳、列表排序、開始／截止日期、標籤、Checklist、附件、搜尋、篩選、排序與收藏
-- 標籤資料庫：表格、看板、階段更新與自訂標籤
+- 整合式卡片庫：分類與標籤、卡片／清單／表格／階段看板、卡片與待辦混合檢視、批次操作
 - PDF、DOCX、Markdown、純文字、HTML、圖片、音訊與影片匯入
 - 網頁文章擷取與 YouTube 來源卡片
 - OpenRouter：本機 AES-256-GCM 加密金鑰、精選模型、同步最新模型、自訂模型名稱

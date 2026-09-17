@@ -341,9 +341,9 @@ export function GlobalContextMenu() {
     >
       {card && <>
         <header><span>{t("context.cardActions")}</span><b>{card.title}</b></header>
-        <button type="button" role="menuitem" data-menu-action="edit" onClick={() => run(() => useAppStore.getState().openCard(card.id))}><Pencil size={15} />{editCopy.edit}</button>
+        <button type="button" role="menuitem" data-menu-action="edit" onClick={() => run(() => useAppStore.getState().openCard(card.id, { allowInactive: card.state === "archived" || card.state === "trash" }))}><Pencil size={15} />{editCopy.edit}</button>
         {card.sourceUrl && <button type="button" role="menuitem" onClick={() => run(() => window.open(card.sourceUrl, "_blank", "noopener,noreferrer"))}><ArrowUpRight size={15} />{t("context.openOriginal")}</button>}
-        {card.state !== "trash" && <button type="button" role="menuitem" data-menu-action="convert-board" onClick={() => run(() => { useAppStore.getState().openCard(card.id); useAppStore.getState().openAIWithAction(t("card.convertToBoardPrompt")); })}><PanelsTopLeft size={15} />{t("card.convertToBoard")}</button>}
+        {card.state !== "trash" && <button type="button" role="menuitem" data-menu-action="convert-board" onClick={() => run(() => { useAppStore.getState().openCard(card.id, { allowInactive: card.state === "archived" || card.state === "trash" }); useAppStore.getState().openAIWithAction(t("card.convertToBoardPrompt")); })}><PanelsTopLeft size={15} />{t("card.convertToBoard")}</button>}
         {card.state !== "trash" && <button type="button" role="menuitem" data-menu-action="to-task" onClick={() => run(addCardAsTask)}><ListTodo size={15} />{contentTaskCopy.menuLabel}</button>}
         <button type="button" role="menuitem" onClick={() => run(() => db.cards.update(card.id, { favorite: !card.favorite, updatedAt: Date.now() }))}>{card.favorite ? <PinOff size={15} /> : <Pin size={15} />}{card.favorite ? t("context.unpinCard") : t("context.pinCard")}</button>
         <button type="button" role="menuitem" data-menu-action="duplicate" onClick={() => run(duplicateCard)}><FilePlus2 size={15} />{t("context.duplicate")}</button>
@@ -385,7 +385,7 @@ export function GlobalContextMenu() {
         <header><span>{t("context.fragmentActions")}</span><b>{fragment.text.slice(0, 42)}</b></header>
         <button type="button" role="menuitem" data-menu-action="edit" onClick={() => { setRequest(null); setEditDialog({ kind: "fragment", id: fragment.id, draft: fragment.text }); }}><Pencil size={15} />{editCopy.edit}</button>
         <button type="button" role="menuitem" onClick={() => run(() => db.fragments.update(fragment.id, { pinned: !fragment.pinned, updatedAt: Date.now() }))}>{fragment.pinned ? <PinOff size={15} /> : <Pin size={15} />}{fragment.pinned ? t("context.unpin") : t("context.pin")}</button>
-        <button type="button" role="menuitem" onClick={() => run(async () => { const card = await cardFromFragment(); if (card) useAppStore.getState().openCard(card.id); })}><FilePlus2 size={15} />{t("context.toCard")}</button>
+        <button type="button" role="menuitem" onClick={() => run(async () => { const card = await cardFromFragment(); if (card) useAppStore.getState().openCard(card.id, { allowInactive: card.state === "archived" || card.state === "trash" }); })}><FilePlus2 size={15} />{t("context.toCard")}</button>
         <button type="button" role="menuitem" onClick={() => run(sendFragmentToBoard)}><PanelsTopLeft size={15} />{t("context.toBoard")}</button>
         <button type="button" role="menuitem" onClick={() => run(sendFragmentToKanban)}><SquareKanban size={15} />{t("context.toKanban")}</button>
         <button type="button" role="menuitem" data-menu-action="to-task" onClick={() => run(addFragmentAsTask)}><ListTodo size={15} />{contentTaskCopy.menuLabel}</button>

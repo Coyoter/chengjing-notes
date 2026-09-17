@@ -221,10 +221,10 @@ const brainSearchWorks = await page.locator(".brain-node-label").count() > 0;
 await page.getByRole("button", { name: "清除搜尋", exact: true }).click();
 
 // 資料庫：置頂、標籤與待辦三種資料共同存在
-await page.getByRole("button", { name: "資料庫", exact: true }).click();
-await page.locator(".database-sidebar").getByRole("button", { name: /已置頂/ }).click();
+await page.getByRole("button", { name: "卡片庫", exact: true }).first().click();
+await page.locator(".library-tag-section").getByRole("button", { name: /已置頂/ }).click();
 const databasePinnedWorks = await page.locator(".data-table").getByText("Q3 新功能上線協調", { exact: true }).isVisible();
-await page.locator(".database-sidebar").getByRole("button", { name: /待辦/ }).click();
+await page.locator(".library-tag-section").getByRole("button", { name: /待辦/ }).click();
 await page.locator(".database-task-row").filter({ hasText: "檢查 Q3 上線後的登入完成率" }).waitFor();
 const databaseTaskWorks = await page.locator(".database-task-row").filter({ hasText: "檢查 Q3 上線後的登入完成率" }).isVisible();
 

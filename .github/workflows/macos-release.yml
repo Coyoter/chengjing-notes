@@ -41,6 +41,15 @@ jobs:
           npm run typecheck
           npm test
           node scripts/qa-preview-overflow.mjs
+          npm run qa:archive-library
+
+      - name: 保存回歸測試畫面與報告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chengjing-regression-${{ github.run_number }}
+          path: qa-artifacts/
+          retention-days: 14
 
       - name: 建置 macOS DMG
         env:
@@ -69,7 +78,10 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           TAG="v${VERSION}"
+          NOTES=(--generate-notes)
+          if [ -f "docs/releases/${TAG}.md" ]; then NOTES=(--notes-file "docs/releases/${TAG}.md"); fi
           gh release create "$TAG" release/*.dmg release/ChengJing-macOS.sha256 \
             --repo "$GITHUB_REPOSITORY" \
             --title "澄境筆記 ${VERSION}" \
-            --generate-notes
+            --target "$GITHUB_SHA" \
+            "${NOTES[@]}"
