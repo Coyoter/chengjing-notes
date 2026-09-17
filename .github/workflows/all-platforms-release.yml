@@ -1,0 +1,294 @@
+name: ChengJing all-platform stable release
+
+on:
+  push:
+    branches: [main, release/all-platforms-v0.10.11]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chengjing-all-platforms-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      version: ${{ steps.source.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check required signing inputs without printing credentials
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.CHENGJING_ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_CREDENTIALS: ${{ secrets.CHENGJING_ANDROID_SIGNING_CREDENTIALS_JSON }}
+          ANDROID_PASSWORD: ${{ secrets.CHENGJING_ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_ALIAS: ${{ secrets.CHENGJING_ANDROID_KEY_ALIAS }}
+          DESKTOP_OAUTH: ${{ secrets.CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET }}
+        run: |
+          python3 - <<'PY'
+          import os,json
+          missing=[]
+          if not os.environ.get('DESKTOP_OAUTH'): missing.append('CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET')
+          if not os.environ.get('ANDROID_KEYSTORE'): missing.append('CHENGJING_ANDROID_KEYSTORE_BASE64')
+          if os.environ.get('ANDROID_CREDENTIALS'):
+              credentials=json.loads(os.environ['ANDROID_CREDENTIALS'])
+              if not credentials.get('password') or not credentials.get('alias'):
+                  missing.append('valid CHENGJING_ANDROID_SIGNING_CREDENTIALS_JSON (password and alias)')
+          elif not os.environ.get('ANDROID_PASSWORD') or not os.environ.get('ANDROID_ALIAS'):
+              missing.append('CHENGJING_ANDROID_KEYSTORE_PASSWORD and CHENGJING_ANDROID_KEY_ALIAS')
+          if missing: raise SystemExit('Missing release inputs: ' + ', '.join(missing))
+          print('PASS: required release inputs are configured; values were not printed')
+          PY
+      - name: Prevent loss of fixes from the last Android and Windows release
+        run: |
+          BASELINE=$(python3 -c 'import json; print(json.load(open("release-version.json"))["previousStableCommit"])')
+          if ! git merge-base --is-ancestor "$BASELINE" HEAD; then
+            echo '::error::The last full stable release is not integrated. Reconcile v0.10.6 with current main before publishing; do not overwrite either side.'
+            git log --oneline HEAD.."$BASELINE"
+            exit 1
+          fi
+      - name: Prepare one versioned source commit for every platform
+        id: source
+        run: |
+          python3 - <<'PY'
+          import json,pathlib,re
+          root=pathlib.Path('.')
+          plan=json.loads((root/'release-version.json').read_text())
+          version=plan['version']; code=plan['androidVersionCode']
+          if not re.fullmatch(r'\d+\.\d+\.\d+',version) or not isinstance(code,int) or code<=10:
+              raise SystemExit('Invalid stable release version')
+          for filename in ('package.json','package-lock.json'):
+              file=root/filename; value=json.loads(file.read_text())
+              if tuple(map(int,value['version'].split('.'))) > tuple(map(int,version.split('.'))):
+                  raise SystemExit('Refusing to downgrade '+filename)
+              value['version']=version
+              if filename=='package-lock.json': value['packages']['']['version']=version
+              file.write_text(json.dumps(value,ensure_ascii=False,indent=2)+'\n')
+          gradle=root/'android/app/build.gradle.kts'; content=gradle.read_text()
+          old=int(re.search(r'versionCode\s*=\s*(\d+)',content)[1])
+          if old>code: raise SystemExit('Refusing to downgrade Android versionCode')
+          content,n=re.subn(r'versionCode\s*=\s*\d+',f'versionCode = {code}',content)
+          if n!=1: raise SystemExit('Ambiguous Android versionCode')
+          content,n=re.subn(r'versionName\s*=\s*"[^"]+"',f'versionName = "{version}"',content)
+          if n!=1: raise SystemExit('Ambiguous Android versionName')
+          gradle.write_text(content)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "release/prepared-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git add package.json package-lock.json android/app/build.gradle.kts
+          git diff --cached --check
+          if ! git diff --cached --quiet; then git commit -m 'release: align desktop and Android version metadata'; fi
+          git push origin "HEAD:refs/heads/release/prepared-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: prepare
+    runs-on: macos-14
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium
+      - name: Test shared structure, migration, visibility and tag colors
+        env:
+          CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET }}
+        run: |
+          npm run typecheck
+          npm test
+          node scripts/qa-preview-overflow.mjs
+          npm run qa:archive-library
+          npm run qa:capture-cards
+          npm run qa:library-tag-colors
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cross-platform-regression
+          path: qa-artifacts/
+          retention-days: 14
+
+  macos:
+    needs: [prepare, test]
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build and verify Apple Silicon DMG
+        env:
+          CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET }}
+        run: |
+          npm run dist:mac
+          hdiutil verify release/*.dmg
+          python3 scripts/release-integrity.py --stage macos
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stable-macos
+          path: |
+            release/*.dmg
+            release/build-macos.json
+          if-no-files-found: error
+
+  windows:
+    needs: [prepare, test]
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/windows-installer/go.mod
+          cache: false
+      - run: npm ci
+      - name: Build and inspect both native Windows installers
+        env:
+          CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET }}
+        run: |
+          node scripts/prepare-google-oauth.mjs --required
+          npm run icons
+          npm run build
+          npx electron-builder --win --dir --x64 --publish never
+          node scripts/build-windows-installer.mjs x64
+          npx electron-builder --win --dir --arm64 --publish never
+          node scripts/build-windows-installer.mjs arm64
+          npm run qa:windows-package
+          python scripts/release-integrity.py --stage windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stable-windows
+          path: |
+            release/*-Installer.exe
+            release/build-windows.json
+          if-no-files-found: error
+
+  android:
+    needs: [prepare, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - run: npm ci
+      - name: Restore existing production signing key, never generate a replacement
+        env:
+          KEYSTORE_BASE64: ${{ secrets.CHENGJING_ANDROID_KEYSTORE_BASE64 }}
+          SIGNING_JSON: ${{ secrets.CHENGJING_ANDROID_SIGNING_CREDENTIALS_JSON }}
+          STORE_PASSWORD: ${{ secrets.CHENGJING_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.CHENGJING_ANDROID_KEY_ALIAS }}
+        run: |
+          python3 - <<'PY'
+          import os,base64,json,pathlib
+          folder=pathlib.Path('android/signing'); folder.mkdir(mode=0o700,exist_ok=True)
+          credentials=json.loads(os.environ['SIGNING_JSON']) if os.environ.get('SIGNING_JSON') else {'password':os.environ['STORE_PASSWORD'],'alias':os.environ['KEY_ALIAS']}
+          if not credentials.get('password') or not credentials.get('alias'): raise SystemExit('Missing original signing credentials')
+          for name,data in [('chengjing-release.jks',base64.b64decode(os.environ['KEYSTORE_BASE64'],validate=True)),('credentials.json',json.dumps(credentials).encode())]:
+              file=folder/name; file.write_bytes(data); file.chmod(0o600)
+          PY
+      - name: Build fresh frontend into direct APK and Play AAB
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          npm run build
+          mkdir -p android/app/src/main/assets/public release
+          rsync -a --delete dist/ android/app/src/main/assets/public/
+          chmod +x android/gradlew
+          android/gradlew -p android :app:testReleaseUnitTest :app:assembleRelease -PdistributionChannel=direct --no-daemon --console=plain
+          cp android/app/build/outputs/apk/release/app-release.apk "release/ChengJing-${VERSION}-Android.apk"
+          android/gradlew -p android :app:bundleRelease -PdistributionChannel=play --no-daemon --console=plain
+          cp android/app/build/outputs/bundle/release/app-release.aab "release/ChengJing-${VERSION}-Android-Play.aab"
+          python3 scripts/verify-android-release.py
+          python3 scripts/release-integrity.py --stage android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stable-android
+          path: |
+            release/*.apk
+            release/*.aab
+            release/build-android.json
+            release/android-signing.json
+          if-no-files-found: error
+      - name: Remove temporary signing files
+        if: always()
+        run: rm -f android/signing/chengjing-release.jks android/signing/credentials.json
+
+  publish:
+    needs: [prepare, test, macos, windows, android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: stable-*
+          path: release
+          merge-multiple: true
+      - name: Verify all five packages belong to this exact commit
+        run: python3 scripts/release-integrity.py --assemble
+      - name: Upload draft, verify remote bytes, fast-forward main and publish stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          TAG="v${VERSION}"
+          test -f "docs/releases/${TAG}.md"
+          git fetch origin main
+          git merge-base --is-ancestor origin/main HEAD
+          if git ls-remote --exit-code origin "refs/tags/${TAG}" > /dev/null; then
+            echo '::error::Release tag already exists; refusing to replace published history.'
+            exit 1
+          fi
+          mapfile -t NAMES < release/release-assets.txt
+          FILES=()
+          for NAME in "${NAMES[@]}"; do FILES+=("release/$NAME"); done
+          gh release create "$TAG" "${FILES[@]}" --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --title "澄境筆記 ${VERSION}" --notes-file "docs/releases/${TAG}.md" --draft
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > release/remote-release.json
+          python3 scripts/release-integrity.py --remote release/remote-release.json
+          git push origin HEAD:main
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest

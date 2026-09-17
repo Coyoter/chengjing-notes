@@ -13,16 +13,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Inspect release signing configuration without exposing values
+      - name: Inspect only the required release inputs without exposing values
         env:
-          RELEASE_SECRET_CONTEXT: ${{ toJSON(secrets) }}
+          ANDROID_KEYSTORE: ${{ secrets.CHENGJING_ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_CREDENTIALS: ${{ secrets.CHENGJING_ANDROID_SIGNING_CREDENTIALS_JSON }}
+          ANDROID_PASSWORD: ${{ secrets.CHENGJING_ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_ALIAS: ${{ secrets.CHENGJING_ANDROID_KEY_ALIAS }}
+          DESKTOP_OAUTH: ${{ secrets.CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET }}
         run: |
           mkdir -p preflight
           python3 - <<'PY'
-          import os,json,re
-          values=json.loads(os.environ.pop('RELEASE_SECRET_CONTEXT'))
-          names=sorted(k for k,v in values.items() if v and re.search(r'ANDROID|KEYSTORE|SIGNING|CHENGJING.*(?:PASSWORD|ALIAS|CREDENTIAL)',k))
-          report={'configuredSigningInputNames':names,'desktopOAuthConfigured':bool(values.get('CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET'))}
+          import os,json
+          report={name:bool(os.environ.get(name)) for name in ('ANDROID_KEYSTORE','ANDROID_CREDENTIALS','ANDROID_PASSWORD','ANDROID_ALIAS','DESKTOP_OAUTH')}
           with open('preflight/signing-readiness.json','w') as f: json.dump(report,f,indent=2)
           print(json.dumps(report,indent=2))
           PY
