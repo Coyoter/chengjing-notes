@@ -1,0 +1,19 @@
+name: Fleeting cards validation
+on:
+  push:
+    branches: [fix/fleeting-cards-v0.10.9]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Archive tracked source for review
+        run: git archive HEAD -o source.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fleeting-source
+          path: source.zip
+          retention-days: 1
