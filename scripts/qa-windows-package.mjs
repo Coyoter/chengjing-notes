@@ -42,7 +42,8 @@ for (const target of packages) {
   }
   const machine = await peMachine(executable);
   const uninstallerMachine = await peMachine(uninstaller);
-  const files = listPackage(asarPath);
+  // ASAR uses path.join internally, so native Windows listings contain backslashes.
+  const files = listPackage(asarPath).map((file) => file.replaceAll("\\", "/"));
   const packagedMetadata = JSON.parse(extractFile(asarPath, "package.json").toString("utf8"));
   const mainSource = extractFile(asarPath, "electron/main.cjs").toString("utf8");
   const transformersBundle = files.find((file) => /^\/dist\/assets\/transformers\.web-.*\.js$/.test(file));
@@ -95,5 +96,5 @@ const report = {
   releaseFiles,
 };
 
-if (report.installers.some((installer) => !installer.architectureSpecific) || !report.checksumSidecarsAbsent || report.sharedApplicationCode === false) throw new Error(`windows-architecture-installers:${JSON.stringify(report)}`);
+if (!report.unpackedApplicationChecked || report.installers.some((installer) => !installer.architectureSpecific) || !report.checksumSidecarsAbsent || report.sharedApplicationCode === false) throw new Error(`windows-architecture-installers:${JSON.stringify(report)}`);
 console.log(JSON.stringify(report, null, 2));
