@@ -540,9 +540,11 @@ export async function createCard(input: Partial<CardRecord> & Pick<CardRecord, "
     dueAt: input.dueAt,
     sourceUrl: input.sourceUrl,
     attachmentIds: input.attachmentIds || [],
-    properties: input.properties || {},
+    properties: { ...input.properties },
     collectionId: input.collectionId,
   };
+  // A deliberate duplicate is a new card, not the owner of the original legacy ID.
+  delete card.properties.legacyFragmentId;
   if (card.kind === "journal" && card.journalTouched === undefined) card.journalTouched = inferJournalTouched(card);
   await db.cards.add(card);
   return card;

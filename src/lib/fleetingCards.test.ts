@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db, createFleetingCard, createFragment, updateFleetingText, moveCardToTrash, restoreCardVersion } from "../db";
+import { duplicateCardFromId } from "./appClipboard";
 import { fragmentAsCard } from "./fleetingCard";
 import { migrateLegacyFragments, resolveFleetingCard } from "./migrateFragments";
 import { organizeCard } from "./cardOrganization";
@@ -103,6 +104,16 @@ describe("舊片語搬移與同步相容", () => {
     expect(await db.brainShares.get("card:old")).toMatchObject({ remoteId: "public-original", localType: "card", localId: "old", sharedAt: 15 });
     expect(await db.brainShares.get("fragment:old")).toBeUndefined();
     expect(await db.tasks.get("task")).toMatchObject({ cardId: "old", conversionKey: "content:card:old" });
+  });
+  it("使用者另製副本不奪走原片語的搬移與共享身分", async () => {
+    await db.fragments.add(legacy()); await migrateLegacyFragments();
+    const copy = await duplicateCardFromId("old");
+    expect(copy?.id).not.toBe("old"); expect(copy?.tagIds).toEqual(["AI"]);
+    expect(copy?.properties.legacyFragmentId).toBeUndefined();
+    await migrateLegacyFragments();
+    expect((await db.preferences.get("fragment-card-migration:old"))?.value).toBe("old");
+    await db.cards.delete("old"); await db.fragments.add(legacy()); await migrateLegacyFragments();
+    expect(await db.cards.count()).toBe(1); expect(await db.cards.get("old")).toBeUndefined();
   });
   it("意外 ID 衝突不覆寫一般卡片，仍可解析舊片語 ID", async () => {
     await db.cards.add({ ...fragmentAsCard(legacy()), properties: {}, title: "不能覆寫" });

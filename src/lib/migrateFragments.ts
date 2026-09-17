@@ -79,8 +79,10 @@ export async function migrateLegacyFragments() {
       const id = `card:${localId}`;
       const existing = await db.brainShares.get(id);
       if (existing && existing.remoteId !== share.remoteId) throw new Error("fragment-migration-share-conflict");
-      if (!existing || share.updatedAt > existing.updatedAt) await db.brainShares.put({ ...share, id, localId, localType: "card" });
+      // remoteId is unique: release the old key before inserting the new key.
+      // Both writes remain in this transaction, so a failure restores the old row.
       if (share.id !== id) await db.brainShares.delete(share.id);
+      if (!existing || share.updatedAt > existing.updatedAt) await db.brainShares.put({ ...share, id, localId, localType: "card" });
     }
     await db.tasks.filter(task => Boolean(task.conversionKey?.startsWith("content:fragment:") && mappings.has(task.conversionKey.slice("content:fragment:".length)))).modify(task => {
       const prefix = "content:fragment:";
