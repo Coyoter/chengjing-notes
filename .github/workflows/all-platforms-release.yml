@@ -25,35 +25,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Check required signing inputs without printing credentials
+      - name: Check desktop build input
         env:
-          ANDROID_KEYSTORE: ${{ secrets.CHENGJING_ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_CREDENTIALS: ${{ secrets.CHENGJING_ANDROID_SIGNING_CREDENTIALS_JSON }}
-          ANDROID_PASSWORD: ${{ secrets.CHENGJING_ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_ALIAS: ${{ secrets.CHENGJING_ANDROID_KEY_ALIAS }}
           DESKTOP_OAUTH: ${{ secrets.CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET }}
+        run: test -n "$DESKTOP_OAUTH" || { echo '::error::Missing desktop OAuth build input'; exit 1; }
+      - name: Reconcile the last complete stable release without losing newer structure
         run: |
-          python3 - <<'PY'
-          import os,json
-          missing=[]
-          if not os.environ.get('DESKTOP_OAUTH'): missing.append('CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET')
-          if not os.environ.get('ANDROID_KEYSTORE'): missing.append('CHENGJING_ANDROID_KEYSTORE_BASE64')
-          if os.environ.get('ANDROID_CREDENTIALS'):
-              credentials=json.loads(os.environ['ANDROID_CREDENTIALS'])
-              if not credentials.get('password') or not credentials.get('alias'):
-                  missing.append('valid CHENGJING_ANDROID_SIGNING_CREDENTIALS_JSON (password and alias)')
-          elif not os.environ.get('ANDROID_PASSWORD') or not os.environ.get('ANDROID_ALIAS'):
-              missing.append('CHENGJING_ANDROID_KEYSTORE_PASSWORD and CHENGJING_ANDROID_KEY_ALIAS')
-          if missing: raise SystemExit('Missing release inputs: ' + ', '.join(missing))
-          print('PASS: required release inputs are configured; values were not printed')
-          PY
-      - name: Prevent loss of fixes from the last Android and Windows release
-        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "release/prepared-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           BASELINE=$(python3 -c 'import json; print(json.load(open("release-version.json"))["previousStableCommit"])')
+          test "$(git rev-parse 'v0.10.6^{}')" = "$BASELINE"
           if ! git merge-base --is-ancestor "$BASELINE" HEAD; then
-            echo '::error::The last full stable release is not integrated. Reconcile v0.10.6 with current main before publishing; do not overwrite either side.'
-            git log --oneline HEAD.."$BASELINE"
-            exit 1
+            if ! git -c merge.conflictStyle=merge merge --no-commit --no-ff v0.10.6; then
+              python3 scripts/reconcile-release-source.py
+            fi
           fi
       - name: Prepare one versioned source commit for every platform
         id: source
@@ -83,10 +69,10 @@ jobs:
           PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git switch -c "release/prepared-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           git add package.json package-lock.json android/app/build.gradle.kts
           git diff --cached --check
-          if ! git diff --cached --quiet; then git commit -m 'release: align desktop and Android version metadata'; fi
+          if ! git diff --cached --quiet; then git commit -m 'release: reconcile complete platform history and align v0.10.11 metadata'; fi
+          git merge-base --is-ancestor "$(python3 -c 'import json; print(json.load(open("release-version.json"))["previousStableCommit"])')" HEAD
           git push origin "HEAD:refs/heads/release/prepared-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "version=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
@@ -199,6 +185,26 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.sha }}
+      - name: Check original Android signing inputs without printing credentials
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.CHENGJING_ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_CREDENTIALS: ${{ secrets.CHENGJING_ANDROID_SIGNING_CREDENTIALS_JSON }}
+          ANDROID_PASSWORD: ${{ secrets.CHENGJING_ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_ALIAS: ${{ secrets.CHENGJING_ANDROID_KEY_ALIAS }}
+        run: |
+          python3 - <<'PY'
+          import os,json
+          missing=[]
+          if not os.environ.get('ANDROID_KEYSTORE'): missing.append('CHENGJING_ANDROID_KEYSTORE_BASE64')
+          if os.environ.get('ANDROID_CREDENTIALS'):
+              credentials=json.loads(os.environ['ANDROID_CREDENTIALS'])
+              if not credentials.get('password') or not credentials.get('alias'):
+                  missing.append('valid CHENGJING_ANDROID_SIGNING_CREDENTIALS_JSON (password and alias)')
+          elif not os.environ.get('ANDROID_PASSWORD') or not os.environ.get('ANDROID_ALIAS'):
+              missing.append('CHENGJING_ANDROID_KEYSTORE_PASSWORD and CHENGJING_ANDROID_KEY_ALIAS')
+          if missing: raise SystemExit('Missing release inputs: ' + ', '.join(missing))
+          print('PASS: required release inputs are configured; values were not printed')
+          PY
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -252,8 +258,43 @@ jobs:
         if: always()
         run: rm -f android/signing/chengjing-release.jks android/signing/credentials.json
 
+  android-check:
+    needs: [prepare, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - run: npm ci
+      - name: Compile Android and run native unit tests without distributing a debug package
+        run: |
+          npm run build
+          mkdir -p android/app/src/main/assets/public
+          rsync -a --delete dist/ android/app/src/main/assets/public/
+          chmod +x android/gradlew
+          android/gradlew -p android :app:testDebugUnitTest :app:assembleDebug --no-daemon --console=plain
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-native-test-reports
+          path: |
+            android/app/build/reports/tests/
+            android/app/build/test-results/
+          retention-days: 14
+
   publish:
-    needs: [prepare, test, macos, windows, android]
+    needs: [prepare, test, macos, windows, android, android-check]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
