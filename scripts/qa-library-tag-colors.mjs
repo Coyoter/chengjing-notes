@@ -36,8 +36,8 @@ async function openOrganizer(page, mobile) {
 async function snapshot(page) {
   return page.evaluate(async () => {
     const { db } = await import("/src/db.ts");
-    // Startup reconciliation may settle the internal task sync marker on reload.
-    // Compare every user-data field, but not this derived worker bookkeeping flag.
+    // This internal queue flag changes from pending to synced on startup.
+    // Compare every persisted user-content field, not background queue progress.
     const cards = (await db.cards.orderBy("id").toArray()).map(({ taskSyncState, ...card }) => card);
     return { tags: await db.tags.orderBy("id").toArray(), cards };
   });
@@ -68,7 +68,8 @@ try {
       await db.tags.bulkAdd(palette.map((color) => ({ id: `qa-${color}`, name: `QA ${color}`, color, group: "custom", createdAt: now })));
       return (await createFragment("標籤顏色一致性測試", palette.map((color) => `qa-${color}`))).id;
     }, palette);
-    await page.locator(`[data-capture-card-id="${captureId}"]`).waitFor();
+    const capture = page.locator(mobile ? ".mobile-thought-stream > article" : `[data-capture-card-id="${captureId}"]`).filter({ hasText: "標籤顏色一致性測試" });
+    await capture.waitFor();
     const original = await snapshot(page);
 
     for (const theme of ["light", "dark", "ink"]) {
@@ -78,8 +79,8 @@ try {
       }, theme);
       await page.waitForFunction((theme) => document.documentElement.dataset.theme === theme, theme);
       await navigate(page, "fragments");
-      const captureDots = page.locator(`[data-capture-card-id="${captureId}"] .shared-tag-picker > button > i`);
-      await page.waitForFunction((count) => document.querySelectorAll(".fragment-stream .shared-tag-picker > button > i").length === count, palette.length);
+      const captureDots = capture.locator(".shared-tag-picker > button > i");
+      await captureDots.nth(palette.length - 1).waitFor();
       const expected = await dots(captureDots);
       assert.equal(Object.keys(expected).length, palette.length);
       assert.equal(new Set(palette.slice(0, 6).map((tone) => expected[tone])).size, 6, "The six supported tones must stay distinct");
