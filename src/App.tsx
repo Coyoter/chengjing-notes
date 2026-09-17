@@ -27,6 +27,8 @@ import { initializeGlobalHistory, redoGlobalAction, runWithoutGlobalHistory, und
 import { migrateLegacyAttachments } from "./lib/attachments";
 import { scrollIntoViewWhenReady } from "./lib/utils";
 import { MobileChrome } from "./components/MobileChrome";
+import { migrateLegacyFragments } from "./lib/captureCards";
+import { CaptureMigrationManager } from "./components/CaptureMigrationManager";
 import { SyncManager } from "./components/SyncSettings";
 
 let workspaceBootstrap: Promise<void> | null = null;
@@ -38,6 +40,7 @@ const ImportModal = lazy(() => import("./components/ImportModal").then((module) 
 
 function prepareWorkspace() {
   if (!workspaceBootstrap) workspaceBootstrap = seedDatabase().then(async () => {
+    await migrateLegacyFragments();
     const sweep = window.chengjing?.attachments?.sweepPending;
     const pending = await window.chengjing?.attachments?.pendingPaths?.().catch(() => []) || [];
     if (sweep && pending.length) {
@@ -258,7 +261,7 @@ export function App() {
       <GlobalContextMenu />
       <UpdateManager />
       <AutoBackupManager />
-      <SyncManager />
+      <CaptureMigrationManager /><SyncManager />
       <CommunityNotificationManager />
       <SharedBrainSyncManager />
     </div>

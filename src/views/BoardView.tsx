@@ -767,7 +767,7 @@ function BoardCanvas({ boardId, focusNodeId, onFocusConsumed }: { boardId: strin
       cardId = duplicate?.id || "";
     } else {
       let text = clipboard.text.trim();
-      if (clipboard.payload?.kind === "fragment-ref") text = (await db.fragments.get(clipboard.payload.fragmentId))?.text || text;
+      if (clipboard.payload?.kind === "fragment-ref") { const { getCaptureCard } = await import("../lib/captureCards"); text = (await getCaptureCard(clipboard.payload.fragmentId))?.plainText || text; }
       if (text) {
         const escaped = text.replace(/[&<>]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[character] || character);
         const card = await createCard({ title: text.split(/\r?\n/)[0].slice(0, 80), plainText: text, contentHtml: `<p>${escaped.replace(/\r?\n/g, "<br>")}</p>`, state: "active", color: "slate" });

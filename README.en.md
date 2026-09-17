@@ -1,4 +1,6 @@
-# ChengJing Notes v0.10.8
+# ChengJing Notes v0.10.9
+
+**v0.10.9 (macOS ARM64):** Every quick capture is now an unfiled card, immediately available in the library and tags. Filing reuses the same card. [Migration and release scope](docs/releases/v0.10.9.md).
 
 <p align="center">
   <a href="README.md">繁體中文</a>
@@ -53,7 +55,7 @@ The macOS build is currently ad-hoc signed and is not notarized with an Apple De
 - Custom AI providers with multiple OpenAI-compatible gateways or local Ollama connections, per-profile Chat Completions or Responses API mode, model discovery, testing, and encrypted keys
 - Gemma 4 E2B local WebGPU generation with on-demand download, progress display, and removal
 - Global AI assistant, card actions, and a safe action plan for creating, editing, and deleting content
-- Snippets that can be saved, pinned, edited, copied, converted into cards, or sent to a whiteboard, board, or Second Brain
+- Quick captures are unfiled cards from the start, sharing library tags and supporting direct editing, pinning, filing, and task/whiteboard/kanban placement
 - System-wide quick capture: ⌘\ on macOS and Ctrl+\ on Windows by default, with customizable shortcuts
 - Difference-based undo/redo for global actions, with native text editing behavior preserved while typing
 - Wish Pool with anonymous feedback, two-level replies, and in-app moderation

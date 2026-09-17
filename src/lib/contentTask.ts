@@ -18,6 +18,7 @@ export async function createUnscheduledContentTask(input: { title: string; sourc
   const title = contentTaskTitle(input.title);
   if (!title) throw new Error("empty-task-title");
   const conversionKey = `content:${input.sourceKey}`;
+  return db.transaction("rw", db.tasks, async () => {
   const candidates = await db.tasks.where("conversionKey").equals(conversionKey).toArray();
   const existing = candidates.find((task) => matchesUnscheduledContentTask(task, title, conversionKey, input.cardId));
   if (existing) return { task: existing, created: false };
@@ -33,4 +34,5 @@ export async function createUnscheduledContentTask(input: { title: string; sourc
   };
   await db.tasks.add(task);
   return { task, created: true };
+  });
 }

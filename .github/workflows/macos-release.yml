@@ -42,6 +42,7 @@ jobs:
           npm test
           node scripts/qa-preview-overflow.mjs
           npm run qa:archive-library
+          npm run qa:capture-cards
 
       - name: 保存回歸測試畫面與報告
         if: always()

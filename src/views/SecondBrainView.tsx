@@ -348,7 +348,7 @@ export function SecondBrainView() {
   const { language, t } = useI18n();
   const cards = useLiveQuery(() => db.cards.toArray(), [], []);
   const boards = useLiveQuery(() => db.boards.toArray(), [], []);
-  const fragments = useLiveQuery(() => db.fragments.toArray(), [], []);
+  const fragments = useMemo(() => [], []); // Captures are already cards, not duplicate neurons.
   const tasks = useLiveQuery(() => db.tasks.toArray(), [], []);
   const boardNodes = useLiveQuery(() => db.boardNodes.toArray(), [], []);
   const tags = useLiveQuery(() => db.tags.toArray(), [], []);

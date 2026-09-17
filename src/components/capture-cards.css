@@ -1,0 +1,6 @@
+.card-placement-dialog { width: min(460px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; }
+.card-placement-dialog label { display: grid; gap: 8px; margin: 14px 0; min-width: 0; }
+.card-placement-dialog select { width: 100%; min-width: 0; max-width: 100%; padding: 10px; color: var(--text-1); background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; }
+.card-placement-dialog header, .card-placement-dialog p, .card-placement-dialog header span { overflow-wrap: anywhere; white-space: normal; }
+.capture-inbox-note { padding: 0 20px; font-size: 12px; opacity: .7; line-height: 1.7; }
+.capture-migration-error { position: fixed; bottom: 16px; left: 16px; max-width: calc(100vw - 32px); z-index: 300; padding: 12px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; }

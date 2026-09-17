@@ -114,7 +114,7 @@ function buildMcpServer(execute, version = "0.0.0") {
   });
   register("chengjing_create_neuron", {
     title: "Create neuron content / 新增神經元內容",
-    description: "Create a note, task, fragment or whiteboard; these are the underlying neurons in ChengJing. / 建立會成為神經元的筆記、待辦、隻言片語或白板。",
+    description: "Create a note, task or whiteboard. A fragment creates an unfiled note with the same card ID. / 隻言片語會直接建立未整理卡片，無需轉換。",
     inputSchema: z.object({ type: z.enum(["note", "task", "fragment", "whiteboard"]), title: z.string().max(240).optional(), content: z.string().max(100000).optional(), description: z.string().max(10000).optional(), favorite: z.boolean().optional(), pinned: z.boolean().optional(), cardId: z.string().max(180).optional(), parentTaskId: z.string().max(180).optional(), dueDate: z.string().max(10).optional() }), annotations: create,
   });
   register("chengjing_connect_neurons", {
@@ -128,7 +128,7 @@ function buildMcpServer(execute, version = "0.0.0") {
   }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify({
     transport: "local Streamable HTTP", accessModes: ["read-only", "ask", "allow"], permanentDelete: false,
     optimisticConcurrency: "Call get_item before updates and pass its updatedAt.",
-    neurons: "Cards, boards, tasks and fragments are neuron content; brainEdges connect them.",
+    neurons: "Cards, boards and tasks are neuron content. Fragments are captured cards, not extra neurons; brainEdges use the canonical card ID.",
   }, null, 2) }] }));
   return server;
 }

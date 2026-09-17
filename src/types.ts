@@ -59,6 +59,9 @@ export interface CardRecord {
   deletedAt?: number;
   searchTerms?: string[];
   taskSyncState?: "pending" | "synced";
+  /** Quick capture is an ordinary card; this marks its inbox provenance. */
+  captureStatus?: "unfiled" | "filed";
+  legacyFragmentId?: string;
 }
 
 export interface KnowledgeGroupRecord {
@@ -226,6 +229,8 @@ export interface PreferenceRecord {
 }
 
 export interface CardVersionRecord {
+  /** Original legacy capture snapshot retained during conflict-safe migration. */
+  legacyFragment?: FragmentRecord;
   id: string;
   cardId: string;
   title: string;

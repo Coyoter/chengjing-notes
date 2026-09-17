@@ -26,12 +26,10 @@ import {
   db,
   deleteBoardPermanently,
   deleteCardPermanently,
-  deleteFragmentPermanently,
   deleteTag,
   moveCardToTrash,
   restoreCardFromTrash,
   renameTag,
-  touchBoard,
 } from "../db";
 import { useAppStore } from "../store";
 import type { BoardEdgeRecord, BoardNodeRecord, TaskRecord } from "../types";
@@ -41,8 +39,10 @@ import { createTaskChild, deleteTaskEverywhere, setTaskDone, setTaskDueAt, taskD
 import { getTaskEnhancementCopy } from "../lib/taskEnhancementCopy";
 import { TaskDatePicker } from "./TaskDatePicker";
 import { duplicateCardFromId, readAppClipboard, writeAppClipboard } from "../lib/appClipboard";
-import { createKanbanBoard, createKanbanList, placeCardOnKanban } from "../lib/kanban";
-import { getKanbanCopy } from "../lib/kanbanCopy";
+import { CardPlacementDialog, type CardPlacementMode } from "./CardPlacementDialog";
+import { captureCopy } from "../lib/captureCopy";
+import { getCaptureCard, updateCaptureFragment } from "../lib/captureCards";
+import { isCaptureCard } from "../lib/captureModel";
 import { getContentEditCopy } from "../lib/contentEditCopy";
 import { createUnscheduledContentTask } from "../lib/contentTask";
 import { getContentTaskCopy } from "../lib/contentTaskCopy";
@@ -86,20 +86,20 @@ export function GlobalContextMenu() {
   const childComposing = useRef(false);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openedAt = useRef(0);
-  const cardId = request?.target.kind === "card" ? request.target.id : null;
+  const cardId = request?.target.kind === "card" || request?.target.kind === "fragment" ? request.target.id : null;
   const taskId = request?.target.kind === "task" ? request.target.id : null;
   const highlightId = request?.target.kind === "highlight" ? request.target.id : null;
-  const fragmentId = request?.target.kind === "fragment" ? request.target.id : null;
   const boardId = request?.target.kind === "board" ? request.target.id : null;
   const tagId = request?.target.kind === "tag" ? request.target.id : null;
-  const card = useLiveQuery(() => cardId ? db.cards.get(cardId) : undefined, [cardId]);
+  const legacyFragmentTarget = request?.target.kind === "fragment";
+  const card = useLiveQuery(() => cardId ? (legacyFragmentTarget ? getCaptureCard(cardId) : db.cards.get(cardId)) : undefined, [cardId, legacyFragmentTarget]);
   const highlight = useLiveQuery(() => highlightId ? db.highlights.get(highlightId) : undefined, [highlightId]);
-  const fragment = useLiveQuery(() => fragmentId ? db.fragments.get(fragmentId) : undefined, [fragmentId]);
   const board = useLiveQuery(() => boardId ? db.boards.get(boardId) : undefined, [boardId]);
   const tag = useLiveQuery(() => tagId ? db.tags.get(tagId) : undefined, [tagId]);
   const { language, t } = useI18n();
   const taskCopy = getTaskEnhancementCopy(language);
-  const kanbanCopy = getKanbanCopy(language);
+  const filingCopy = captureCopy(language);
+  const [placementDialog, setPlacementDialog] = useState<{ id: string; mode: CardPlacementMode } | null>(null);
   const editCopy = getContentEditCopy(language);
   const contentTaskCopy = getContentTaskCopy(language);
   const hierarchyCopy = getTaskHierarchyCopy(language);
@@ -157,7 +157,7 @@ export function GlobalContextMenu() {
       x: Math.max(8, Math.min(request.x, window.innerWidth - rect.width - 8)),
       y: Math.max(8, Math.min(request.y, window.innerHeight - rect.height - 8)),
     });
-  }, [request, card, task, highlight, fragment, board, tag]);
+  }, [request, card, task, highlight, board, tag]);
 
   function run(action: () => unknown | Promise<unknown>) {
     setRequest(null);
@@ -172,13 +172,7 @@ export function GlobalContextMenu() {
 
   async function addCardAsTask() {
     if (!card) return;
-    const result = await createUnscheduledContentTask({ title: card.title, sourceKey: `card:${card.id}`, cardId: card.id });
-    showNotice(result.created ? contentTaskCopy.added : contentTaskCopy.alreadyExists);
-  }
-
-  async function addFragmentAsTask() {
-    if (!fragment) return;
-    const result = await createUnscheduledContentTask({ title: fragment.text, sourceKey: `fragment:${fragment.id}` });
+    const result = await createUnscheduledContentTask({ title: isCaptureCard(card) ? card.plainText || card.title : card.title, sourceKey: `card:${card.id}`, cardId: card.id });
     showNotice(result.created ? contentTaskCopy.added : contentTaskCopy.alreadyExists);
   }
 
@@ -216,39 +210,6 @@ export function GlobalContextMenu() {
     const escaped = escapeHtml(text).replace(/\r?\n/g, "<br>");
     const next = await createCard({ title: text.split(/\r?\n/)[0].slice(0, 80), plainText: text, contentHtml: `<p>${escaped}</p>`, state: "active" });
     useAppStore.getState().openCard(next.id);
-  }
-
-  async function cardFromFragment() {
-    if (!fragment) return null;
-    return createCard({ title: fragment.text.slice(0, 34), plainText: fragment.text, contentHtml: `<p>${escapeHtml(fragment.text)}</p>`, state: "active", tagIds: [...fragment.tagIds] });
-  }
-
-  async function sendFragmentToBoard() {
-    const card = await cardFromFragment();
-    if (!card) return;
-    let board = useAppStore.getState().selectedBoardId ? await db.boards.get(useAppStore.getState().selectedBoardId!) : undefined;
-    if (!board) board = (await db.boards.orderBy("updatedAt").reverse().first()) || undefined;
-    if (!board) {
-      const timestamp = Date.now();
-      board = { id: crypto.randomUUID(), title: t("common.untitledBoard"), description: "", favorite: false, tagIds: [], createdAt: timestamp, updatedAt: timestamp };
-      await db.boards.add(board);
-    }
-    const count = await db.boardNodes.where("boardId").equals(board.id).count();
-    await db.boardNodes.add({ id: crypto.randomUUID(), boardId: board.id, kind: "card", cardId: card.id, x: 100 + (count % 3) * 315, y: 100 + Math.floor(count / 3) * 215, width: 265, height: 190 });
-    await touchBoard(board.id);
-    useAppStore.getState().openBoard(board.id);
-  }
-
-  async function sendFragmentToKanban() {
-    const card = await cardFromFragment();
-    if (!card) return;
-    let board = useAppStore.getState().selectedKanbanBoardId ? await db.kanbanBoards.get(useAppStore.getState().selectedKanbanBoardId!) : undefined;
-    if (!board) board = (await db.kanbanBoards.orderBy("updatedAt").reverse().first()) || undefined;
-    if (!board) board = await createKanbanBoard(kanbanCopy.untitledBoard, [...kanbanCopy.defaultLists]);
-    let list = await db.kanbanLists.where("boardId").equals(board.id).sortBy("order").then((items) => items[0]);
-    if (!list) list = await createKanbanList(board.id, kanbanCopy.defaultLists[0]);
-    if (list) await placeCardOnKanban(board.id, list.id, card.id);
-    useAppStore.getState().openKanbanBoard(board.id);
   }
 
   async function duplicateBoard() {
@@ -304,7 +265,7 @@ export function GlobalContextMenu() {
     if (!value) return;
     try {
       if (editDialog.kind === "task") await updateTaskEverywhere(editDialog.id, { title: value });
-      if (editDialog.kind === "fragment") await db.fragments.update(editDialog.id, { text: value, updatedAt: Date.now() });
+      if (editDialog.kind === "fragment") await updateCaptureFragment(editDialog.id, { text: value });
       if (editDialog.kind === "highlight") await db.highlights.update(editDialog.id, { text: value, note: editDialog.noteDraft.trim() });
       setEditDialog(null);
     } catch (error) {
@@ -324,10 +285,11 @@ export function GlobalContextMenu() {
     }
   }
 
-  if (!request && !renameDialog && !dueDialog && !editDialog && !childDialog && !notice) return null;
+  if (!request && !renameDialog && !dueDialog && !editDialog && !childDialog && !notice && !placementDialog) return null;
 
   return (
     <>
+    {placementDialog && <CardPlacementDialog cardId={placementDialog.id} mode={placementDialog.mode} onClose={() => setPlacementDialog(null)} />}
     {request &&
     <div
       ref={ref}
@@ -345,6 +307,12 @@ export function GlobalContextMenu() {
         {card.sourceUrl && <button type="button" role="menuitem" onClick={() => run(() => window.open(card.sourceUrl, "_blank", "noopener,noreferrer"))}><ArrowUpRight size={15} />{t("context.openOriginal")}</button>}
         {card.state !== "trash" && <button type="button" role="menuitem" data-menu-action="convert-board" onClick={() => run(() => { useAppStore.getState().openCard(card.id, { allowInactive: card.state === "archived" || card.state === "trash" }); useAppStore.getState().openAIWithAction(t("card.convertToBoardPrompt")); })}><PanelsTopLeft size={15} />{t("card.convertToBoard")}</button>}
         {card.state !== "trash" && <button type="button" role="menuitem" data-menu-action="to-task" onClick={() => run(addCardAsTask)}><ListTodo size={15} />{contentTaskCopy.menuLabel}</button>}
+        {card.state !== "trash" && card.state !== "archived" && <>
+          <button type="button" role="menuitem" data-menu-action="categorize" onClick={() => { setPlacementDialog({ id: card.id, mode: "topic" }); setRequest(null); }}><FolderOpen size={15} />{filingCopy.topic}</button>
+          <button type="button" role="menuitem" data-menu-action="to-whiteboard" onClick={() => { setPlacementDialog({ id: card.id, mode: "board" }); setRequest(null); }}><PanelsTopLeft size={15} />{filingCopy.board}</button>
+          <button type="button" role="menuitem" data-menu-action="to-kanban" onClick={() => { setPlacementDialog({ id: card.id, mode: "kanban" }); setRequest(null); }}><SquareKanban size={15} />{filingCopy.kanban}</button>
+          {card.captureStatus === "unfiled" && <button type="button" role="menuitem" data-menu-action="file-capture" onClick={() => run(() => db.cards.update(card.id, { captureStatus: "filed", updatedAt: Date.now() }))}><CheckCircle2 size={15} />{filingCopy.filed}</button>}
+        </>}
         <button type="button" role="menuitem" onClick={() => run(() => db.cards.update(card.id, { favorite: !card.favorite, updatedAt: Date.now() }))}>{card.favorite ? <PinOff size={15} /> : <Pin size={15} />}{card.favorite ? t("context.unpinCard") : t("context.pinCard")}</button>
         <button type="button" role="menuitem" data-menu-action="duplicate" onClick={() => run(duplicateCard)}><FilePlus2 size={15} />{t("context.duplicate")}</button>
         <button type="button" role="menuitem" onClick={() => run(() => writeAppClipboard({ kind: "card-ref", cardId: card.id }, `${card.title}\n\n${card.plainText}`))}><Copy size={15} />{t("context.copyCard")}</button>
@@ -379,19 +347,6 @@ export function GlobalContextMenu() {
         <button type="button" role="menuitem" onClick={() => run(() => copyText(highlight.text))}><Copy size={15} />{t("context.copyHighlight")}</button>
         <i className="context-separator" />
         <button type="button" role="menuitem" className="is-danger" onClick={() => run(() => db.highlights.delete(highlight.id))}><Trash2 size={15} />{t("context.deleteHighlight")}</button>
-      </>}
-
-      {fragment && <>
-        <header><span>{t("context.fragmentActions")}</span><b>{fragment.text.slice(0, 42)}</b></header>
-        <button type="button" role="menuitem" data-menu-action="edit" onClick={() => { setRequest(null); setEditDialog({ kind: "fragment", id: fragment.id, draft: fragment.text }); }}><Pencil size={15} />{editCopy.edit}</button>
-        <button type="button" role="menuitem" onClick={() => run(() => db.fragments.update(fragment.id, { pinned: !fragment.pinned, updatedAt: Date.now() }))}>{fragment.pinned ? <PinOff size={15} /> : <Pin size={15} />}{fragment.pinned ? t("context.unpin") : t("context.pin")}</button>
-        <button type="button" role="menuitem" onClick={() => run(async () => { const card = await cardFromFragment(); if (card) useAppStore.getState().openCard(card.id, { allowInactive: card.state === "archived" || card.state === "trash" }); })}><FilePlus2 size={15} />{t("context.toCard")}</button>
-        <button type="button" role="menuitem" onClick={() => run(sendFragmentToBoard)}><PanelsTopLeft size={15} />{t("context.toBoard")}</button>
-        <button type="button" role="menuitem" onClick={() => run(sendFragmentToKanban)}><SquareKanban size={15} />{t("context.toKanban")}</button>
-        <button type="button" role="menuitem" data-menu-action="to-task" onClick={() => run(addFragmentAsTask)}><ListTodo size={15} />{contentTaskCopy.menuLabel}</button>
-        <button type="button" role="menuitem" onClick={() => run(() => writeAppClipboard({ kind: "fragment-ref", fragmentId: fragment.id }, fragment.text))}><Copy size={15} />{t("context.copyText")}</button>
-        <i className="context-separator" />
-        <button type="button" role="menuitem" className="is-danger" onClick={() => run(() => deleteFragmentPermanently(fragment.id))}><Trash2 size={15} />{t("context.deleteFragment")}</button>
       </>}
 
       {board && <>

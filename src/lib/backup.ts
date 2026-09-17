@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { migrateLegacyFragments } from "./captureCards";
 import { db } from "../db";
 import { intlLocale, translate } from "../i18n";
 import { useAppStore } from "../store";
@@ -21,6 +22,7 @@ export async function estimateNoteStorageBytes() {
 }
 
 export async function createBackupObject() {
+  await migrateLegacyFragments();
   const snapshot = await db.transaction("r", db.tables, async () => {
     const records = await Promise.all(TABLES.map(async (table) => [table, await db.table(table).toArray()] as const));
     return { records, attachments: await db.attachments.toArray() };
@@ -40,6 +42,7 @@ export async function createBackupObject() {
 }
 
 export async function createIncrementalBackupPayload() {
+  await migrateLegacyFragments();
   await migrateLegacyAttachments();
   const snapshot = await db.transaction("r", db.tables, async () => {
     const records = await Promise.all(TABLES.map(async (table) => [table, await db.table(table).toArray()] as const));
@@ -81,6 +84,7 @@ export async function saveJsonBackup() {
 }
 
 export async function saveMarkdownArchive() {
+  await migrateLegacyFragments();
   const language = useAppStore.getState().language || "zh-TW";
   const zip = new JSZip();
   const cards = await db.cards.toArray();
@@ -134,14 +138,15 @@ export async function restoreBackup(raw: string, backupFilePath = "") {
       storage: "indexeddb",
       blob: dataUrlToBlob(String(item.blob || "")),
     }));
-  await runWithoutGlobalHistory(async () => {
+  await runWithoutGlobalHistory(() => db.transaction("rw", db.tables, async () => {
     for (const table of db.tables.filter((table) => !table.name.startsWith("sync"))) await table.clear();
     for (const name of TABLES) {
       const values = parsed.data[name];
       if (Array.isArray(values) && values.length) await db.table(name).bulkAdd(values);
     }
     if (restoredAttachments.length) await db.attachments.bulkAdd(restoredAttachments);
-  });
+    await migrateLegacyFragments({ restore: true });
+  }));
   clearGlobalHistory();
   await window.chengjing?.attachments?.cleanup(restoredAttachments.map((attachment: AttachmentRecord) => attachment.relativePath).filter(Boolean) as string[]);
   if (isCommunityIdentity(parsed.communityIdentity)) {

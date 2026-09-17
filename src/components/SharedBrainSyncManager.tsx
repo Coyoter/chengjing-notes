@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db";
+import { getCaptureCard } from "../lib/captureCards";
+import { cardAsFragment } from "../lib/captureModel";
 import { useAppStore } from "../store";
 import { communityApi, getCommunityIdentity } from "../lib/community";
 import { journalBrainTitle } from "../lib/brain";
@@ -39,7 +41,8 @@ export function SharedBrainSyncManager() {
         return { shareId: share.id, remoteId: share.remoteId, title: board.title, body: [board.description, looseText].filter(Boolean).join("\n") || board.title, sourceUpdatedAt: board.updatedAt, shareUpdatedAt: share.updatedAt, missing: false };
       }
       if (share.localType === "fragment") {
-        const fragment = await db.fragments.get(share.localId);
+        const card = await getCaptureCard(share.localId);
+        const fragment = card ? cardAsFragment(card) : await db.fragments.get(share.localId);
         return fragment ? { shareId: share.id, remoteId: share.remoteId, title: fragment.text.slice(0, 36), body: fragment.text, sourceUpdatedAt: fragment.updatedAt, shareUpdatedAt: share.updatedAt, missing: false } : { shareId: share.id, remoteId: share.remoteId, title: "", body: "", sourceUpdatedAt: 0, shareUpdatedAt: share.updatedAt, missing: true };
       }
       const task = await db.tasks.get(share.localId);

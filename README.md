@@ -1,4 +1,4 @@
-# 澄境筆記 ChengJing Notes v0.10.8
+# 澄境筆記 ChengJing Notes v0.10.9
 
 <p align="center">
   <a href="README.md"><strong>繁體中文</strong></a>
@@ -24,7 +24,7 @@
 
 ## 直接安裝
 
-**v0.10.8 為 macOS ARM64 更新**：封存可見性修正，以及卡片庫／資料庫整合。[更新內容與其他平台範圍](docs/releases/v0.10.8.md)。本次沒有新的 Windows 安裝檔或 Android APK；下方 v0.10.0 為先前跨平台版本。
+**v0.10.9 為 macOS ARM64 更新**：隻言片語直接成為未整理卡片，標籤與卡片庫共用，右鍵即可整理。[更新內容與資料搬移說明](docs/releases/v0.10.9.md)。本次沒有新的 Windows 安裝檔或 Android APK；下方 v0.10.0 為先前跨平台版本。
 
 跨平台正式發布：[0.10.0 Android、Mac、Windows 與更新說明](https://github.com/Coyoter/chengjing-notes/releases/tag/v0.10.0)。可直接更新，不需移除。Google Play 上架另行處理；GitHub 發布不代表已通過 Play 審核。Google 雙向同步需各裝置使用本次相容同步版，舊桌面 v0.9.5 仍是備份功能。已測範圍與已知限制請見 [Android 說明](ANDROID.md)。
 
@@ -56,7 +56,7 @@ Windows ARM 電腦請下載 ARM64；一般 Intel／AMD 電腦請下載 x64。目
 - 自訂 AI Provider：可連接多組 OpenAI 相容 Gateway 或本機 Ollama，逐組選擇 Chat Completions／Responses API，並支援模型清單、測試與加密金鑰
 - Gemma 4 E2B：WebGPU 隨選下載、本機生成、進度顯示與移除
 - AI 全域助理、卡片快捷動作與安全動作計畫；自然語言可真正新增、修改、刪除卡片、白板、待辦與隻言片語，並追加日誌
-- 隻言片語：兩三個字即可保存、釘選、修改、複製、轉成卡片、送進白板／看板或第二大腦
+- 隻言片語：輸入即成為未整理卡片，標籤與卡片庫共用；可直接修改、釘選、歸類或加入待辦／白板／看板
 - 系統快速記錄：macOS 選單列預設 ⌘\，Windows 系統匣預設 Ctrl+\；皆可自訂全域快捷鍵並在登入時靜默啟動
 - 差異式全域操作歷史：頂端上一步／下一步按鈕，以及 macOS ⌘Z／⌘X、Windows Ctrl+Z／Ctrl+X；每次只保存本次變更，不複製整座資料庫
 - 右側許願池：與共享大腦共用單一身分、兩層留言、管理員回覆與刪除，全程留在澄境視窗內

@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable, type Transaction } from "dexie";
+import { captureCardRecord, cardAsFragment } from "./lib/captureModel";
 import { markBackupChanged } from "./lib/backupChanges";
 import { installSyncJournal } from "./lib/syncJournal";
 import { ignoreTransactionHistory, transactionHistoryIgnored } from "./lib/historyTransactions";
@@ -147,6 +148,9 @@ class ChengJingDatabase extends Dexie {
     // Two offline devices can independently create a reflection for the same day.
     // Preserve both reports instead of rejecting the entire incoming sync batch.
     this.version(15).stores({ brainReports: "id, date, updatedAt" });
+    this.version(16).stores({
+      cards: "id, title, kind, state, updatedAt, createdAt, journalDate, collectionId, *tagIds, favorite, startAt, dueAt, taskSyncState, *searchTerms, captureStatus, legacyFragmentId",
+    });
     installSyncJournal(this);
 
     this.cards.hook("creating", (_key, card) => {
@@ -599,7 +603,8 @@ export async function pruneCardVersions(cardId: string, now = Date.now()) {
 
 export function cardVersionIdsToKeep(versions: CardVersionRecord[], now = Date.now()) {
   const sorted = [...versions].sort((left, right) => right.createdAt - left.createdAt);
-  const keep = new Set(sorted.slice(0, 30).map((version) => version.id));
+  // Legacy conflicts are recovery records, not disposable editing snapshots.
+  const keep = new Set([...sorted.slice(0, 30), ...sorted.filter((version) => version.legacyFragment)].map((version) => version.id));
   const daily = new Set<string>();
   const monthly = new Set<string>();
   const oneYear = 365 * 86_400_000;
@@ -678,22 +683,23 @@ export async function pruneAllCardVersions() {
 export async function restoreCardVersion(versionId: string) {
   const version = await db.cardVersions.get(versionId);
   if (!version) throw new Error(translate(useAppStore.getState().language || "zh-TW", "db.versionMissing"));
-  await updateCardWithHistory(version.cardId, { title: version.title, contentHtml: version.contentHtml, plainText: version.plainText });
+  await updateCardWithHistory(version.cardId, { title: version.title, contentHtml: version.contentHtml, plainText: version.plainText, ...(version.legacyFragment ? { tagIds: [...version.legacyFragment.tagIds], favorite: version.legacyFragment.pinned } : {}) });
 }
 
-export async function createFragment(text: string, tagIds: string[] = []): Promise<FragmentRecord> {
+export async function createFragment(text: string, tagIds: string[] = [], options: { id?: string; pinned?: boolean } = {}): Promise<FragmentRecord> {
   const timestamp = Date.now();
   const fragment: FragmentRecord = {
-    id: crypto.randomUUID(),
+    id: options.id || crypto.randomUUID(),
     text: text.trim(),
-    pinned: false,
+    pinned: options.pinned || false,
     tagIds: [...new Set(tagIds)],
     createdAt: timestamp,
     updatedAt: timestamp,
   };
   if (!fragment.text) throw new Error(translate(useAppStore.getState().language || "zh-TW", "db.fragmentEmpty"));
-  await db.fragments.add(fragment);
-  return fragment;
+  const card = captureCardRecord(fragment);
+  await db.cards.add(card);
+  return cardAsFragment(card);
 }
 
 export async function moveCardToTrash(cardId: string) {
@@ -742,14 +748,10 @@ export async function deleteCardPermanently(cardId: string) {
 }
 
 export async function deleteFragmentPermanently(fragmentId: string) {
-  const brainEdges = await db.brainEdges.filter((edge) =>
-    (edge.sourceType === "fragment" && edge.sourceId === fragmentId) ||
-    (edge.targetType === "fragment" && edge.targetId === fragmentId),
-  ).toArray();
-  await db.transaction("rw", [db.fragments, db.brainEdges], async () => {
-    await db.brainEdges.bulkDelete(brainEdges.map((edge) => edge.id));
-    await db.fragments.delete(fragmentId);
-  });
+  const { getCaptureCard, migrateLegacyFragments } = await import("./lib/captureCards");
+  await migrateLegacyFragments();
+  const card = await getCaptureCard(fragmentId);
+  if (card) await deleteCardPermanently(card.id);
 }
 
 export async function deleteBoardPermanently(boardId: string) {
