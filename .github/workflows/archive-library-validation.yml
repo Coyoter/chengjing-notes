@@ -8,13 +8,21 @@ permissions:
 jobs:
   source:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare source for isolated review
-        run: git archive --format=tar HEAD -o /tmp/chengjing-source.tar
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Prepare isolated test dependencies
+        run: |
+          tar --exclude='node_modules/electron/dist' --exclude='node_modules/onnxruntime-node/bin' --exclude='node_modules/onnxruntime-web/dist/*.wasm' --exclude='node_modules/@huggingface/transformers/.cache' -czf /tmp/chengjing-dependencies.tar.gz node_modules
+          du -h /tmp/chengjing-dependencies.tar.gz
       - uses: actions/upload-artifact@v4
         with:
-          name: chengjing-review-source
-          path: /tmp/chengjing-source.tar
+          name: chengjing-test-dependencies
+          path: /tmp/chengjing-dependencies.tar.gz
           retention-days: 1
+          compression-level: 0
