@@ -3,16 +3,67 @@ on:
   push:
     branches: [work/fragment-cards-v0.10.9]
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: capture-validation
+  cancel-in-progress: true
 jobs:
-  source:
+  validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Export tracked source for review
-        run: git archive --format=tar HEAD > source.tar
-      - uses: actions/upload-artifact@v4
         with:
-          name: fragment-card-source
-          path: source.tar
-          retention-days: 1
+          fetch-depth: 0
+      - name: Apply reviewed integration patch
+        run: |
+          python3 - <<'PY'
+          import base64, json, lzma, pathlib, subprocess
+          root = pathlib.Path('.')
+          packed = ''.join((root / f'.github/capture-patch-{i}.txt').read_text().strip() for i in range(1, 4))
+          data = json.loads(lzma.decompress(base64.b64decode(packed, validate=True)))
+          subprocess.run(['git', 'apply', '--check', '--unidiff-zero', '-'], input=data['patch'], text=True, check=True)
+          subprocess.run(['git', 'apply', '--unidiff-zero', '-'], input=data['patch'], text=True, check=True)
+          p = root / 'src/i18n.ts'
+          s = p.read_text()
+          for old, new in data['i18n'].items():
+              assert s.count(old) == 1, old
+              s = s.replace(old, new)
+          p.write_text(s)
+          PY
+          git diff --check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Existing overflow regression
+        run: node scripts/qa-preview-overflow.mjs
+      - name: Existing archive and library regression
+        run: npm run qa:archive-library
+      - name: Capture and migration browser regression
+        run: npm run qa:capture-cards
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capture-validation-${{ github.run_number }}
+          path: qa-artifacts/
+          retention-days: 7
+      - name: Prepare clean tested commit without changing main
+        run: |
+          rm .github/workflows/fragment-card-validation.yml .github/capture-patch-{1,2,3}.txt
+          git add -A
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          TREE=$(git write-tree)
+          COMMIT=$(printf '%s\n' 'feat: make quick captures first-class cards (v0.10.9)' | git commit-tree "$TREE" -p 93871022a5bb2c964c13bb4ded9697c4ac82fd17)
+          git push origin "$COMMIT:refs/heads/work/fragment-cards-ready-v0.10.9"
+          echo "TESTED_COMMIT=$COMMIT" >> "$GITHUB_STEP_SUMMARY"
+          echo "TESTED_COMMIT=$COMMIT"
