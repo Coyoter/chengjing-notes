@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   recover:
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -79,8 +79,10 @@ jobs:
           opener=urllib.request.build_opener(NoRedirect())
           # Small files first; mobile packages before desktop packages. Never overwrite
           # completed uploads or delete anything outside this exact new draft release.
+          # Resume the remaining large upload from a different runner without a short
+          # client-side read timeout aborting the request while GitHub saves its bytes.
           for name in sorted(names,key=lambda item:expected[item][0]):
-              for attempt in range(4):
+              for attempt in range(2):
                   value,assets=read_release()
                   assert value['draft'] is True, 'Release was published concurrently; stopping writes'
                   item=assets.get(name)
@@ -103,7 +105,7 @@ jobs:
                       'X-GitHub-Api-Version':'2022-11-28',
                       'User-Agent':'ChengJing-Verified-Release-Recovery'})
                   try:
-                      with opener.open(request,timeout=180) as response:
+                      with opener.open(request,timeout=600) as response:
                           uploaded=json.load(response)
                       assert uploaded['name']==name
                       value,assets=read_release()
