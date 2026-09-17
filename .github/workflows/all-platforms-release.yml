@@ -121,6 +121,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npx playwright install chromium
       - name: Build and verify Apple Silicon DMG
         env:
           CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET }}
@@ -156,6 +157,7 @@ jobs:
           go-version-file: tools/windows-installer/go.mod
           cache: false
       - run: npm ci
+      - run: npx playwright install chromium
       - name: Build and inspect both native Windows installers
         env:
           CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET }}
@@ -214,6 +216,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - run: npm ci
       - name: Restore existing production signing key, never generate a replacement
@@ -275,6 +280,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - run: npm ci
       - name: Compile Android and run native unit tests without distributing a debug package
