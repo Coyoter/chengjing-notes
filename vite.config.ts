@@ -12,6 +12,7 @@ export default defineConfig({
     format: "es",
   },
   optimizeDeps: {
+    entries: ["index.html"],
     exclude: ["@huggingface/transformers"],
   },
   build: {
@@ -19,4 +20,3 @@ export default defineConfig({
     chunkSizeWarningLimit: 2500,
   },
 });
-

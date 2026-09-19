@@ -1,5 +1,6 @@
 const { providerPreferencesForRoutingMode } = require("./openrouter-routing.cjs");
 const PARAMETER_ERROR_STATUSES = new Set([400, 404, 422]);
+const compatibilityCache = new Map();
 
 function errorDetail(payload, secret = "") {
   const error = payload?.error || {};
@@ -71,6 +72,15 @@ function buildChatBody(request = {}) {
 
 async function openRouterChat(fetchImpl, apiKey, request, signal) {
   let body = buildChatBody(request);
+  const original = body;
+  const cacheKey = JSON.stringify([body.model, request.routingMode, request.responseFormat]);
+  const cached = compatibilityCache.get(cacheKey);
+  if (cached?.expires > Date.now()) {
+    if (cached.noReasoning) { const { reasoning, ...rest } = body; body = rest; }
+    if (cached.noTemperature) { const { temperature, ...rest } = body; body = rest; }
+    if (cached.format !== body.response_format?.type && body.response_format?.type === "json_schema") body = compatibleBody(body, 400, { error: { message: "json_schema unsupported" } });
+    if (cached.format === undefined && body.response_format?.type === "json_object") body = compatibleBody(body, 400, { error: { message: "json_object unsupported" } });
+  }
   let emptyRetried = false;
   for (let attempt = 0; attempt < 6; attempt++) {
     const response = await fetchImpl("https://openrouter.ai/api/v1/chat/completions", {
@@ -110,9 +120,14 @@ async function openRouterChat(fetchImpl, apiKey, request, signal) {
       }
       throw new Error("openrouter-no-text");
     }
+    if (text && original.response_format) {
+      compatibilityCache.delete(cacheKey);
+      compatibilityCache.set(cacheKey, { format: body.response_format?.type, noReasoning: Boolean(original.reasoning && !body.reasoning), noTemperature: !Object.hasOwn(body, "temperature"), expires: Date.now() + 30 * 60_000 });
+      if (compatibilityCache.size > 64) compatibilityCache.delete(compatibilityCache.keys().next().value);
+    }
     return { text, model: payload.model || body.model, usage: payload.usage || null, finishReason: choice?.finish_reason || null };
   }
   throw new Error("openrouter-compatibility-exhausted");
 }
 
-module.exports = { buildChatBody, compatibleBody, errorDetail, openRouterChat, reasoningRejected, schemaRejected, temperatureRejected };
+module.exports = { buildChatBody, compatibleBody, errorDetail, openRouterChat, reasoningRejected, schemaRejected, temperatureRejected, compatibilityCache };

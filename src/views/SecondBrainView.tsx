@@ -5,6 +5,9 @@ import { Html, Line, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import dayjs from "dayjs";
 import { taskBrainOpacity } from "../lib/taskCompletion";
+import { useBrainWorkspace } from "../hooks/useBrainWorkspace";
+import { ANALYSIS_BATCH, brainFingerprint, planBrainAnalysis } from "../lib/brainAnalysis";
+import { brainPerformanceCopy } from "../lib/brainPerformanceCopy";
 import {
   BrainCircuit,
   ExternalLink,
@@ -30,8 +33,9 @@ import { createCard, db, deleteBoardPermanently, deleteCardPermanently, deleteFr
 import { useI18n } from "../hooks/useI18n";
 import { useAppStore } from "../store";
 import type { BrainEdgeRecord, BrainShareRecord } from "../types";
-import { BRAIN_CONNECTION_RESPONSE_FORMAT, LOCAL_BRAIN_SEMANTIC_LIMITS, PRIVATE_BRAIN_VIEWPORT_LIMIT, brainTemporalDistanceDays, buildBrainGraph, buildBrainSemanticContext, parseAIConnections, selectBrainViewportNodes, splitBrainKey, type BrainEdgeView, type BrainNodeView } from "../lib/brain";
+import { BRAIN_CONNECTION_RESPONSE_FORMAT, LOCAL_BRAIN_SEMANTIC_LIMITS, PRIVATE_BRAIN_VIEWPORT_LIMIT, brainTemporalDistanceDays, buildBrainSemanticContext, parseAIConnections, selectBrainViewportNodes, splitBrainKey, type BrainEdgeView, type BrainNodeView } from "../lib/brain";
 import { runAI } from "../lib/ai";
+import { isVisibleCard } from "../lib/cardVisibility";
 import { showContextMenu } from "../lib/contextMenu";
 import { getBrainSemanticCopy } from "../lib/brainSemanticCopy";
 import { renderSafeMarkdown } from "../lib/safeMarkdown";
@@ -348,13 +352,6 @@ export function SecondBrainView() {
   const [mobileSearch, setMobileSearch] = useState(false);
   const [recenter, setRecenter] = useState(0);
   const { language, t } = useI18n();
-  const cards = useLiveQuery(() => db.cards.toArray(), [], []);
-  const boards = useLiveQuery(() => db.boards.toArray(), [], []);
-  const fragments = useMemo(() => [], []); // Captures are already cards, not duplicate neurons.
-  const tasks = useLiveQuery(() => db.tasks.toArray(), [], []);
-  const boardNodes = useLiveQuery(() => db.boardNodes.toArray(), [], []);
-  const tags = useLiveQuery(() => db.tags.toArray(), [], []);
-  const storedEdges = useLiveQuery(() => db.brainEdges.toArray(), [], []);
   const brainShares = useLiveQuery(() => db.brainShares.toArray(), [], []);
   const today = dayjs().format("YYYY-MM-DD");
   const reports = useLiveQuery(() => db.brainReports.where("date").equals(today).reverse().sortBy("updatedAt"), [today], []);
@@ -365,9 +362,16 @@ export function SecondBrainView() {
   const [linkSource, setLinkSource] = useState<string | null>(null);
   const [edgeMenu, setEdgeMenu] = useState<{ edge: BrainEdgeView; x: number; y: number } | null>(null);
   const [query, setQuery] = useState("");
+  const [workPage, setWorkPage] = useState(0);
+  const workspace = useBrainWorkspace(language, query, workPage);
+  const tasks = workspace.tasks;
+  const performanceCopy = brainPerformanceCopy(language);
+  useEffect(() => setWorkPage(0), [query]);
   const [showAllLabels, setShowAllLabels] = useState(true);
   const [viewportFocus, setViewportFocus] = useState<[number, number, number]>([0, 0, 0]);
   const [busy, setBusy] = useState<"links" | "report" | null>(null);
+  const analysisEpoch = useRef(0);
+  const analysisRunning = useRef(false);
   const [notice, setNotice] = useState("");
   const [reportExpanded, setReportExpanded] = useState(false);
   const [reportMinimized, setReportMinimized] = useState(android);
@@ -407,7 +411,7 @@ export function SecondBrainView() {
   const setView = useAppStore((state) => state.setView);
 
   const taskCopy = useMemo(() => getTaskIntegrationCopy(language), [language]);
-  const sourceGraph = useMemo(() => buildBrainGraph({ cards, boards, fragments, tasks, boardNodes, tags, storedEdges, language }), [cards, boards, fragments, tasks, boardNodes, tags, storedEdges, language]);
+  const sourceGraph = workspace.graph;
   const [fadeClock, setFadeClock] = useState(Date.now);
   const taskMap = useMemo(() => new Map(tasks.map(task => [task.id, task])), [tasks]);
   useEffect(() => {
@@ -434,11 +438,7 @@ export function SecondBrainView() {
   const remoteSceneNodes = useMemo(() => sharedNeuronSceneNodes(selectDiscoveryBatch(sharedSummaries, Boolean(communityIdentity))), [communityIdentity, sharedSummaries]);
   const ownedAINodes = useMemo(() => onlyOwnedNodesForAI([...graph.nodes, ...remoteSceneNodes]), [graph.nodes, remoteSceneNodes]);
   const reportHtml = useMemo(() => report ? renderSafeMarkdown(segmentReflection(report.content, language)) : "", [language, report]);
-  const filteredNodes = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase(language);
-    if (!normalized) return graph.nodes;
-    return graph.nodes.filter((node) => `${node.title} ${node.text} ${node.keywords.join(" ")}`.toLocaleLowerCase(language).includes(normalized));
-  }, [graph.nodes, language, query]);
+  const filteredNodes = graph.nodes;
   const filteredRemoteNodes = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase(language);
     if (!normalized) return remoteSceneNodes;
@@ -455,6 +455,7 @@ export function SecondBrainView() {
   const selectedShare = selected ? brainShares.find((item) => item.id === selected.key && item.status === "shared") || null : null;
   const selectedEdges = selected ? graph.edges.filter((edge) => edge.persisted && (edge.source === selected.key || edge.target === selected.key)) : [];
   const model = engine === "custom-provider" ? customProviderModel : customModel.trim() || openRouterModel;
+  useEffect(() => () => { analysisEpoch.current++; }, [engine, model, language, query, workPage]);
   const canvasColor = useMemo(() => {
     const css = getComputedStyle(document.documentElement).getPropertyValue(android ? "--canvas" : "--brain-canvas").trim();
     return css || (theme === "light" ? "#e8e5dc" : "#0d1311");
@@ -713,12 +714,12 @@ export function SecondBrainView() {
     const localMode = engine === "local-gemma";
     const latest = [...ownedAINodes]
       .sort((a, b) => b.observedAt - a.observedAt || b.updatedAt - a.updatedAt)
-      .slice(0, localMode ? LOCAL_BRAIN_SEMANTIC_LIMITS.reportNodeLimit : 90);
+      .slice(0, localMode ? LOCAL_BRAIN_SEMANTIC_LIMITS.reportNodeLimit : ANALYSIS_BATCH.nodes);
     const nodeMap = new Map(ownedAINodes.map((node) => [node.key, node]));
     const semanticLinks = edges
       .filter((edge) => edge.origin !== "structure")
       .sort((a, b) => (b.confidence || 0) - (a.confidence || 0) || Number(b.persisted) - Number(a.persisted))
-      .slice(0, localMode ? LOCAL_BRAIN_SEMANTIC_LIMITS.reportLinkLimit : 48);
+      .slice(0, localMode ? LOCAL_BRAIN_SEMANTIC_LIMITS.reportLinkLimit : 24);
     const context = [
       `${t("brain.repeatedConcepts")}: ${graph.concepts.slice(0, localMode ? 8 : 16).map((item) => `${item.term}(${item.count})`).join(", ") || t("brain.notObvious")}`,
       `${t("brain.recentNeurons")}:`,
@@ -739,6 +740,7 @@ export function SecondBrainView() {
       model,
       temperature: localMode ? 0.35 : Math.min(0.65, temperature),
       maxTokens: localMode ? LOCAL_BRAIN_SEMANTIC_LIMITS.reportMaxTokens : undefined,
+      reasoning: engine === "openrouter" ? { effort: "low", exclude: true } : undefined,
       context,
       prompt: semanticCopy.reportPrompt,
     });
@@ -747,36 +749,40 @@ export function SecondBrainView() {
   }
 
   async function organizeWithAI() {
+    if (workspace.loading || analysisRunning.current) return;
     if (ownedAINodes.length < 2) {
       setNotice(t("brain.needTwo"));
       return;
     }
     const localMode = engine === "local-gemma";
+    const epoch = ++analysisEpoch.current;
+    const providerProfileId = useAppStore.getState().customProviderId;
+    analysisRunning.current = true;
     setBusy("links");
     try {
+      const receiptKey = "brain-analysis-v2:" + JSON.stringify([engine, model, language, providerProfileId]);
+      const saved = (await db.preferences.get(receiptKey))?.value;
+      const receipts = saved && typeof saved === "object" ? saved as Record<string, string> : {};
+      const plan = planBrainAnalysis(ownedAINodes, graph.edges, receipts, localMode ? LOCAL_BRAIN_SEMANTIC_LIMITS.nodeLimit : ANALYSIS_BATCH.nodes);
+      if (!plan.seeds.length) { setNotice(performanceCopy.done); return; }
       const semanticContext = localMode
-        ? buildBrainSemanticContext(
-          ownedAINodes,
-          graph.edges,
-          Date.now(),
-          LOCAL_BRAIN_SEMANTIC_LIMITS.nodeLimit,
-          LOCAL_BRAIN_SEMANTIC_LIMITS.contentLimit,
-          LOCAL_BRAIN_SEMANTIC_LIMITS.candidateLimit,
-          LOCAL_BRAIN_SEMANTIC_LIMITS.existingEdgeLimit,
-        )
-        : buildBrainSemanticContext(ownedAINodes, graph.edges);
-      setNotice(localMode ? semanticCopy.localReading(semanticContext.selectedNodes.length, ownedAINodes.length) : semanticCopy.reading);
+        ? buildBrainSemanticContext(plan.selectedNodes, graph.edges, Date.now(), LOCAL_BRAIN_SEMANTIC_LIMITS.nodeLimit, LOCAL_BRAIN_SEMANTIC_LIMITS.contentLimit, LOCAL_BRAIN_SEMANTIC_LIMITS.candidateLimit, LOCAL_BRAIN_SEMANTIC_LIMITS.existingEdgeLimit)
+        : plan;
+      const batchInstruction = "\nFocus on these new or changed node keys: " + JSON.stringify([...plan.seedKeys]) + ". Each link must touch at least one focus node. Return at most " + (localMode ? 8 : ANALYSIS_BATCH.links) + " links. No reflection prose.";
+      setNotice(performanceCopy.batch + " · " + plan.seeds.length + " / " + plan.pending);
       let response = await runAI({
         engine,
         model,
+        profileId: providerProfileId,
         temperature: localMode ? 0.05 : Math.min(0.28, temperature),
-        maxTokens: localMode ? LOCAL_BRAIN_SEMANTIC_LIMITS.linkMaxTokens : 16_000,
+        maxTokens: localMode ? LOCAL_BRAIN_SEMANTIC_LIMITS.linkMaxTokens : ANALYSIS_BATCH.outputTokens,
         reasoning: !localMode && engine === "openrouter" ? { effort: "low", exclude: true } : undefined,
         responseFormat: BRAIN_CONNECTION_RESPONSE_FORMAT as unknown as Record<string, unknown>,
         context: semanticContext.text,
-        prompt: localMode ? `${semanticCopy.organizePrompt}\n\n${semanticCopy.localPromptSuffix}` : semanticCopy.organizePrompt,
+        prompt: (localMode ? `${semanticCopy.organizePrompt}\n\n${semanticCopy.localPromptSuffix}` : semanticCopy.organizePrompt) + batchInstruction,
       });
       let parsedConnections: ReturnType<typeof parseAIConnections>;
+      if (epoch !== analysisEpoch.current) return;
       try {
         parsedConnections = parseAIConnections(response.text, semanticContext.nodeKeys, language);
         if (["length", "max_output_tokens"].includes(response.finishReason || "") && !parsedConnections.length) throw new Error("truncated-ai-connection-json");
@@ -786,12 +792,13 @@ export function SecondBrainView() {
         response = await runAI({
           engine,
           model,
+          profileId: providerProfileId,
           temperature: 0.05,
-          maxTokens: 32_000,
+          maxTokens: ANALYSIS_BATCH.retryTokens,
           reasoning: engine === "openrouter" ? { effort: "low", exclude: true } : undefined,
           responseFormat: BRAIN_CONNECTION_RESPONSE_FORMAT as unknown as Record<string, unknown>,
           context: semanticContext.text,
-          prompt: `${semanticCopy.organizePrompt}\n\n${semanticCopy.jsonRetryPrompt}`,
+          prompt: `${semanticCopy.organizePrompt}\n\n${semanticCopy.jsonRetryPrompt}` + batchInstruction,
         });
         try {
           parsedConnections = parseAIConnections(response.text, semanticContext.nodeKeys, language);
@@ -801,7 +808,8 @@ export function SecondBrainView() {
       }
       const parsed = parsedConnections
         .filter((connection) => connection.confidence >= 0.62 && connection.reason.trim().length >= 8 && connection.evidence.length >= 2)
-        .slice(0, localMode ? LOCAL_BRAIN_SEMANTIC_LIMITS.maxConnections : 30);
+        .filter((connection) => plan.seedKeys.has(connection.source) || plan.seedKeys.has(connection.target))
+        .slice(0, localMode ? LOCAL_BRAIN_SEMANTIC_LIMITS.maxConnections : ANALYSIS_BATCH.links);
       const existingPairs = new Set(graph.edges.filter((edge) => edge.origin !== "ai").map((edge) => [edge.source, edge.target].sort().join("|")));
       const semanticNodeMap = new Map(semanticContext.selectedNodes.map((node) => [node.key, node]));
       const records: BrainEdgeRecord[] = parsed.filter((connection) => !existingPairs.has([connection.source, connection.target].sort().join("|"))).map((connection) => {
@@ -811,32 +819,31 @@ export function SecondBrainView() {
         const targetNode = semanticNodeMap.get(connection.target)!;
         return { id: crypto.randomUUID(), sourceType: from.type, sourceId: from.id, targetType: to.type, targetId: to.id, origin: "ai", reason: connection.reason, confidence: connection.confidence, relationType: connection.relationType, evidence: connection.evidence, temporalDistanceDays: brainTemporalDistanceDays(sourceNode, targetNode), createdAt: Date.now() };
       });
-      if (!records.length) {
-        setNotice(t("brain.noNewLinks"));
-        return;
-      }
-      await db.transaction("rw", db.brainEdges, async () => {
-        await db.brainEdges.where("origin").equals("ai").filter((edge) => semanticContext.nodeKeys.has(`${edge.sourceType}:${edge.sourceId}`) && semanticContext.nodeKeys.has(`${edge.targetType}:${edge.targetId}`)).delete();
-        await db.brainEdges.bulkAdd(records);
+      if (epoch !== analysisEpoch.current) return;
+      await db.transaction("rw", [db.cards, db.tasks, db.boards, db.brainEdges, db.preferences], async () => {
+        for (const node of semanticContext.selectedNodes) {
+          const table = node.type === "card" ? db.cards : node.type === "task" ? db.tasks : db.boards;
+          const current = await table.get(node.id);
+          if (!current || current.updatedAt !== node.updatedAt || (node.type === "card" && !isVisibleCard(current as import("../types").CardRecord))) throw new Error(performanceCopy.stale);
+        }
+        for (const record of records) {
+          const related = await db.brainEdges.where("[sourceType+sourceId]").anyOf([[record.sourceType, record.sourceId], [record.targetType, record.targetId]]).toArray();
+          const existing = related.find((edge) =>
+            (edge.sourceType === record.sourceType && edge.sourceId === record.sourceId && edge.targetType === record.targetType && edge.targetId === record.targetId) ||
+            (edge.targetType === record.sourceType && edge.targetId === record.sourceId && edge.sourceType === record.targetType && edge.sourceId === record.targetId));
+          if (!existing) await db.brainEdges.add(record);
+          else if (existing.origin === "ai") await db.brainEdges.put({ ...record, id: existing.id, createdAt: existing.createdAt });
+        }
+        const nextReceipts = { ...receipts };
+        plan.seeds.forEach((node) => { nextReceipts[node.key] = brainFingerprint(node); });
+        await db.preferences.put({ key: receiptKey, value: Object.fromEntries(Object.entries(nextReceipts).slice(-4000)) });
       });
-      const refreshedEdges: BrainEdgeView[] = [
-        ...graph.edges.filter((edge) => edge.origin !== "ai" || !semanticContext.nodeKeys.has(edge.source) || !semanticContext.nodeKeys.has(edge.target)),
-        ...records.map((edge) => ({ id: edge.id, source: `${edge.sourceType}:${edge.sourceId}`, target: `${edge.targetType}:${edge.targetId}`, origin: "ai" as const, reason: edge.reason || t("brain.aiPossible"), confidence: edge.confidence, relationType: edge.relationType, evidence: edge.evidence, temporalDistanceDays: edge.temporalDistanceDays, persisted: true })),
-      ];
-      if (localMode) {
-        setNotice(semanticCopy.localLinksOnly(records.length));
-        return;
-      }
-      setNotice(semanticCopy.updatingReflection);
-      try {
-        await writeSemanticReport(refreshedEdges);
-        setNotice(semanticCopy.linksAndReport(records.length));
-      } catch {
-        setNotice(semanticCopy.linksReportFailed(records.length));
-      }
+      workspace.refresh();
+      setNotice((records.length ? performanceCopy.finish : t("brain.noNewLinks")) + " · " + Math.max(0, plan.pending - plan.seeds.length));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t("brain.organizeFailed"));
     } finally {
+      analysisRunning.current = false;
       setBusy(null);
     }
   }
@@ -877,6 +884,12 @@ export function SecondBrainView() {
         <h2>{t("brain.summary", { nodes: graph.nodes.length, edges: graph.edges.filter((edge) => edge.persisted).length })}</h2>
         <p>{taskCopy.brainDescription}</p>
         <small className="brain-viewport-status">{semanticCopy.viewportStatus(sceneNodes.length, graph.nodes.length)}</small>
+        <small className="brain-viewport-status" style={{ display: "block" }}>{workspace.loading ? performanceCopy.loading : performanceCopy.scope}</small>
+        <div className="brain-batch-nav" role="navigation" aria-label={performanceCopy.scope}>
+          <button type="button" className="text-button" disabled={workspace.loading || busy !== null || workPage === 0} onClick={() => setWorkPage((page) => Math.max(0, page - 1))}>{performanceCopy.newer}</button>
+          <small>{workPage + 1}</small>
+          <button type="button" className="text-button" disabled={workspace.loading || busy !== null || !workspace.hasMore} onClick={() => setWorkPage((page) => page + 1)}>{performanceCopy.older}</button>
+        </div>
       </header>
 
       {android && <div className="brain-mobile-bar"><button aria-label={t("brain.search")} className={query?"is-active":""} onClick={()=>setMobileSearch(!mobileSearch)}><Search size={20}/></button><button aria-label={language.startsWith("zh")?"回到中心":"Recenter"} onClick={()=>{setQuery("");setRecenter(value=>value+1)}}><Maximize2 size={20}/></button><button aria-label={language.startsWith("zh")?"今日反思":"Today's reflection"} onClick={()=>setReportMinimized(value=>!value)}><BookOpenText size={20}/></button><button aria-label={language.startsWith("zh")?"大腦工具":"Brain tools"} onClick={()=>setMobileTools(true)}><MoreHorizontal size={22}/></button></div>}
@@ -886,7 +899,7 @@ export function SecondBrainView() {
         {android?<button aria-label={t("brain.closeInfo")} onClick={()=>setMobileTools(false)}><X size={20}/></button>:<label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("brain.search")} />{query && <button type="button" aria-label={t("brain.clearSearch")} onClick={() => setQuery("")}><X size={13} /></button>}</label>}
         <button type="button" className={showAllLabels ? "is-active" : ""} onClick={() => setShowAllLabels(!showAllLabels)} title={showAllLabels ? t("brain.labelsAllTitle") : t("brain.labelsShowTitle")}><Tags size={15} />{showAllLabels ? t("brain.labelsAll") : t("brain.labelsFocus")}</button>
         <button type="button" className={linkMode ? "is-active" : ""} onClick={() => { setMobileTools(false);setLinkMode(!linkMode); setLinkSource(null); setNotice(!linkMode ? t("brain.linkEnter") : t("brain.linkExit")); }}><Link2 size={15} />{linkMode ? t("brain.linkActive") : t("brain.linkManual")}</button>
-        <button type="button" disabled={busy !== null} onClick={organizeWithAI} title={engine === "local-gemma" ? semanticCopy.localButtonHint : undefined}>{busy === "links" ? <LoaderCircle size={15} className="spin" /> : <Sparkles size={15} />}{t("brain.organize")}</button>
+        <button type="button" disabled={busy !== null || workspace.loading} onClick={organizeWithAI} title={engine === "local-gemma" ? semanticCopy.localButtonHint : undefined}>{busy === "links" ? <LoaderCircle size={15} className="spin" /> : <Sparkles size={15} />}{t("brain.organize")}</button>
         <button type="button" className={exploreShared ? "is-active is-shared-discovery" : ""} disabled={sharedLoading} onClick={() => setExploreShared((value) => { if (value) { setSelectedRemoteId(null); setRemoteDetail(null); } return !value; })}>{sharedLoading ? <LoaderCircle size={15} className="spin" /> : <Waves size={15} />}{sharedCopy.explore}</button>
         <button type="button" className={adminToken ? "is-admin" : ""} onClick={() => setModerationOpen(true)} title={sharedCopy.adminTools}><ShieldCheck size={15} /></button>
       </div>}
@@ -895,7 +908,7 @@ export function SecondBrainView() {
         <span><MousePointer2 size={14} />{t("brain.rotate")}</span><span><Maximize2 size={14} />{t("brain.zoom")}</span><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>{t("brain.move")}</span>
       </aside>
 
-      {notice && <div className="brain-notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice("")}><X size={14} /></button></div>}
+      {(notice || workspace.error) && <div className="brain-notice" role="status"><span>{notice || workspace.error}</span><button type="button" onClick={() => { setNotice(""); if (workspace.error) workspace.refresh(); }}><X size={14} /></button></div>}
 
       {selected && !selectedRemoteId && <aside className="brain-inspector">
         <button type="button" className="bare-button" onClick={() => setSelectedKey(null)} aria-label={t("brain.closeInfo")}><X size={16} /></button>

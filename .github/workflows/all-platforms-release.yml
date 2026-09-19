@@ -102,6 +102,14 @@ jobs:
           npm run qa:capture-cards
           npm run qa:library-tag-colors
           npm run qa:tag-chip-layout
+      - name: Verify bounded brain loading and incremental AI behavior
+        run: |
+          npx vite --config vite.config.ts --host 127.0.0.1 &
+          BRAIN_QA_PID=$!
+          trap 'kill "$BRAIN_QA_PID" 2>/dev/null || true' EXIT
+          npx wait-on http://127.0.0.1:5173
+          npm run qa:brain-analysis
+          npm run qa:brain-performance
       - uses: actions/upload-artifact@v4
         if: always()
         with:

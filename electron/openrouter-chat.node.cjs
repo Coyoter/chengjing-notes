@@ -1,9 +1,25 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { buildChatBody, errorDetail, openRouterChat } = require("./openrouter-chat.cjs");
+const { buildChatBody, errorDetail, openRouterChat, compatibilityCache } = require("./openrouter-chat.cjs");
+test.beforeEach(() => compatibilityCache.clear());
 
 const schema = { type: "json_schema", json_schema: { name: "links", strict: false, schema: { type: "object", properties: { connections: { type: "array" } }, required: ["connections"] } } };
 function response(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } }); }
+
+test("successful format fallback is reused without another failing request", async () => {
+  const formats = [];
+  const fetchMock = async (_url, options) => {
+    const body = JSON.parse(options.body); formats.push(body.response_format?.type);
+    return body.response_format?.type === "json_schema" ? response({ error: { message: "json_schema unsupported" } }, 400) : response({ choices: [{ message: { content: '{"connections":[]}' }, finish_reason: "stop" }] });
+  };
+  const request = { model: "cache/model", messages: [], responseFormat: schema };
+  await openRouterChat(fetchMock, "secret", request);
+  await openRouterChat(fetchMock, "secret", request);
+  assert.deepEqual(formats, ["json_schema", "json_object", "json_object"]);
+  for (const value of compatibilityCache.values()) value.expires = 0;
+  await openRouterChat(fetchMock, "secret", request);
+  assert.deepEqual(formats.slice(-2), ["json_schema", "json_object"]);
+});
 
 test("Gemini 拒絕 JSON Schema 時自動改用 JSON 物件且保留本機驗證 schema", async () => {
   const bodies = [];

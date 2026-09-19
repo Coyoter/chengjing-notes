@@ -1,4 +1,6 @@
-# 澄境筆記 ChengJing Notes v0.10.9
+# 澄境筆記 ChengJing Notes v0.10.14
+
+0.10.14 改善第二大腦大量資料與 AI 整理：背景載入近期工作集合、翻頁與完整內文搜尋，AI 分批處理新內容並保留既有連線。[更新說明](docs/releases/v0.10.14.md)
 
 <p align="center">
   <a href="README.md"><strong>繁體中文</strong></a>

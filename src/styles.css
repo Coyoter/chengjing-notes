@@ -1292,6 +1292,8 @@ html[data-quick-capture="true"], html[data-quick-capture="true"] body, html[data
 .second-brain-page > canvas { display: block; width: 100% !important; height: 100% !important; }
 .brain-access-list, .brain-edge-access-list { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .brain-heading { position: absolute; z-index: 10; top: 22px; left: 24px; max-width: 310px; pointer-events: none; }
+.brain-batch-nav { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; padding: 4px 8px; border-radius: 8px; background: var(--surface-1); pointer-events: auto; }
+.brain-batch-nav small { font-size: calc(12px * var(--font-scale)); color: var(--text-muted); }
 .brain-heading > span { display: flex; align-items: center; gap: 7px; color: var(--accent-strong); font-size: calc(12px * var(--font-scale)); font-weight: 700; letter-spacing: 0.08em; }
 .brain-heading h2 { margin: 6px 0 4px; color: var(--text-1); font-size: calc(18px * var(--font-scale)); font-weight: 620; }
 .brain-heading p { margin: 0; color: var(--text-muted); font-size: calc(12.5px * var(--font-scale)); line-height: 1.6; }

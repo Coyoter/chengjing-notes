@@ -1,4 +1,6 @@
-# ChengJing Notes v0.10.9
+# ChengJing Notes v0.10.14
+
+0.10.14 improves Second Brain scalability: background working-set loading, older-content paging, full-text lookup, and incremental AI analysis that preserves existing links. [Release notes](docs/releases/v0.10.14.md)
 
 **v0.10.9 (macOS ARM64):** Every quick capture is now an unfiled card, immediately available in the library and tags. Filing reuses the same card. [Migration and release scope](docs/releases/v0.10.9.md).
 

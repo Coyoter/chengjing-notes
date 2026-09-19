@@ -1,6 +1,6 @@
 {
   "name": "chengjing",
-  "version": "0.10.13",
+  "version": "0.10.14",
   "private": true,
   "author": "Techtarian",
   "description": "澄境 ChengJing — 本機優先的繁體中文視覺筆記與 AI 研究桌面應用",
@@ -33,6 +33,8 @@
     "qa:global-capture": "node scripts/qa-global-capture.mjs",
     "qa:menu-bar": "node scripts/qa-menu-bar.mjs",
     "qa:second-brain": "node scripts/qa-second-brain.mjs",
+    "qa:brain-performance": "node scripts/qa-brain-performance.mjs",
+    "qa:brain-analysis": "node scripts/qa-brain-analysis.mjs",
     "qa:database-share": "node scripts/qa-database-share.mjs",
     "qa:pinned-cards": "node scripts/qa-pinned-cards.mjs",
     "qa:journal-polish": "node scripts/qa-journal-polish.mjs",

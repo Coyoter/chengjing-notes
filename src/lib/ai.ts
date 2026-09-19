@@ -74,6 +74,7 @@ export async function buildSpaceContext(query: string) {
 export async function runAI(options: {
   engine: AIEngine;
   model: string;
+  profileId?: string;
   prompt: string;
   context?: string;
   history?: AIMessage[];
@@ -111,7 +112,7 @@ export async function runAI(options: {
       reasoning: options.reasoning,
       routingMode: useAppStore.getState().openRouterRoutingMode,
   };
-  const profileId = useAppStore.getState().customProviderId;
+  const profileId = options.profileId ?? useAppStore.getState().customProviderId;
   const send = options.engine === "custom-provider"
     ? (payload: typeof request) => window.chengjing!.ai.providerChat({ ...payload, profileId })
     : (payload: typeof request) => window.chengjing!.ai.openRouterChat(payload);
