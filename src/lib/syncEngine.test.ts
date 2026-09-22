@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { beforeAll, beforeEach, afterEach, expect, it } from "vitest";
 import { webcrypto } from "node:crypto";
 import { db } from "../db";
-import { applySyncPacket, pendingSyncPackets, synchronize, reconcileLatestRecords, initializeSyncBaseline } from "./syncEngine";
+import { applySyncPacket, pendingSyncPackets, synchronize, reconcileLatestRecords, initializeSyncBaseline, flushPendingSync } from "./syncEngine";
 beforeAll(() => { Object.defineProperty(crypto, "subtle", { value: webcrypto.subtle }); return db.open(); });
 beforeEach(async () => { localStorage.removeItem("chengjing-sync-enabled");localStorage.removeItem("chengjing-sync-tracking"); await db.transaction("rw",db.tables,async()=>{for(const table of db.tables)await table.clear();});localStorage.setItem("chengjing-sync-enabled","true"); });
 afterEach(() => localStorage.removeItem("chengjing-sync-enabled"));
@@ -100,4 +100,42 @@ it("相同附件的較新名稱生效，但裝置自己的檔案位置不被雲�
   }]});
   expect((await db.attachments.get("asset"))?.name).toBe("new.txt");
   expect((await db.attachments.get("asset"))?.relativePath).toBe("local-file");
+});
+
+it("退出補傳等待進行中的同步，並傳送其間的最後編輯", async () => {
+  await db.fragments.put(fragment("one", "first"));
+  let release!: () => void;
+  const uploading = new Promise<void>(resolve => { release = resolve; });
+  let started!: () => void;
+  const firstUpload = new Promise<void>(resolve => { started = resolve; });
+  const sent: string[] = [];
+  const transport = {
+    list: async () => [], get: async () => "",
+    put: async (_id: string, raw: string) => {
+      sent.push(JSON.parse(raw).operations[0].value.text);
+      if (sent.length === 1) { started(); await uploading; }
+    },
+  };
+  const initial = synchronize(transport);
+  await firstUpload;
+  await db.fragments.put(fragment("one", "final"));
+  const quitting = flushPendingSync(transport);
+  release();
+  await Promise.all([initial, quitting]);
+  expect(sent).toEqual(["first", "final"]);
+  expect(await db.table("syncOutbox").count()).toBe(0);
+});
+
+it("退出無待傳資料或同步暫停時不呼叫網路；失敗仍保留待傳修改", async () => {
+  let calls = 0;
+  const transport = { list: async () => { calls++; throw new Error("offline"); }, get: async () => "", put: async () => {} };
+  await flushPendingSync(transport);
+  expect(calls).toBe(0);
+  await db.fragments.put(fragment("one"));
+  localStorage.removeItem("chengjing-sync-enabled");
+  await flushPendingSync(transport);
+  expect(calls).toBe(0);
+  localStorage.setItem("chengjing-sync-enabled", "true");
+  await expect(flushPendingSync(transport)).rejects.toThrow("offline");
+  expect(await db.table("syncOutbox").count()).toBe(1);
 });

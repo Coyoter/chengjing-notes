@@ -1,5 +1,6 @@
 import { buildBrainGraph } from "./brain";
 import { isVisibleCard } from "./cardVisibility";
+import { taskBrainOpacity } from "./taskCompletion";
 import type { CardRecord, TaskRecord, BoardRecord, BoardNodeRecord, BrainEdgeRecord, TagRecord, AppLanguage } from "../types";
 
 export const BRAIN_WINDOW = { cards: 1000, tasks: 200, boards: 80, search: 100, edges: 2400, boardNodes: 2000 };
@@ -17,6 +18,7 @@ export async function readBrainWorkspace(input: BrainWorkspaceRequest): Promise<
   });
   let scanned = 0;
   const query = input.query.normalize("NFKC").toLocaleLowerCase(input.language).trim();
+  const now = Date.now();
   const matches = (text: string) => !query || text.normalize("NFKC").toLocaleLowerCase(input.language).includes(query);
   function read<T>(store: string, index: string | null, predicate: (value: T) => boolean, limit: number, skip = 0, range?: IDBKeyRange, project: (value: T) => T = (value) => value): Promise<T[]> {
     return new Promise((resolve, reject) => {
@@ -58,7 +60,7 @@ export async function readBrainWorkspace(input: BrainWorkspaceRequest): Promise<
     const limits = query ? { cards: BRAIN_WINDOW.search, tasks: BRAIN_WINDOW.search, boards: BRAIN_WINDOW.search } : BRAIN_WINDOW;
     const [cardRows, taskRows, boardRows] = await Promise.all([
       read<CardRecord>("cards", "updatedAt", (card) => isVisibleCard(card) && matches(`${card.title}\n${card.plainText}`), limits.cards + 1, input.page * limits.cards, undefined, compactCard),
-      read<TaskRecord>("tasks", "updatedAt", (task) => matches(task.title), limits.tasks + 1, input.page * limits.tasks),
+      read<TaskRecord>("tasks", "updatedAt", (task) => taskBrainOpacity(task, now) > 0 && matches(task.title), limits.tasks + 1, input.page * limits.tasks),
       read<BoardRecord>("boards", "updatedAt", (board) => matches(`${board.title}\n${board.description}`), limits.boards + 1, input.page * limits.boards),
     ]);
     const hasMore = cardRows.length > limits.cards || taskRows.length > limits.tasks || boardRows.length > limits.boards;
@@ -94,6 +96,7 @@ export async function readBrainWorkspace(input: BrainWorkspaceRequest): Promise<
     }
     const tags = await getMany<TagRecord>("tags", [...cardMap.values(), ...boards].flatMap((row) => row.tagIds || []));
     const keys = [...cardMap.keys()].map((id) => ["card", id]).concat(visibleTasks.map((row) => ["task", row.id]), boards.map((row) => ["board", row.id]));
+    const visibleKeys = new Set(keys.map(([type, id]) => `${type}:${id}`));
     const edgeMap = new Map<string, BrainEdgeRecord>();
     // Each lookup is indexed and the live relationship set has a hard memory bound.
     await new Promise<void>((resolve, reject) => {
@@ -104,12 +107,15 @@ export async function readBrainWorkspace(input: BrainWorkspaceRequest): Promise<
         request.onsuccess = () => {
           const cursor = request.result;
           if (!cursor || edgeMap.size >= BRAIN_WINDOW.edges) return;
-          const edge = cursor.value as BrainEdgeRecord; edgeMap.set(edge.id, edge); cursor.continue();
+          const edge = cursor.value as BrainEdgeRecord;
+          // Links to another page cannot be drawn here and must not consume this page's budget.
+          if (visibleKeys.has(`${edge.sourceType}:${edge.sourceId}`) && visibleKeys.has(`${edge.targetType}:${edge.targetId}`)) edgeMap.set(edge.id, edge);
+          cursor.continue();
         };
       }
       tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error);
     });
-    const graph = buildBrainGraph({ cards: [...cardMap.values()], tasks: visibleTasks, boards, boardNodes, tags, fragments: [], storedEdges: [...edgeMap.values()], language: input.language });
+    const graph = buildBrainGraph({ cards: [...cardMap.values()], tasks: visibleTasks, boards, boardNodes, tags, fragments: [], storedEdges: [...edgeMap.values()], language: input.language, now });
     return { graph, tasks: visibleTasks, hasMore, scanned, elapsedMs: performance.now() - started };
   } finally { database.close(); }
 }

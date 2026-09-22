@@ -3,9 +3,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AutoBackupManager } from "./AutoBackupManager";
 
-const { isAutoBackupDue, announceAutoBackup } = vi.hoisted(() => ({
+const { isAutoBackupDue, announceAutoBackup, flushPendingSync, reportSyncActivity } = vi.hoisted(() => ({
   isAutoBackupDue: vi.fn(() => true),
   announceAutoBackup: vi.fn(),
+  flushPendingSync: vi.fn(async () => {}),
+  reportSyncActivity: vi.fn(),
 }));
 
 vi.mock("../lib/autoBackup", () => ({
@@ -13,6 +15,8 @@ vi.mock("../lib/autoBackup", () => ({
   isAutoBackupDue,
   prepareCompleteBackup: async () => ({ data: "snapshot", assets: [] }),
 }));
+vi.mock("../lib/syncEngine", () => ({ flushPendingSync }));
+vi.mock("../lib/syncActivity", () => ({ reportSyncActivity }));
 
 let root: Root;
 let exit: () => Promise<void>;
@@ -24,6 +28,8 @@ beforeEach(async () => {
   localStorage.clear();
   isAutoBackupDue.mockReturnValue(true);
   announceAutoBackup.mockClear();
+  flushPendingSync.mockReset().mockResolvedValue(undefined);
+  reportSyncActivity.mockClear();
 
   const settings = {
     enabled: true,
@@ -48,6 +54,7 @@ beforeEach(async () => {
         return () => {};
       },
     },
+    sync: { list: async () => ({ files: [] }), get: vi.fn(), put: vi.fn() },
   } as unknown as NonNullable<Window["chengjing"]>;
 
   root = createRoot(document.createElement("div"));
@@ -122,4 +129,60 @@ it("本機備份失敗後等待一分鐘再重試", async () => {
 
   expect(localWrite).toHaveBeenCalledTimes(2);
   expect(cloudWrite).not.toHaveBeenCalled();
+});
+
+it("退出前先儲存編輯器，未啟用本機備份仍會完成 Google 同步", async () => {
+  localStorage.setItem("chengjing-sync-enabled", "true");
+  isAutoBackupDue.mockReturnValue(false);
+  const flushed = vi.fn();
+  window.addEventListener("chengjing:flush-editors", flushed);
+  const quitting = exit();
+  expect(flushed).toHaveBeenCalledOnce();
+  expect(flushPendingSync).not.toHaveBeenCalled();
+  await act(async () => { await vi.advanceTimersByTimeAsync(750); await quitting; });
+  expect(flushPendingSync).toHaveBeenCalledOnce();
+  expect(localWrite).not.toHaveBeenCalled();
+  expect(cloudWrite).not.toHaveBeenCalled();
+  window.removeEventListener("chengjing:flush-editors", flushed);
+});
+
+it("Google 同步失敗仍完成本機備份，退出重試會再傳送", async () => {
+  localStorage.setItem("chengjing-sync-enabled", "true");
+  flushPendingSync.mockRejectedValueOnce(new Error("offline"));
+  const failed = expect(exit()).rejects.toThrow("offline");
+  await act(async () => { await vi.advanceTimersByTimeAsync(750); await failed; });
+  expect(localWrite).toHaveBeenCalledOnce();
+  expect(reportSyncActivity).toHaveBeenCalledWith("error", "offline");
+
+  const quitting = exit();
+  await act(async () => { await vi.advanceTimersByTimeAsync(750); await quitting; });
+  expect(flushPendingSync).toHaveBeenCalledTimes(2);
+});
+
+it("本機備份失敗仍完成 Google 同步，兩者都停用時只儲存編輯器", async () => {
+  localStorage.setItem("chengjing-sync-enabled", "true");
+  localWrite.mockRejectedValueOnce(new Error("disk unavailable"));
+  const failed = expect(exit()).rejects.toThrow("disk unavailable");
+  await act(async () => { await vi.advanceTimersByTimeAsync(750); await failed; });
+  expect(flushPendingSync).toHaveBeenCalledOnce();
+
+  localStorage.removeItem("chengjing-sync-enabled");
+  isAutoBackupDue.mockReturnValue(false);
+  const quitting = exit();
+  await act(async () => { await vi.advanceTimersByTimeAsync(750); await quitting; });
+  expect(flushPendingSync).toHaveBeenCalledOnce();
+  expect(localWrite).toHaveBeenCalledOnce();
+});
+
+it("尚在等待退出時的重試共用同一流程，返回後可再次退出", async () => {
+  localStorage.setItem("chengjing-sync-enabled", "true");
+  const first = exit();
+  const retry = exit();
+  expect(first).toBe(retry);
+  await act(async () => { await vi.advanceTimersByTimeAsync(750); await first; });
+  expect(flushPendingSync).toHaveBeenCalledOnce();
+  window.dispatchEvent(new Event("chengjing:quit-backup-cancelled"));
+  const again = exit();
+  await act(async () => { await vi.advanceTimersByTimeAsync(750); await again; });
+  expect(flushPendingSync).toHaveBeenCalledTimes(2);
 });

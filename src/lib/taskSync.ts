@@ -27,7 +27,7 @@ export function normalizeEditorTaskHtml(html: string, createId: () => string = c
   const document = new DOMParser().parseFromString(html || "<p></p>", "text/html");
   const seen = new Set<string>();
   const tasks: EditorTaskSnapshot[] = [];
-  document.body.querySelectorAll('ul[data-type="taskList"] li').forEach((item) => {
+  document.body.querySelectorAll('ul[data-type="taskList"] > li').forEach((item) => {
     let sourceTaskId = (item.getAttribute("data-task-id") || "").trim();
     if (!sourceTaskId || seen.has(sourceTaskId)) {
       sourceTaskId = createId();
@@ -60,26 +60,55 @@ export function timestampToDueDateInput(value: number | undefined) {
   return `${year}-${month}-${day}`;
 }
 
+export async function readCompletedRootTasks(hiddenTaskIds: ReadonlySet<string>, limit: number) {
+  if (limit <= 0) return [];
+  return db.tasks.orderBy("updatedAt").reverse()
+    .filter((task) => task.done && !task.parentTaskId && !hiddenTaskIds.has(task.id))
+    .limit(limit).toArray();
+}
+
 async function deleteTaskBrainEdges(taskIds: string[]) {
   if (!taskIds.length) return;
   const ids = new Set(taskIds);
   await db.brainEdges.filter((edge) => (edge.sourceType === "task" && ids.has(edge.sourceId)) || (edge.targetType === "task" && ids.has(edge.targetId))).delete();
 }
 
-export async function syncCardTasksFromHtml(cardId: string, html: string) {
-  const card = await db.cards.get(cardId);
-  if (!card) return normalizeEditorTaskHtml(html);
-  const normalized = normalizeEditorTaskHtml(html);
-  const existing = (await db.tasks.where("cardId").equals(cardId).toArray()).filter((task) => Boolean(task.sourceTaskId));
-  const bySource = new Map(existing.map((task) => [task.sourceTaskId!, task]));
-  const activeSources = new Set(normalized.tasks.map((task) => task.sourceTaskId));
-  const timestamp = Date.now();
+/** Checklist removal must not hide separately created subtasks behind a missing parent. */
+async function preserveChildrenOfRemovedTasks(removed: TaskRecord[]) {
+  const parentIds = new Set<string>();
+  if (!removed.length) return parentIds;
+  const removedById = new Map(removed.map((task) => [task.id, task]));
+  const children = await db.tasks.where("parentTaskId").anyOf([...removedById.keys()]).toArray();
+  for (const child of children) {
+    if (removedById.has(child.id)) continue;
+    const visited = new Set<string>([child.id]);
+    let parentId = child.parentTaskId;
+    while (parentId && removedById.has(parentId) && !visited.has(parentId)) {
+      visited.add(parentId);
+      parentId = removedById.get(parentId)?.parentTaskId;
+    }
+    if (parentId && (visited.has(parentId) || !await db.tasks.get(parentId))) parentId = undefined;
+    await db.tasks.update(child.id, { parentTaskId: parentId, updatedAt: Date.now() });
+    if (parentId) parentIds.add(parentId);
+  }
+  return parentIds;
+}
 
-  await db.transaction("rw", [db.cards, db.tasks, db.brainEdges], async () => {
+export async function syncCardTasksFromHtml(cardId: string, html: string) {
+  return db.transaction("rw", [db.cards, db.tasks, db.brainEdges], async () => {
+    const card = await db.cards.get(cardId);
+    if (!card) return normalizeEditorTaskHtml(html);
+    const normalized = normalizeEditorTaskHtml(html);
+    const existing = (await db.tasks.where("cardId").equals(cardId).toArray()).filter((task) => Boolean(task.sourceTaskId));
+    const bySource = new Map(existing.map((task) => [task.sourceTaskId!, task]));
+    const activeSources = new Set(normalized.tasks.map((task) => task.sourceTaskId));
+    const timestamp = Date.now();
+
     if (normalized.html !== html) await db.cards.update(cardId, { contentHtml: normalized.html, taskSyncState: "synced" });
     for (const snapshot of normalized.tasks) {
       const previous = bySource.get(snapshot.sourceTaskId);
       const changed = !previous || previous.title !== snapshot.title || previous.done !== snapshot.done;
+      if (!changed) continue;
       const record: TaskRecord = {
         ...previous,
         id: previous?.id || editorTaskRecordId(cardId, snapshot.sourceTaskId),
@@ -89,19 +118,21 @@ export async function syncCardTasksFromHtml(cardId: string, html: string) {
         sourceTaskId: snapshot.sourceTaskId,
         dueAt: previous?.dueAt,
         createdAt: previous?.createdAt || timestamp,
-        updatedAt: changed ? timestamp : previous.updatedAt,
+        updatedAt: timestamp,
       };
       await db.tasks.put(record);
     }
     const removed = existing.filter((task) => !activeSources.has(task.sourceTaskId!));
     if (removed.length) {
       const removedIds = removed.map((task) => task.id);
+      const parentIds = await preserveChildrenOfRemovedTasks(removed);
       await deleteTaskBrainEdges(removedIds);
       await db.tasks.bulkDelete(removedIds);
+      for (const parentId of parentIds) await reconcileTaskChain(parentId);
     }
     if (normalized.html === html) await db.cards.update(cardId, { taskSyncState: "synced" });
+    return normalized;
   });
-  return normalized;
 }
 
 export async function syncAllCardTasks() {
@@ -110,10 +141,12 @@ export async function syncAllCardTasks() {
   for (const card of availableCards) await syncCardTasksFromHtml(card.id, card.contentHtml);
   const availableCardIds = new Set(availableCards.map((item) => item.id));
   const stale = await db.tasks.filter((task) => Boolean(task.sourceTaskId) && (!task.cardId || !availableCardIds.has(task.cardId))).toArray();
-  if (stale.length) await db.transaction("rw", [db.tasks, db.brainEdges], async () => {
+  if (stale.length) await db.transaction("rw", [db.cards, db.tasks, db.brainEdges], async () => {
     const staleIds = stale.map((task) => task.id);
+    const parentIds = await preserveChildrenOfRemovedTasks(stale);
     await deleteTaskBrainEdges(staleIds);
     await db.tasks.bulkDelete(staleIds);
+    for (const parentId of parentIds) await reconcileTaskChain(parentId);
   });
 }
 
@@ -138,7 +171,7 @@ export async function syncPendingCardTasks(batchSize = 40, maintenance = false) 
 }
 
 function findLinkedTaskItem(document: Document, sourceTaskId: string) {
-  return [...document.body.querySelectorAll('ul[data-type="taskList"] li')].find((item) => item.getAttribute("data-task-id") === sourceTaskId) || null;
+  return [...document.body.querySelectorAll('ul[data-type="taskList"] > li')].find((item) => item.getAttribute("data-task-id") === sourceTaskId) || null;
 }
 
 async function setTaskDoneDirect(taskId: string, done: boolean) {

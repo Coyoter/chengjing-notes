@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BrainNodeView } from "./brain";
-import { onlyOwnedNodesForAI, selectDiscoveryBatch, sharedNeuronSceneNodes } from "./sharedBrain";
+import { createBrainShareRecord, onlyOwnedNodesForAI, selectDiscoveryBatch, sharedNeuronSceneNodes } from "./sharedBrain";
 import type { SharedNeuronSummary } from "./community";
 
 const localNode: BrainNodeView = { key: "card:mine", type: "card", id: "mine", title: "自己的內容", text: "只允許這段進入 AI", sourceKind: "note", keywords: ["自己"], weight: 1, radius: 0.5, position: [0, 0, 0], createdAt: 1, observedAt: 1, updatedAt: 1 };
@@ -11,6 +11,20 @@ function remote(index: number, author = `陌生人${index}`): SharedNeuronSummar
 }
 
 describe("共享大腦資料邊界", () => {
+  it("首次分享完成只確認送出的版本，請求期間的編輯仍需要同步", () => {
+    const sent = { ...localNode, updatedAt: 1000 };
+    const editedDuringUpload = { ...sent, text: "上傳期間的新內容", updatedAt: 1500 };
+    const record = createBrainShareRecord(sent, "shared-mine", 2000);
+    expect(record.updatedAt).toBe(1000);
+    expect(record.sharedAt).toBe(2000);
+    expect(editedDuringUpload.updatedAt > record.updatedAt).toBe(true);
+  });
+
+  it("Fork 以新建筆記的內容版本確認同步並保留原始出處", () => {
+    const forked = { ...localNode, id: "forked", key: "card:forked", updatedAt: 1200 };
+    const record = createBrainShareRecord(forked, "remote-fork", 1300, "remote-original");
+    expect(record).toMatchObject({ id: "card:forked", localId: "forked", remoteId: "remote-fork", originRemoteId: "remote-original", sharedAt: 1300, updatedAt: 1200 });
+  });
   it("遠端神經元即使已載入場景，也不會進入 AI 輸入集合", () => {
     const scene = sharedNeuronSceneNodes([remote(1)]);
     expect(scene).toHaveLength(1);

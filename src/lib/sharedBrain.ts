@@ -1,5 +1,15 @@
 import type { BrainNodeView } from "./brain";
 import type { SharedNeuronSummary } from "./community";
+import type { BrainShareRecord } from "../types";
+
+export function createBrainShareRecord(
+  snapshot: Pick<BrainNodeView, "key" | "type" | "id" | "updatedAt">,
+  remoteId: string,
+  sharedAt = Date.now(),
+  originRemoteId?: string,
+): BrainShareRecord {
+  return { id: snapshot.key, localType: snapshot.type, localId: snapshot.id, remoteId, status: "shared", sharedAt, updatedAt: snapshot.updatedAt, ...(originRemoteId ? { originRemoteId } : {}) };
+}
 
 export interface SharedNeuronSceneNode {
   kind: "shared-remote";

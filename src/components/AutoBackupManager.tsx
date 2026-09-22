@@ -1,7 +1,17 @@
 import { useEffect, useState } from "react";
 import { announceAutoBackup, isAutoBackupDue, prepareCompleteBackup } from "../lib/autoBackup";
 import { useAppStore } from "../store";
-import { getAutoBackupCopy } from "../lib/autoBackupCopy";
+import { flushPendingSync } from "../lib/syncEngine";
+import { syncEnabled } from "../lib/syncJournal";
+import { reportSyncActivity } from "../lib/syncActivity";
+
+const QUIT_MESSAGES = {
+  "zh-TW": ["正在儲存最後變更…", "正在儲存並完成同步…"],
+  "zh-CN": ["正在保存最后更改…", "正在保存并完成同步…"],
+  en: ["Saving your latest changes…", "Saving and finishing sync…"],
+  ja: ["最新の変更を保存しています…", "保存と同期を完了しています…"],
+  ko: ["최근 변경 사항을 저장하는 중…", "저장 및 동기화를 완료하는 중…"],
+};
 
 export function AutoBackupManager() {
   const [quitting, setQuitting] = useState(false);
@@ -10,7 +20,7 @@ export function AutoBackupManager() {
   useEffect(() => {
     const local = window.chengjing?.backups;
     const lifecycle = window.chengjing?.cloudBackups;
-    if (!local) return;
+    if (!local && !lifecycle?.onBeforeQuit) return;
     const backupBridge = local;
 
     let disposed = false;
@@ -19,6 +29,7 @@ export function AutoBackupManager() {
     let operation: Promise<void> | null = null;
     let exiting = false;
     let debounce = 0;
+    let quitOperation: Promise<void> | null = null;
 
     async function check(exit = false): Promise<void> {
       if (operation) {
@@ -28,6 +39,7 @@ export function AutoBackupManager() {
       }
 
       if (disposed || (!exit && exiting)) return;
+      if (!backupBridge) return;
       if (!exit && Date.now() < retryAfter) return;
 
       operation = (async () => {
@@ -68,19 +80,43 @@ export function AutoBackupManager() {
       setQuitting(false);
     };
 
-    const disposeExit = lifecycle?.onBeforeQuit?.(async () => {
-      exiting = true;
-      (document.activeElement as HTMLElement | null)?.blur();
-      window.dispatchEvent(new Event("chengjing:flush-editors"));
-      setQuitting(true);
+    const disposeExit = lifecycle?.onBeforeQuit?.(() => {
+      if (quitOperation) return quitOperation;
+      quitOperation = (async () => {
+        exiting = true;
+        (document.activeElement as HTMLElement | null)?.blur();
+        window.dispatchEvent(new Event("chengjing:flush-editors"));
+        setQuitting(true);
 
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 750));
-        await check(true);
-      } finally {
-        exiting = false;
-        setQuitting(false);
-      }
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 750));
+          const sync = async () => {
+            if (!syncEnabled()) return;
+            const bridge = window.chengjing?.sync;
+            if (!bridge) throw new Error("sync-bridge-unavailable");
+            try {
+              await flushPendingSync({
+                list: async () => (await bridge.list()).files,
+                get: bridge.get, put: bridge.put, stage: bridge.stage,
+                uploadAsset: bridge.uploadAsset, downloadAsset: bridge.downloadAsset,
+              });
+            } catch (error) {
+              reportSyncActivity("error", error instanceof Error ? error.message : String(error));
+              throw error;
+            }
+          };
+          // Each destination remains independent: a failed cloud upload must not
+          // prevent a due local backup from finishing, or vice versa.
+          const results = await Promise.allSettled([check(true), sync()]);
+          const failure = results.find(result => result.status === "rejected");
+          if (failure?.status === "rejected") throw failure.reason;
+        } finally {
+          exiting = false;
+          quitOperation = null;
+          setQuitting(false);
+        }
+      })();
+      return quitOperation;
     });
 
     window.addEventListener("chengjing:backup-changed", changed);
@@ -119,7 +155,7 @@ export function AutoBackupManager() {
         color: "var(--text-1)",
       }}
     >
-      {getAutoBackupCopy(language).localRunning}
+      {QUIT_MESSAGES[language][syncEnabled() ? 1 : 0]}
     </div>
   ) : null;
 }

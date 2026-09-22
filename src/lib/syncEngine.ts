@@ -175,6 +175,26 @@ export function synchronize(transport: SyncTransport): Promise<void> {
   return active;
 }
 
+/** Finish the final editor save without fetching remote history on every quit. */
+export async function flushPendingSync(transport: SyncTransport): Promise<void> {
+  if (!syncEnabled()) return;
+  if (active) {
+    try { await active; }
+    catch (error) {
+      if (await db.table("syncOutbox").count()) throw error;
+    }
+  }
+  // An upload freezes its outgoing IDs. If the final editor save arrived during
+  // that upload, one more pass must include it before the process can exit.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (!syncEnabled() || !await db.table("syncOutbox").count()) return;
+    await synchronize(transport);
+  }
+  if (syncEnabled() && await db.table("syncOutbox").count()) {
+    throw new Error("sync-pending-changes");
+  }
+}
+
 /**
  * Synchronize first, then hold the workspace exclusively for capture or restore.
  * The callback must not call synchronize(), stagePendingSync(), or this function

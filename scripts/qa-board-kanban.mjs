@@ -140,6 +140,21 @@ await taskCard.dragTo(secondList);
 await page.waitForTimeout(320);
 const cardMoved = await secondList.locator("article").filter({ hasText: "確認首頁資訊架構" }).isVisible();
 
+// 現有卡片選單延後讀取，仍可找到未放在看板的內容，加入後不再重複出現。
+await firstList.getByRole("button", { name: "加入現有卡片", exact: true }).click();
+const existingDialog = page.locator(".project-kanban-modal");
+await existingDialog.getByPlaceholder("搜尋卡片庫").fill("白板原地編輯卡片");
+await existingDialog.getByRole("button").filter({ hasText: "白板原地編輯卡片" }).click();
+await existingDialog.waitFor({ state: "detached" });
+await firstList.locator("article").filter({ hasText: "白板原地編輯卡片" }).waitFor();
+const existingCardAdded = true;
+await page.locator(".project-kanban-inspector > header button").click();
+await firstList.getByRole("button", { name: "加入現有卡片", exact: true }).click();
+await existingDialog.getByPlaceholder("搜尋卡片庫").fill("白板原地編輯卡片");
+await existingDialog.getByText("目前條件沒有符合的卡片。", { exact: true }).waitFor();
+const existingCardExcludedAfterAdd = await existingDialog.getByRole("button").filter({ hasText: "白板原地編輯卡片" }).count() === 0;
+await existingDialog.locator("header > button").click();
+
 await page.locator(".project-kanban-actions button").first().click();
 await page.locator(".project-kanban-actions button.is-active").waitFor();
 const boardFavorited = true;
@@ -156,11 +171,11 @@ await page.evaluate(() => { document.documentElement.dataset.theme = "dark"; });
 
 const report = {
   whiteboard: { noFullscreenOnCreate, cardResized, sectionResized, mindmapResized, fileAppearsOnCanvas, noFullscreenOnImport },
-  kanban: { defaultListsCreated, dueDateSet, tagApplied, attachmentAdded, searchWorks, cardMoved, boardFavorited, kanbanThemeColors },
+  kanban: { defaultListsCreated, dueDateSet, tagApplied, attachmentAdded, searchWorks, cardMoved, existingCardAdded, existingCardExcludedAfterAdd, boardFavorited, kanbanThemeColors },
   errors,
 };
 await fs.writeFile(path.join(output, "summary.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
 await browser.close();
 
-if (!noFullscreenOnCreate || !cardResized || !sectionResized || !mindmapResized || !fileAppearsOnCanvas || !noFullscreenOnImport || !defaultListsCreated || !dueDateSet || !tagApplied || !attachmentAdded || !searchWorks || !cardMoved || !boardFavorited || kanbanThemeColors.dark.token !== "#17211d" || kanbanThemeColors.ink.token !== "#191a16" || kanbanThemeColors.light.token !== "#e5e1d7" || errors.length) process.exitCode = 1;
+if (!noFullscreenOnCreate || !cardResized || !sectionResized || !mindmapResized || !fileAppearsOnCanvas || !noFullscreenOnImport || !defaultListsCreated || !dueDateSet || !tagApplied || !attachmentAdded || !searchWorks || !cardMoved || !existingCardAdded || !existingCardExcludedAfterAdd || !boardFavorited || kanbanThemeColors.dark.token !== "#17211d" || kanbanThemeColors.ink.token !== "#191a16" || kanbanThemeColors.light.token !== "#e5e1d7" || errors.length) process.exitCode = 1;

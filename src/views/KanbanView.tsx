@@ -51,6 +51,7 @@ import { duplicateCardFromId, readAppClipboard, writeAppClipboard } from "../lib
 import { createUnscheduledContentTask } from "../lib/contentTask";
 import { getContentTaskCopy } from "../lib/contentTaskCopy";
 import { useMobileBack } from "../lib/mobileBack";
+import { includesQuery, searchRecords } from "../lib/searchRecords";
 
 type DateFilter = "all" | "overdue" | "today" | "upcoming" | "none";
 type SortMode = "manual" | "title" | "due";
@@ -79,8 +80,13 @@ export function KanbanView() {
   const openCard = useAppStore((state) => state.openCard);
   const boards = useLiveQuery(() => db.kanbanBoards.toArray(), [], []);
   const lists = useLiveQuery<KanbanListRecord[], KanbanListRecord[]>(() => selectedBoardId ? db.kanbanLists.where("boardId").equals(selectedBoardId).sortBy("order") : Promise.resolve([]), [selectedBoardId], []);
-  const placements = useLiveQuery<KanbanPlacementRecord[], KanbanPlacementRecord[]>(() => selectedBoardId ? db.kanbanPlacements.where("boardId").equals(selectedBoardId).sortBy("order") : Promise.resolve([]), [selectedBoardId], []);
-  const cards = useLiveQuery(async () => (await db.cards.where("state").notEqual("trash").toArray()).filter(isVisibleCard), [], []);
+  const { placements, cards } = useLiveQuery(async () => {
+    if (!selectedBoardId) return { placements: [], cards: [] };
+    const placements = await db.kanbanPlacements.where("boardId").equals(selectedBoardId).sortBy("order");
+    const cards = (await db.cards.bulkGet([...new Set(placements.map((placement) => placement.cardId))]))
+      .filter((card): card is CardRecord => Boolean(card && isVisibleCard(card)));
+    return { placements, cards };
+  }, [selectedBoardId], { placements: [] as KanbanPlacementRecord[], cards: [] as CardRecord[] });
   const tags = useLiveQuery(() => db.tags.orderBy("name").toArray(), [], []);
   const attachmentIds = useMemo(() => {
     const cardById = new Map(cards.map((card) => [card.id, card]));
@@ -107,6 +113,12 @@ export function KanbanView() {
   const [existingTargetListId, setExistingTargetListId] = useState<string | null>(null);
   useMobileBack(Boolean(existingTargetListId||selectedPlacementId||boardMenu||listMenu),()=>{if(existingTargetListId)setExistingTargetListId(null);else if(boardMenu||listMenu){setBoardMenu(null);setListMenu(null);}else setSelectedPlacementId(null);});
   const [existingQuery, setExistingQuery] = useState("");
+  const existingCards = useLiveQuery(async () => {
+    if (!existingTargetListId) return [];
+    const placedCardIds = new Set(placements.map((placement) => placement.cardId));
+    return searchRecords(db.cards, existingQuery, language, (card) => isVisibleCard(card) && !placedCardIds.has(card.id)
+      && includesQuery(`${card.title} ${card.plainText}`, existingQuery, language), 18);
+  }, [existingTargetListId, existingQuery, language, placements], []);
   const [inspectorTitleDraft, setInspectorTitleDraft] = useState("");
   const [dropTarget, setDropTarget] = useState<{ listId: string; index: number } | null>(null);
   const [notice, setNotice] = useState("");
@@ -136,8 +148,17 @@ export function KanbanView() {
   }, []);
 
   useEffect(() => {
-    if (selectedPlacementId && !placements.some((placement) => placement.id === selectedPlacementId && cardMap.has(placement.cardId))) setSelectedPlacementId(null);
-  }, [placements, selectedPlacementId, cardMap]);
+    if (!selectedPlacementId || placements.some((placement) => placement.id === selectedPlacementId && placement.boardId === selectedBoardId && cardMap.has(placement.cardId))) return;
+    let canceled = false;
+    // A successful add may finish before the live query publishes its new snapshot.
+    void db.transaction("r", [db.kanbanPlacements, db.cards], async () => {
+      const placement = await db.kanbanPlacements.get(selectedPlacementId);
+      const card = placement ? await db.cards.get(placement.cardId) : undefined;
+      const valid = placement?.boardId === selectedBoardId && card && isVisibleCard(card);
+      if (!canceled && !valid) setSelectedPlacementId((current) => current === selectedPlacementId ? null : current);
+    });
+    return () => { canceled = true; };
+  }, [placements, selectedPlacementId, selectedBoardId, cardMap]);
 
   useEffect(() => {
     setInspectorTitleDraft(selectedCard?.title || "");
@@ -336,12 +357,6 @@ export function KanbanView() {
     const placementId = event.dataTransfer.getData("application/x-chengjing-kanban-placement");
     if (placementId) await moveKanbanPlacement(placementId, targetListId, targetIndex);
   }
-
-  const placedCardIds = new Set(placements.map((placement) => placement.cardId));
-  const existingCards = cards.filter((card) => {
-    const normalized = existingQuery.trim().toLocaleLowerCase(language);
-    return !placedCardIds.has(card.id) && (!normalized || `${card.title} ${card.plainText}`.toLocaleLowerCase(language).includes(normalized));
-  }).slice(0, 18);
 
   if (!board) return <div className="project-kanban-empty"><div><span>{copy.eyebrow}</span><h2>{copy.emptyTitle}</h2><p>{copy.emptyDescription}</p>{creatingBoard ? <form onSubmit={submitBoard}><input autoFocus value={boardDraft} placeholder={copy.boardPlaceholder} onChange={(event) => setBoardDraft(event.target.value)} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} /><button type="submit">{copy.save}</button></form> : <button type="button" className="primary-button" onClick={() => setCreatingBoard(true)}><Plus size={16} />{copy.createFirst}</button>}</div></div>;
 

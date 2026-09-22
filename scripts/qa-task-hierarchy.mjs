@@ -131,9 +131,22 @@ await editorCheckbox.waitFor();
 const editorUncheckedAfterReopen = !await editorCheckbox.isChecked();
 const editorParentSyncs = editorCheckedAfterChild && editorUncheckedAfterReopen;
 
-const report = { hierarchyCreated, visualDepthWorks, parentWaitsForChildren, parentCompletesAfterChildren, reopeningChildReopensParent, nestedDepthWorks, addingChildReopensCompletedParent, completingParentCompletesTree, compactHierarchyWorks, compactMetrics, deletingParentDeletesTree, editorParentSyncs, errors };
+// 把來源核取方塊改回一般文字，不應把另外建立的子待辦一起藏起來。
+await page.locator('.journal-paper .prose-editor li[data-task-id]').filter({ hasText: "完成第一個可執行版本" }).locator("p").first().click();
+await page.locator(".journal-paper").getByRole("button", { name: "待辦清單", exact: true }).click();
+await editorCheckbox.waitFor({ state: "detached" });
+await page.getByRole("button", { name: "待辦", exact: true }).click();
+const preservedChildRow = page.locator(`[data-task-id="${editorChild.id}"]`);
+await preservedChildRow.waitFor();
+tasks = await allTasks();
+const preservedChild = tasks.find((task) => task.id === editorChild.id);
+const editorRemovalPreservesChild = !tasks.some((task) => task.id === editorParent.id)
+  && preservedChild?.parentTaskId === undefined && preservedChild?.cardId === editorParent.cardId
+  && await preservedChildRow.getAttribute("data-task-depth") === "0";
+
+const report = { hierarchyCreated, visualDepthWorks, parentWaitsForChildren, parentCompletesAfterChildren, reopeningChildReopensParent, nestedDepthWorks, addingChildReopensCompletedParent, completingParentCompletesTree, compactHierarchyWorks, compactMetrics, deletingParentDeletesTree, editorParentSyncs, editorRemovalPreservesChild, errors };
 await fs.writeFile(path.join(output, "summary.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
 if (cdpEndpoint) await page.evaluate(() => window.chengjing?.app?.quit?.()).catch(() => {});
 await browser.close();
-if (!hierarchyCreated || !visualDepthWorks || !parentWaitsForChildren || !parentCompletesAfterChildren || !reopeningChildReopensParent || !nestedDepthWorks || !addingChildReopensCompletedParent || !completingParentCompletesTree || !compactHierarchyWorks || !deletingParentDeletesTree || !editorParentSyncs || errors.length) process.exitCode = 1;
+if (!hierarchyCreated || !visualDepthWorks || !parentWaitsForChildren || !parentCompletesAfterChildren || !reopeningChildReopensParent || !nestedDepthWorks || !addingChildReopensCompletedParent || !completingParentCompletesTree || !compactHierarchyWorks || !deletingParentDeletesTree || !editorParentSyncs || !editorRemovalPreservesChild || errors.length) process.exitCode = 1;

@@ -26,7 +26,10 @@ interface SyncItem {
 export function SharedBrainSyncManager() {
   const language = useAppStore((state) => state.language);
   const [identity, setIdentity] = useState(() => getCommunityIdentity());
+  const [completed, setCompleted] = useState(0);
   const running = useRef(new Set<string>());
+  const acknowledged = useRef(new Map<string, number>());
+  const removed = useRef(new Set<string>());
   const items = useLiveQuery(async (): Promise<SyncItem[]> => {
     const shares = await db.brainShares.where("status").equals("shared").toArray();
     return Promise.all(shares.map(async (share) => {
@@ -63,14 +66,30 @@ export function SharedBrainSyncManager() {
   useEffect(() => {
     if (!identity) return;
     for (const item of items) {
-      if (running.current.has(item.shareId) || (!item.missing && item.sourceUpdatedAt <= item.shareUpdatedAt)) continue;
+      const confirmedAt = Math.max(item.shareUpdatedAt, acknowledged.current.get(item.remoteId) || 0);
+      if (running.current.has(item.shareId) || removed.current.has(item.remoteId)
+        || (!item.missing && item.sourceUpdatedAt <= confirmedAt)) continue;
       running.current.add(item.shareId);
+      let succeeded = false;
       const request = item.missing
-        ? communityApi.deleteNeuron(item.remoteId, identity).then(() => db.brainShares.update(item.shareId, { status: "deleted", updatedAt: Date.now() }))
-        : communityApi.updateNeuron(identity, item.remoteId, { title: item.title, body: item.body }).then(() => db.brainShares.update(item.shareId, { updatedAt: Date.now() }));
-      void request.catch(() => {}).finally(() => running.current.delete(item.shareId));
+        ? communityApi.deleteNeuron(item.remoteId, identity).then(() => {
+          removed.current.add(item.remoteId);
+          return db.brainShares.update(item.shareId, { status: "deleted", updatedAt: Date.now() });
+        })
+        : communityApi.updateNeuron(identity, item.remoteId, { title: item.title, body: item.body }).then(() => {
+          // Confirm only the content actually sent. Edits made while the request
+          // was in flight must remain newer than the acknowledged version.
+          acknowledged.current.set(item.remoteId, item.sourceUpdatedAt);
+          return db.brainShares.update(item.shareId, { updatedAt: item.sourceUpdatedAt });
+        });
+      void request.then(() => { succeeded = true; }).catch(() => {}).finally(() => {
+        running.current.delete(item.shareId);
+        // A live-query update may arrive before finally releases the in-flight
+        // guard. Recheck once after success; failed requests do not spin/retry.
+        if (succeeded) setCompleted(value => value + 1);
+      });
     }
-  }, [identity, items]);
+  }, [identity, items, completed]);
 
   return null;
 }

@@ -1675,9 +1675,9 @@ ipcMain.on("cloud-backup:quit-result", (event, result) => {
   }
 });
 async function backupBeforeQuit() {
-  const settings = await readAutoBackupSettings(app.getPath("userData"));
-  if (!settings.enabled || !settings.directory) return;
-  if (!mainWindow || mainWindow.isDestroyed()) await createWindow();
+  // The renderer owns pending editor saves and the enabled Google sync state.
+  // Always ask it to flush, even when no local backup folder is configured.
+  if (!mainWindow || mainWindow.isDestroyed()) await createWindow({ show: false });
   const started = Date.now();
   while (backupQuitRenderer !== mainWindow?.webContents) {
     if (Date.now() - started > 10_000) throw new Error("Backup window did not become ready.");
@@ -1688,7 +1688,7 @@ async function backupBeforeQuit() {
     const sender = backupQuitRenderer;
     const timer = setTimeout(() => {
       if (pendingBackupQuit?.id === id) pendingBackupQuit = null;
-      reject(new Error("Local backup did not finish within 30 seconds."));
+      reject(new Error("Saving, synchronization or local backup did not finish within 30 seconds."));
     }, 30_000);
     pendingBackupQuit = { id, sender, timer, resolve, reject };
     sender.send("cloud-backup:before-quit", id);
@@ -1708,9 +1708,9 @@ app.on("before-quit", (event) => {
       const chinese = currentLanguage.startsWith("zh");
       const result = await dialog.showMessageBox({
         type: "warning", title: "澄境",
-        message: chinese ? "最新內容尚未完成本機備份" : "Your latest changes have not finished backing up locally",
-        detail: chinese ? "資料仍保存在澄境中。你可以重試本機備份、返回澄境，或仍然退出並於下次開啟後再備份。" : "Your data remains in ChengJing. Retry the local backup, return to ChengJing, or quit anyway and back up after the next launch.",
-        buttons: chinese ? ["重試本機備份", "返回澄境", "仍然退出"] : ["Retry local backup", "Return to ChengJing", "Quit anyway"],
+        message: chinese ? "最新內容尚未完成同步或備份" : "Your latest changes have not finished syncing or backing up",
+        detail: chinese ? "資料仍保存在這台裝置。你可以重試、返回澄境，或仍然退出；尚未同步的內容會在下次開啟後繼續傳送。" : "Your data remains on this device. Retry, return to ChengJing, or quit anyway. Pending changes will sync after the next launch.",
+        buttons: chinese ? ["重試", "返回澄境", "仍然退出"] : ["Retry", "Return to ChengJing", "Quit anyway"],
         defaultId: 0, cancelId: 1,
       });
       if (result.response === 2) { backupQuitAllowed = true; app.quit(); }

@@ -8,7 +8,7 @@ import { TaskDatePicker } from "../components/TaskDatePicker";
 import { showContextMenu, showContextMenuFromPointer } from "../lib/contextMenu";
 import { isAndroid } from "../lib/platform";
 import { useI18n } from "../hooks/useI18n";
-import { dueDateInputToTimestamp, setTaskDone } from "../lib/taskSync";
+import { dueDateInputToTimestamp, readCompletedRootTasks, setTaskDone } from "../lib/taskSync";
 import { getTaskEnhancementCopy } from "../lib/taskEnhancementCopy";
 import { groupTasksByTimeline, localDateKey, timestampForLocalDateKey, type TaskDateGroup } from "../lib/taskTimeline";
 import type { TaskRecord } from "../types";
@@ -30,7 +30,7 @@ export function TasksView() {
       db.tasks.where("[doneKey+scheduleKey]").between(["active", todayStart], ["active", tomorrowStart], true, false).filter((task) => !hidden.has(task.id) && !task.parentTaskId).limit(displayLimit).toArray(),
       db.tasks.where("[doneKey+scheduleKey]").between(["active", Dexie.minKey], ["active", todayStart], true, false).reverse().filter((task) => !hidden.has(task.id) && !task.parentTaskId).limit(displayLimit).toArray(),
       db.tasks.where("[doneKey+scheduleKey]").between(["active", tomorrowStart], ["active", Number.MAX_SAFE_INTEGER], true, true).filter((task) => !hidden.has(task.id) && !task.parentTaskId).limit(displayLimit).toArray(),
-      db.tasks.where("doneKey").equals("done").filter((task) => !hidden.has(task.id) && !task.parentTaskId).toArray().then((items) => items.sort((left, right) => right.updatedAt - left.updatedAt).slice(0, displayLimit)),
+      readCompletedRootTasks(hidden, displayLimit),
     ]);
     const roots = [...new Map([...today, ...overdue, ...future, ...completed].map((task) => [task.id, task])).values()];
     const all = new Map(roots.map((task) => [task.id, task]));

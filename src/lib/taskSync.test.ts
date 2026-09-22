@@ -19,6 +19,11 @@ describe("編輯器待辦同步", () => {
     expect(result.tasks.map((task) => task.sourceTaskId)).toEqual(["same", "replacement"]);
   });
 
+  it("核取方塊下的一般清單說明不會意外變成待辦", () => {
+    const html = '<ul data-type="taskList"><li data-type="taskItem" data-task-id="task" data-checked="false"><div><p>整理計畫</p><ul><li>一般說明</li></ul><ul data-type="taskList"><li data-type="taskItem" data-task-id="nested"><div><p>真正的子核取方塊</p></div></li></ul></div></li></ul>';
+    expect(normalizeEditorTaskHtml(html).tasks.map((task) => task.sourceTaskId)).toEqual(["task", "nested"]);
+  });
+
   it("ETA 日期以本地中午保存，來回轉換不受時區跨日影響", () => {
     const timestamp = dueDateInputToTimestamp("2026-09-03");
     expect(timestampToDueDateInput(timestamp)).toBe("2026-09-03");

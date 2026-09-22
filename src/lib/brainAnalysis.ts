@@ -7,6 +7,18 @@ export function brainFingerprint(node: BrainNodeView) {
   for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
   return `${text.length}:${hash >>> 0}`;
 }
+
+export function recordBrainAnalysis(receipts: Record<string, string>, seeds: BrainNodeView[], finishReason?: string | null) {
+  // Complete recovered links may be saved after truncation, but the whole batch has not been reviewed.
+  if (["length", "max_output_tokens"].includes(finishReason || "")) return { receipts, completed: 0 };
+  const next = { ...receipts };
+  for (const node of seeds) {
+    delete next[node.key];
+    next[node.key] = brainFingerprint(node);
+  }
+  return { receipts: Object.fromEntries(Object.entries(next).slice(-4000)), completed: seeds.length };
+}
+
 export function planBrainAnalysis(nodes: BrainNodeView[], edges: BrainEdgeView[], receipts: Record<string, string>, maxNodes = ANALYSIS_BATCH.nodes) {
   const pending = nodes.filter((node) => receipts[node.key] !== brainFingerprint(node)).sort((a, b) => b.updatedAt - a.updatedAt || a.key.localeCompare(b.key));
   const seeds = pending.slice(0, Math.min(ANALYSIS_BATCH.seeds, Math.floor(maxNodes / 2)));

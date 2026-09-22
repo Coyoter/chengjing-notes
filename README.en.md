@@ -1,4 +1,6 @@
-# ChengJing Notes v0.10.14
+# ChengJing Notes v0.10.15
+
+0.10.15 fixes quit-time sync, shared-content update races, orphan child tasks and kanban operations; reduces unnecessary full-database reads and aligns Second Brain controls and theme colors. [Release notes](docs/releases/v0.10.15.md)
 
 0.10.14 improves Second Brain scalability: background working-set loading, older-content paging, full-text lookup, and incremental AI analysis that preserves existing links. [Release notes](docs/releases/v0.10.14.md)
 

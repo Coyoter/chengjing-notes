@@ -6,7 +6,7 @@ import * as THREE from "three";
 import dayjs from "dayjs";
 import { taskBrainOpacity } from "../lib/taskCompletion";
 import { useBrainWorkspace } from "../hooks/useBrainWorkspace";
-import { ANALYSIS_BATCH, brainFingerprint, planBrainAnalysis } from "../lib/brainAnalysis";
+import { ANALYSIS_BATCH, planBrainAnalysis, recordBrainAnalysis } from "../lib/brainAnalysis";
 import { brainPerformanceCopy } from "../lib/brainPerformanceCopy";
 import {
   BrainCircuit,
@@ -55,7 +55,8 @@ import {
   type SharedNeuronSummary,
 } from "../lib/community";
 import { getSharedBrainCopy } from "../lib/sharedBrainCopy";
-import { onlyOwnedNodesForAI, selectDiscoveryBatch, sharedNeuronSceneNodes, type SharedNeuronSceneNode } from "../lib/sharedBrain";
+import { createBrainShareRecord, onlyOwnedNodesForAI, selectDiscoveryBatch, sharedNeuronSceneNodes, type SharedNeuronSceneNode } from "../lib/sharedBrain";
+import { readBrainShareSnapshot } from "../lib/brainShareSnapshot";
 import { CommunityIdentityDialog } from "../components/CommunityIdentityDialog";
 import { CommunityModerationDialog, CommunityReportDialog, DeleteSharedNeuronDialog, ShareNeuronDialog, SharedNeuronInspector } from "../components/SharedBrainPanels";
 import { getWishAdminSession } from "../lib/wishPool";
@@ -400,7 +401,6 @@ export function SecondBrainView() {
   const [reportTarget, setReportTarget] = useState<{ targetType: "neuron" | "comment"; targetId: string } | null>(null);
   const [moderationOpen, setModerationOpen] = useState(false);
   const [adminToken, setAdminToken] = useState(() => getWishAdminSession());
-  const theme = useAppStore((state) => state.theme);
   const engine = useAppStore((state) => state.aiEngine);
   const openRouterModel = useAppStore((state) => state.openRouterModel);
   const customModel = useAppStore((state) => state.customModel);
@@ -456,10 +456,18 @@ export function SecondBrainView() {
   const selectedEdges = selected ? graph.edges.filter((edge) => edge.persisted && (edge.source === selected.key || edge.target === selected.key)) : [];
   const model = engine === "custom-provider" ? customProviderModel : customModel.trim() || openRouterModel;
   useEffect(() => () => { analysisEpoch.current++; }, [engine, model, language, query, workPage]);
-  const canvasColor = useMemo(() => {
-    const css = getComputedStyle(document.documentElement).getPropertyValue(android ? "--canvas" : "--brain-canvas").trim();
-    return css || (theme === "light" ? "#e8e5dc" : "#0d1311");
-  }, [theme, android]);
+  const [canvasColor, setCanvasColor] = useState("#0d1311");
+  useLayoutEffect(() => {
+    const updateColor = () => {
+      const root = document.documentElement;
+      const css = getComputedStyle(root).getPropertyValue(android ? "--canvas" : "--brain-canvas").trim();
+      setCanvasColor(css || (root.dataset.theme === "light" ? "#e8e5dc" : "#0d1311"));
+    };
+    updateColor();
+    const observer = new MutationObserver(updateColor);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, [android]);
 
   useEffect(() => {
     brainSharesRef.current = brainShares;
@@ -567,8 +575,12 @@ export function SecondBrainView() {
   }
 
   function startSharing(node: BrainNodeView) {
-    if (!node.text.trim() && !node.title.trim()) { setNotice(t("brain.emptyContent")); return; }
-    ensureCommunityIdentity(() => { setShareError(""); setShareCandidate(node); });
+    ensureCommunityIdentity(() => {
+      void readBrainShareSnapshot(db, node, language).then((snapshot) => {
+        if (!snapshot || (!snapshot.text.trim() && !snapshot.title.trim())) { setNotice(t("brain.emptyContent")); return; }
+        setShareError(""); setShareCandidate(snapshot);
+      }).catch((reason) => setNotice(communityError(reason)));
+    });
   }
 
   async function confirmSharing(intention: SharedIntention) {
@@ -581,7 +593,7 @@ export function SecondBrainView() {
         body: shareCandidate.text.trim() || shareCandidate.title,
         intention,
       });
-      const record: BrainShareRecord = { id: shareCandidate.key, localType: shareCandidate.type, localId: shareCandidate.id, remoteId: result.item.id, status: "shared", sharedAt: Date.now(), updatedAt: Date.now() };
+      const record = createBrainShareRecord(shareCandidate, result.item.id);
       await db.brainShares.put(record);
       setShareCandidate(null);
       setNotice(sharedCopy.shareDone);
@@ -594,10 +606,10 @@ export function SecondBrainView() {
     setRemoteBusyAction("fork");
     try {
       const result = await communityApi.fork(identity, remoteDetail.id);
-      const escaped = remoteDetail.body.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+      const escaped = result.item.body.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
       const contentHtml = escaped.split(/\n{2,}/).map((paragraph) => `<p>${paragraph.replaceAll("\n", "<br>")}</p>`).join("");
-      const card = await createCard({ title: remoteDetail.title, plainText: remoteDetail.body, contentHtml, kind: "note", state: "active", properties: { 共享來源: remoteDetail.authorName, 來源神經元: remoteDetail.id } });
-      await db.brainShares.put({ id: `card:${card.id}`, localType: "card", localId: card.id, remoteId: result.item.id, status: "shared", originRemoteId: remoteDetail.id, sharedAt: Date.now(), updatedAt: Date.now() });
+      const card = await createCard({ title: result.item.title, plainText: result.item.body, contentHtml, kind: "note", state: "active", properties: { 共享來源: remoteDetail.authorName, 來源神經元: remoteDetail.id } });
+      await db.brainShares.put(createBrainShareRecord({ key: `card:${card.id}`, type: "card", id: card.id, updatedAt: card.updatedAt }, result.item.id, Date.now(), remoteDetail.id));
       setNotice(sharedCopy.forked);
     } catch (reason) { setNotice(communityError(reason)); }
     finally { setRemoteBusyAction(""); }
@@ -820,6 +832,7 @@ export function SecondBrainView() {
         return { id: crypto.randomUUID(), sourceType: from.type, sourceId: from.id, targetType: to.type, targetId: to.id, origin: "ai", reason: connection.reason, confidence: connection.confidence, relationType: connection.relationType, evidence: connection.evidence, temporalDistanceDays: brainTemporalDistanceDays(sourceNode, targetNode), createdAt: Date.now() };
       });
       if (epoch !== analysisEpoch.current) return;
+      const progress = recordBrainAnalysis(receipts, plan.seeds, response.finishReason);
       await db.transaction("rw", [db.cards, db.tasks, db.boards, db.brainEdges, db.preferences], async () => {
         for (const node of semanticContext.selectedNodes) {
           const table = node.type === "card" ? db.cards : node.type === "task" ? db.tasks : db.boards;
@@ -834,12 +847,10 @@ export function SecondBrainView() {
           if (!existing) await db.brainEdges.add(record);
           else if (existing.origin === "ai") await db.brainEdges.put({ ...record, id: existing.id, createdAt: existing.createdAt });
         }
-        const nextReceipts = { ...receipts };
-        plan.seeds.forEach((node) => { nextReceipts[node.key] = brainFingerprint(node); });
-        await db.preferences.put({ key: receiptKey, value: Object.fromEntries(Object.entries(nextReceipts).slice(-4000)) });
+        await db.preferences.put({ key: receiptKey, value: progress.receipts });
       });
       workspace.refresh();
-      setNotice((records.length ? performanceCopy.finish : t("brain.noNewLinks")) + " · " + Math.max(0, plan.pending - plan.seeds.length));
+      setNotice((records.length ? progress.completed < plan.seeds.length ? performanceCopy.partial : performanceCopy.finish : t("brain.noNewLinks")) + " · " + Math.max(0, plan.pending - progress.completed));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t("brain.organizeFailed"));
     } finally {
@@ -867,7 +878,7 @@ export function SecondBrainView() {
 
   return (
     <div className="second-brain-page" data-brain-nodes={graph.nodes.length} data-brain-rendered-nodes={sceneNodes.length} data-brain-viewport-focus={viewportFocus.map((value) => value.toFixed(2)).join(",")} data-brain-persisted-links={graph.edges.filter((edge) => edge.persisted).length} data-brain-editable-edge-hit-targets={graph.edges.filter((edge) => edge.persisted).length}>
-      <Canvas frameloop="demand" camera={{ position: [0, 1.5, android ? 29 : 19], fov: 54, near: 0.1, far: 120 }} dpr={[1, android ? 1.25 : 1.75]} gl={{ antialias: true, alpha: false }} onPointerMissed={() => { setSelectedKey(null); setSelectedRemoteId(null); setRemoteDetail(null); }}>
+      <Canvas className="brain-canvas" data-canvas-color={canvasColor} frameloop="demand" camera={{ position: [0, 1.5, android ? 29 : 19], fov: 54, near: 0.1, far: 120 }} dpr={[1, android ? 1.25 : 1.75]} gl={{ antialias: true, alpha: false }} onPointerMissed={() => { setSelectedKey(null); setSelectedRemoteId(null); setRemoteDetail(null); }}>
         <BrainScene nodes={sceneNodes} edges={filteredEdges} remoteNodes={filteredRemoteNodes} ownSharedKeys={ownSharedKeys} selectedKey={selectedKey} selectedRemoteId={selectedRemoteId} linkSource={linkSource} showAllLabels={showAllLabels} canvasColor={canvasColor} onSelect={selectNode} onOpen={openNode} onNodeContext={nodeContext} onEdgeContext={edgeContext} onRemoteSelect={(node) => void openRemoteNeuron(node.id)} onViewportFocus={setViewportFocus} focusRequest={searchFocusRequest} />
       </Canvas>
 
