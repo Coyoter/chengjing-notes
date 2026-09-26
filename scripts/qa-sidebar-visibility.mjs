@@ -14,6 +14,7 @@ const page = await context.newPage();
 page.setDefaultTimeout(10000);
 const errors = [];
 const results = [];
+let activeMatrix = null;
 page.on("pageerror", error => errors.push(error.message));
 const menu = page.locator(".sidebar-context-menu");
 const nav = id => page.locator(`.primary-nav [data-nav-id="${id}"]`);
@@ -89,6 +90,23 @@ async function menuGeometry() {
       }),
       background: getComputedStyle(element).backgroundColor,
     };
+  });
+}
+
+async function settleMatrixLayout({ language, theme, width, height, scale, collapsed }) {
+  // Store updates are synchronous, but App applies document theme/scale in effects.
+  // Browser resize events also run during rendering: opening a menu before that
+  // event is delivered correctly dismisses it via the app's resize handler.
+  await page.waitForFunction(expected => {
+    const root = document.documentElement;
+    return innerWidth === expected.width && innerHeight === expected.height
+      && root.dataset.theme === expected.theme && root.dataset.language === expected.language
+      && Number(getComputedStyle(root).getPropertyValue("--font-scale")) === expected.scale
+      && document.querySelector(".sidebar")?.classList.contains("is-collapsed") === expected.collapsed;
+  }, { language, theme, width, height, scale, collapsed });
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   });
 }
 
@@ -239,9 +257,11 @@ try {
   for (const language of ["zh-TW", "zh-CN", "en", "ja", "ko"]) {
     for (const theme of ["light", "dark", "ink"]) {
       for (const layout of [{ width: 1440, height: 980, scale: 1, collapsed: false }, { width: 960, height: 680, scale: 1.2, collapsed: true }]) {
+        activeMatrix = { language, theme, ...layout };
         await page.setViewportSize({ width: layout.width, height: layout.height });
         await state({ language, theme, fontScale: layout.scale, sidebarCollapsed: layout.collapsed, sidebarHiddenItems: defaultOrder });
         await assertOrder([]);
+        await settleMatrixLayout(activeMatrix);
         await blankMenu({ nearBottom: true });
         // Wait for the post-measurement positioning pass, then inspect fresh bounds.
         await page.waitForFunction(() => {
@@ -255,6 +275,9 @@ try {
         if (language === "en" && layout.collapsed) await page.screenshot({ path: path.join(output, `menu-${theme}-english-compact.png`) });
         await page.keyboard.press("Escape");
         await menu.waitFor({ state: "detached" });
+        // Closing restores focus on the next frame; finish it before changing the
+        // following fixture's layout, so focus cannot race with its newly open menu.
+        await page.waitForFunction(() => document.activeElement === document.querySelector(".sidebar"));
       }
     }
   }
@@ -263,7 +286,19 @@ try {
   console.log(JSON.stringify({ cases: results.length, passed: true, errors, output }, null, 2));
 } catch (error) {
   process.exitCode = 1;
-  results.push({ test: "failure", error: error.stack });
+  const observed = await page.evaluate(() => {
+    const root = document.documentElement;
+    const element = document.querySelector(".sidebar-context-menu");
+    const box = element?.getBoundingClientRect();
+    return {
+      menuCount: document.querySelectorAll(".sidebar-context-menu").length,
+      menuBounds: box ? { left: box.left, top: box.top, right: box.right, bottom: box.bottom, width: box.width, height: box.height } : null,
+      innerWidth, innerHeight, language: root.dataset.language, theme: root.dataset.theme,
+      fontScale: getComputedStyle(root).getPropertyValue("--font-scale").trim(),
+      collapsed: document.querySelector(".sidebar")?.classList.contains("is-collapsed"),
+    };
+  }).catch(() => null);
+  results.push({ test: "failure", matrix: activeMatrix, observed, error: error.stack });
   await page.screenshot({ path: path.join(output, "failure.png") }).catch(() => {});
   console.error(error);
 } finally {
