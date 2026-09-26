@@ -1,4 +1,6 @@
-# ChengJing Notes v0.10.15
+# ChengJing Notes v0.10.16
+
+0.10.16 adds right-click hiding and restoration for desktop sidebar features, preserving your data, saved order and current workspace. [Release notes](docs/releases/v0.10.16.md)
 
 0.10.15 fixes quit-time sync, shared-content update races, orphan child tasks and kanban operations; reduces unnecessary full-database reads and aligns Second Brain controls and theme colors. [Release notes](docs/releases/v0.10.15.md)
 
@@ -30,7 +32,7 @@ This is source-available software rather than OSI-approved “Open Source” sof
 
 ## Install
 
-Cross-platform release: [0.10.0 for Android, Mac and Windows](https://github.com/Coyoter/chengjing-notes/releases/tag/v0.10.0). Install over the previous build without uninstalling. Google Play publication is handled separately; a GitHub release does not imply Play approval. Bidirectional Google sync requires compatible clients on every device; older desktop v0.9.5 supports snapshot backups only. See [Android details and known limitations](ANDROID.md).
+Cross-platform release: [Latest Android, Mac and Windows downloads](https://github.com/Coyoter/chengjing-notes/releases/latest). Install over the previous build without uninstalling. Google Play publication is handled separately; a GitHub release does not imply Play approval. Bidirectional Google sync requires compatible clients on every device; older desktop v0.9.5 supports snapshot backups only. See [Android details and known limitations](ANDROID.md).
 
 Official installers are currently available for Apple Silicon Macs and Windows ARM64, Intel, and AMD x64 systems:
 

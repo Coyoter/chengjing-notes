@@ -121,6 +121,7 @@ export function GlobalContextMenu() {
     };
     const keydown = (event: KeyboardEvent) => event.key === "Escape" && close();
     window.addEventListener("chengjing:context-menu", open);
+    window.addEventListener("chengjing:sidebar-context-menu", close);
     window.addEventListener("pointerdown", close);
     window.addEventListener("blur", close);
     window.addEventListener("resize", resize);
@@ -128,6 +129,7 @@ export function GlobalContextMenu() {
     document.addEventListener("scroll", closeAfterInitialPositioning, true);
     return () => {
       window.removeEventListener("chengjing:context-menu", open);
+      window.removeEventListener("chengjing:sidebar-context-menu", close);
       window.removeEventListener("pointerdown", close);
       window.removeEventListener("blur", close);
       window.removeEventListener("resize", resize);

@@ -1,4 +1,6 @@
-# 澄境筆記 ChengJing Notes v0.10.15
+# 澄境筆記 ChengJing Notes v0.10.16
+
+0.10.16 可在桌面左側功能上按右鍵隱藏，並從選單空白處找回；保留資料、原有排序與目前工作。[更新說明](docs/releases/v0.10.16.md)
 
 0.10.15 修正退出漏同步、共享內容更新競態、子待辦遺失與看板操作問題；減少不必要的全庫讀取，並修正第二大腦控制列及主題不一致。[更新說明](docs/releases/v0.10.15.md)
 
@@ -28,9 +30,7 @@
 
 ## 直接安裝
 
-**v0.10.9 為 macOS ARM64 更新**：隻言片語直接成為未整理卡片，標籤與卡片庫共用，右鍵即可整理。[更新內容與資料搬移說明](docs/releases/v0.10.9.md)。本次沒有新的 Windows 安裝檔或 Android APK；下方 v0.10.0 為先前跨平台版本。
-
-跨平台正式發布：[0.10.0 Android、Mac、Windows 與更新說明](https://github.com/Coyoter/chengjing-notes/releases/tag/v0.10.0)。可直接更新，不需移除。Google Play 上架另行處理；GitHub 發布不代表已通過 Play 審核。Google 雙向同步需各裝置使用本次相容同步版，舊桌面 v0.9.5 仍是備份功能。已測範圍與已知限制請見 [Android 說明](ANDROID.md)。
+跨平台正式發布：[最新版 Android、Mac、Windows 與更新說明](https://github.com/Coyoter/chengjing-notes/releases/latest)。可直接更新，不需移除。Google Play 上架另行處理；GitHub 發布不代表已通過 Play 審核。Google 雙向同步需各裝置使用相容同步版，舊桌面 v0.9.5 仍是備份功能。已測範圍與已知限制請見 [Android 說明](ANDROID.md)。
 
 目前正式安裝包支援 Apple Silicon Mac，以及 Windows ARM64／Intel、AMD x64：
 

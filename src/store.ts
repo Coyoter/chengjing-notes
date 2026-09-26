@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import dayjs from "dayjs";
-import { DEFAULT_SIDEBAR_ORDER, normalizeSidebarOrder } from "./lib/sidebarOrder";
+import { DEFAULT_SIDEBAR_ORDER, normalizeSidebarHiddenItems, normalizeSidebarOrder } from "./lib/sidebarOrder";
 import type { AIEngine, AppLanguage, AppView, OpenRouterRoutingMode, ThemeMode } from "./types";
 
 interface AppState {
@@ -18,6 +18,7 @@ interface AppState {
   importOpen: boolean;
   sidebarCollapsed: boolean;
   sidebarOrder: AppView[];
+  sidebarHiddenItems: AppView[];
   showMiniMap: boolean;
   theme: ThemeMode;
   aiEngine: AIEngine;
@@ -52,6 +53,8 @@ interface AppState {
   setImportOpen: (open: boolean) => void;
   setSidebarCollapsed: (value: boolean) => void;
   setSidebarOrder: (value: AppView[]) => void;
+  setSidebarItemHidden: (view: AppView, hidden: boolean) => void;
+  showAllSidebarItems: () => void;
   setShowMiniMap: (value: boolean) => void;
   setTheme: (theme: ThemeMode) => void;
   setAIEngine: (engine: AIEngine) => void;
@@ -108,6 +111,7 @@ export const useAppStore = create<AppState>()(
       importOpen: false,
       sidebarCollapsed: false,
       sidebarOrder: DEFAULT_SIDEBAR_ORDER,
+      sidebarHiddenItems: [],
       showMiniMap: false,
       theme: "system",
       aiEngine: "openrouter",
@@ -142,6 +146,12 @@ export const useAppStore = create<AppState>()(
       setImportOpen: (importOpen) => set({ importOpen }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       setSidebarOrder: (sidebarOrder) => set({ sidebarOrder: normalizeSidebarOrder(sidebarOrder) }),
+      setSidebarItemHidden: (view, hidden) => set((state) => {
+        const item = view === "database" ? "library" : view;
+        const current = normalizeSidebarHiddenItems(state.sidebarHiddenItems);
+        return { sidebarHiddenItems: hidden ? normalizeSidebarHiddenItems([...current, item]) : current.filter(id => id !== item) };
+      }),
+      showAllSidebarItems: () => set({ sidebarHiddenItems: [] }),
       setShowMiniMap: (showMiniMap) => set({ showMiniMap }),
       setTheme: (theme) => set({ theme }),
       setAIEngine: (aiEngine) => set({ aiEngine }),
@@ -157,9 +167,19 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "chengjing-ui",
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState && typeof persistedState === "object" ? persistedState as Partial<AppState> : {};
+        return {
+          ...currentState,
+          ...persisted,
+          sidebarOrder: normalizeSidebarOrder(persisted.sidebarOrder),
+          sidebarHiddenItems: normalizeSidebarHiddenItems(persisted.sidebarHiddenItems),
+        };
+      },
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
         sidebarOrder: state.sidebarOrder,
+        sidebarHiddenItems: state.sidebarHiddenItems,
         showMiniMap: state.showMiniMap,
         theme: state.theme,
         aiEngine: state.aiEngine,

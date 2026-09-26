@@ -1,7 +1,7 @@
 import { getHiddenTaskIds } from "../lib/activeContent";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type KeyboardEvent } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { moveSidebarItem, normalizeSidebarOrder } from "../lib/sidebarOrder";
+import { getVisibleSidebarOrder, moveSidebarItem, normalizeSidebarOrder } from "../lib/sidebarOrder";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   BrainCircuit,
@@ -31,6 +31,8 @@ import type { MessageKey } from "../i18n";
 import { getWishPoolCopy } from "../lib/wishPoolCopy";
 import { primaryShortcut } from "../lib/platform";
 import { preloadWorkspaceView } from "./Workspace";
+import { SidebarContextMenu, type SidebarMenuRequest } from "./SidebarContextMenu";
+import { getSidebarVisibilityCopy } from "../lib/sidebarVisibilityCopy";
 
 const nav: Array<{ view: AppView; label: MessageKey; icon: typeof FileStack; badge?: "tasks" }> = [
   { view: "today", label: "nav.today", icon: LayoutDashboard },
@@ -55,11 +57,16 @@ export function Sidebar() {
   const collapsed = useAppStore((state) => state.sidebarCollapsed);
   const sidebarOrder = useAppStore(state => state.sidebarOrder);
   const setSidebarOrder = useAppStore(state => state.setSidebarOrder);
+  const sidebarHiddenItems = useAppStore(state => state.sidebarHiddenItems);
+  const setSidebarItemHidden = useAppStore(state => state.setSidebarItemHidden);
+  const showAllSidebarItems = useAppStore(state => state.showAllSidebarItems);
   const desktop = window.chengjing?.platform !== "android";
   const reducedMotion = useReducedMotion();
   const dragSource = useRef<AppView | null>(null);
   const [dropTarget, setDropTarget] = useState<AppView | null>(null);
-  const orderedNav = normalizeSidebarOrder(desktop ? sidebarOrder : undefined).map(id => nav.find(item => item.view === id)!);
+  const fullOrder = normalizeSidebarOrder(desktop ? sidebarOrder : undefined);
+  const visibleOrder = getVisibleSidebarOrder(fullOrder, desktop ? sidebarHiddenItems : []);
+  const orderedNav = visibleOrder.map(id => nav.find(item => item.view === id)!);
   const rightPanel = useAppStore((state) => state.rightPanel);
   const language = useAppStore((state) => state.language);
   const setView = useAppStore((state) => state.setView);
@@ -68,7 +75,35 @@ export function Sidebar() {
   const setCreateCardOpen = useAppStore((state) => state.setCreateCardOpen);
   const { t } = useI18n();
   const wishCopy = getWishPoolCopy(language);
+  const visibilityCopy = getSidebarVisibilityCopy(language);
   const preloadTimer = useRef<number | null>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const [menu, setMenu] = useState<SidebarMenuRequest | null>(null);
+  const menuTrigger = useRef<HTMLElement | null>(null);
+  const hiddenNav = fullOrder.filter(id => !visibleOrder.includes(id)).map(id => ({ view: id, label: t(nav.find(item => item.view === id)!.label) }));
+  const closeMenu = useCallback((restoreFocus = false) => {
+    setMenu(null);
+    if (restoreFocus) requestAnimationFrame(() => {
+      const trigger = menuTrigger.current;
+      (trigger?.isConnected ? trigger : sidebarRef.current)?.focus({ preventScroll: true });
+    });
+  }, []);
+
+  function openMenu(event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>, targetView?: AppView) {
+    if (!desktop) return;
+    event.preventDefault();
+    event.stopPropagation();
+    cancelPrepareView();
+    window.dispatchEvent(new Event("chengjing:sidebar-context-menu"));
+    menuTrigger.current = event.currentTarget;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const pointer = "clientX" in event && (event.clientX !== 0 || event.clientY !== 0);
+    setMenu({ view: targetView, x: pointer ? event.clientX : rect.left + 12, y: pointer ? event.clientY : rect.top + Math.min(rect.height, 44) });
+  }
+
+  function isContextKey(event: KeyboardEvent<HTMLElement>) {
+    return event.key === "ContextMenu" || (event.shiftKey && event.key === "F10");
+  }
 
   useEffect(() => () => {
     if (preloadTimer.current !== null) window.clearTimeout(preloadTimer.current);
@@ -94,7 +129,13 @@ export function Sidebar() {
   }
 
   return (
-    <aside className={`sidebar ${collapsed ? "is-collapsed" : ""}`}>
+    <aside ref={sidebarRef} className={`sidebar ${collapsed ? "is-collapsed" : ""}`}
+      tabIndex={desktop ? 0 : undefined} aria-label={t("nav.primary")}
+      onContextMenu={(event) => {
+        if ((event.target as Element).closest("button, a, input, textarea, [contenteditable]")) return;
+        openMenu(event);
+      }}
+      onKeyDown={(event) => { if (event.target === event.currentTarget && isContextKey(event)) openMenu(event); }}>
       <div className="window-drag-region" />
       <div className="brand-row">
         <img src={markUrl} alt="" />
@@ -131,12 +172,14 @@ export function Sidebar() {
               onDragLeave={() => setDropTarget(null)}
               onDrop={(event) => { if (!desktop || !dragSource.current) return; event.preventDefault(); setSidebarOrder(moveSidebarItem(sidebarOrder, dragSource.current, item.view)); dragSource.current = null; setDropTarget(null); }}
               onDragEndCapture={() => { dragSource.current = null; setDropTarget(null); }}
+              onContextMenu={(event) => openMenu(event, item.view)}
               onKeyDown={(event) => {
+                if (isContextKey(event)) { openMenu(event, item.view); return; }
                 if (!desktop || !event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
                 event.preventDefault();
-                const order = normalizeSidebarOrder(sidebarOrder); const index = order.indexOf(item.view);
-                const target = order[index + (event.key === "ArrowUp" ? -1 : 1)];
-                if (target) setSidebarOrder(moveSidebarItem(order, item.view, target));
+                const index = visibleOrder.indexOf(item.view);
+                const target = visibleOrder[index + (event.key === "ArrowUp" ? -1 : 1)];
+                if (target) setSidebarOrder(moveSidebarItem(fullOrder, item.view, target));
               }}
               onPointerEnter={() => { if (!dragSource.current) prepareView(item.view); }}
               onPointerLeave={cancelPrepareView}
@@ -145,7 +188,9 @@ export function Sidebar() {
               onClick={() => setView(item.view)}
               aria-current={view === item.view ? "page" : undefined}
               aria-label={label}
-              title={collapsed ? label : desktop ? `${label} · ${language.startsWith("zh") ? "拖曳排序，或按 Alt＋↑／↓" : "Drag to reorder, or Alt + ↑ / ↓"}` : undefined}
+              aria-haspopup={desktop ? "menu" : undefined}
+              aria-expanded={desktop ? menu?.view === item.view : undefined}
+              title={collapsed ? label : desktop ? `${label} · ${visibilityCopy.navigationHint}` : undefined}
             >
               <Icon size={17} />
               {!collapsed && <span>{label}</span>}
@@ -155,7 +200,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      {!collapsed && (
+      {!collapsed && visibleOrder.includes("boards") && (
         <section className="sidebar-boards">
           <header>
             <span>{t("nav.recentBoards")}</span>
@@ -198,6 +243,9 @@ export function Sidebar() {
           {!collapsed && <span>{t("nav.collapse")}</span>}
         </button>
       </div>
+      {menu && <SidebarContextMenu request={menu} title={menu.view ? t(nav.find(item => item.view === menu.view)!.label) : undefined}
+        hidden={hiddenNav} copy={visibilityCopy} onHide={(id) => setSidebarItemHidden(id, true)} onShow={(id) => setSidebarItemHidden(id, false)}
+        onShowAll={showAllSidebarItems} onClose={closeMenu} />}
     </aside>
   );
 }

@@ -4,6 +4,14 @@ export function normalizeSidebarOrder(value: unknown): AppView[] {
   const input = Array.isArray(value) ? value.map(id => id === "database" ? "library" : id) : [];
   return [...new Set([...input.filter((id): id is AppView => DEFAULT_SIDEBAR_ORDER.includes(id)), ...DEFAULT_SIDEBAR_ORDER])];
 }
+export function normalizeSidebarHiddenItems(value: unknown): AppView[] {
+  const input = Array.isArray(value) ? value.map(id => id === "database" ? "library" : id) : [];
+  return [...new Set(input.filter((id): id is AppView => DEFAULT_SIDEBAR_ORDER.includes(id)))];
+}
+export function getVisibleSidebarOrder(order: unknown, hiddenItems: unknown): AppView[] {
+  const hidden = new Set(normalizeSidebarHiddenItems(hiddenItems));
+  return normalizeSidebarOrder(order).filter(id => !hidden.has(id));
+}
 export function moveSidebarItem(order: unknown, source: AppView, target: AppView): AppView[] {
   const next = normalizeSidebarOrder(order);
   const from = next.indexOf(source), to = next.indexOf(target);
