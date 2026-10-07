@@ -1,4 +1,6 @@
-# ChengJing Notes v0.10.17
+# ChengJing Notes v0.10.18
+
+0.10.18 adds native macOS full-screen menu presentation recovery and direct display-wake handling, preserving window geometry. [Investigation and release notes](docs/releases/v0.10.18.md)
 
 0.10.17 improves macOS window placement, correcting only inaccessible top edges and retaining ordinary window geometry, with optional placement diagnostics. [Investigation and release notes](docs/releases/v0.10.17.md)
 

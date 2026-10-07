@@ -1,4 +1,4 @@
-const { app, BrowserWindow, clipboard, ClipboardItem, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, powerMonitor, protocol, safeStorage, screen, shell, Tray } = require("electron");
+const { app, BrowserWindow, clipboard, ClipboardItem, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, powerMonitor, protocol, safeStorage, screen, shell, systemPreferences, Tray } = require("electron");
 const { createHash, randomUUID } = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { createReadStream } = require("node:fs");
@@ -15,6 +15,7 @@ const { isUpdateCandidateStale, parseLatestRelease, parseLatestReleaseFeed } = r
 const { DEFAULT_SHORTCUT, readQuickCaptureSettings, writeQuickCaptureSettings } = require("./quick-capture-settings.cjs");
 const { initialWindowBounds, windowCorrection, geometrySnapshot, createWindowPlacementGuard } = require("./window-placement.cjs");
 const { createWindowDiagnostics } = require("./window-diagnostics.cjs");
+const { createFullscreenPresentation } = require("./fullscreen-presentation.cjs");
 
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 const OPENROUTER_KEY_URL = "https://openrouter.ai/api/v1/key";
@@ -980,7 +981,9 @@ async function createWindow({ show = !isSmoke } = {}) {
   });
   if (process.platform === "darwin") {
     const window = mainWindow;
-    mainWindowPlacement = createWindowPlacementGuard({ window, screen, app, powerMonitor, diagnostics: {
+    const native = require(app.isPackaged ? path.join(process.resourcesPath, "native", "mac-window-presentation.node") : path.join(__dirname, "..", "build", "mac-window-presentation.node"));
+    const fullscreenPresentation = createFullscreenPresentation({ window, native });
+    mainWindowPlacement = createWindowPlacementGuard({ window, screen, app, powerMonitor, workspacePreferences: systemPreferences, fullscreenPresentation, diagnostics: {
       record(event, geometry, detail) {
         if (!windowDiagnostics?.isEnabled()) return;
         windowDiagnostics.record(event, geometry, detail);

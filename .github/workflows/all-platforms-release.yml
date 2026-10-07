@@ -141,6 +141,7 @@ jobs:
         run: |
           npm run dist:mac
           npm run qa:window-placement -- --skip-idle --skip-fullscreen
+          CHENGJING_PACKAGED_APP="$PWD/release/mac-arm64/澄境.app/Contents/MacOS/澄境" npm run qa:window-placement -- --skip-idle --skip-fullscreen
           hdiutil verify release/*.dmg
           python3 scripts/release-integrity.py --stage macos
       - uses: actions/upload-artifact@v4

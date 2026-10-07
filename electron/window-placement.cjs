@@ -61,7 +61,7 @@ function geometrySnapshot(window, screen) {
   };
 }
 
-function createWindowPlacementGuard({ window, screen, app, powerMonitor, diagnostics, delay = 300 }) {
+function createWindowPlacementGuard({ window, screen, app, powerMonitor, diagnostics, fullscreenPresentation, workspacePreferences, delay = 300 }) {
   let timer = null, applying = false, disposed = false, suspended = false, locked = false;
   const listeners = [];
   const listen = (emitter, event, callback) => { emitter.on(event, callback); listeners.push(() => emitter.removeListener(event, callback)); };
@@ -71,7 +71,13 @@ function createWindowPlacementGuard({ window, screen, app, powerMonitor, diagnos
     if (disposed || window.isDestroyed()) return;
     const before = snapshot();
     record(event, before);
-    if (applying || suspended || locked || (!before.visible && !allowHidden)) return;
+    if (applying || suspended || (!before.visible && !allowHidden)) return;
+    if (before.fullscreen && fullscreenPresentation) {
+      const result = fullscreenPresentation.check();
+      record(result.changed ? "fullscreen-presentation-repaired" : `${event}:fullscreen`, before, result);
+      return;
+    }
+    if (locked) return;
     const correction = windowCorrection(before.bounds, before.displays, before);
     if (!correction) return;
     applying = true;
@@ -93,7 +99,13 @@ function createWindowPlacementGuard({ window, screen, app, powerMonitor, diagnos
   for (const event of ["show", "focus", "restore", "leave-full-screen", "maximize", "unmaximize"]) listen(window, event, () => schedule(event));
   // Observe user moves/resizes without imposing placement during a drag.
   for (const event of ["moved", "resized", "hide", "minimize", "blur"]) listen(window, event, () => record(event, snapshot()));
-  listen(window, "enter-full-screen", () => { clearTimeout(timer); timer = null; record("enter-full-screen", snapshot()); });
+  listen(window, "enter-full-screen", () => {
+    clearTimeout(timer); timer = null;
+    const native = fullscreenPresentation?.capture();
+    record("enter-full-screen", snapshot(), native);
+    schedule("fullscreen-entered");
+  });
+  listen(window, "leave-full-screen", () => fullscreenPresentation?.clear());
   listen(app, "did-become-active", () => schedule("app-active"));
   listen(screen, "display-added", () => schedule("display-added"));
   listen(screen, "display-removed", () => schedule("display-removed"));
@@ -104,6 +116,11 @@ function createWindowPlacementGuard({ window, screen, app, powerMonitor, diagnos
   listen(powerMonitor, "resume", () => { suspended = false; schedule("resume"); });
   listen(powerMonitor, "lock-screen", () => { locked = true; record("lock-screen", snapshot()); });
   listen(powerMonitor, "unlock-screen", () => { locked = false; schedule("unlock-screen"); });
+  if (workspacePreferences) {
+    // Display wake is different from system resume or authentication unlock.
+    const id = workspacePreferences.subscribeWorkspaceNotification("NSWorkspaceScreensDidWakeNotification", () => schedule("screens-wake"));
+    listeners.push(() => workspacePreferences.unsubscribeWorkspaceNotification(id));
+  }
   function dispose() { disposed = true; clearTimeout(timer); timer = null; for (const remove of listeners) remove(); }
   listen(window, "closed", dispose);
   return { check, schedule, dispose };

@@ -9,7 +9,8 @@ if (process.platform !== "darwin") { console.log("macOS window placement QA: not
 const profile = await fs.mkdtemp(path.join(os.tmpdir(), "chengjing-window-qa-"));
 const output = path.resolve("qa-artifacts/window-placement");
 await fs.mkdir(output, { recursive: true });
-const client = await electron.launch({ executablePath: electronPath, args: ["."], env: { ...process.env, CHENGJING_SMOKE: "1", CHENGJING_SMOKE_USER_DATA: profile, CHENGJING_WINDOW_DIAGNOSTICS: "1" } });
+const packaged = process.env.CHENGJING_PACKAGED_APP;
+const client = await electron.launch({ executablePath: packaged || electronPath, args: packaged ? [] : ["."], env: { ...process.env, CHENGJING_SMOKE: "1", CHENGJING_SMOKE_USER_DATA: profile, CHENGJING_WINDOW_DIAGNOSTICS: "1" } });
 const reports = [], errors = [];
 let page;
 const snapshot = label => client.evaluate(({ BrowserWindow, screen }, label) => {

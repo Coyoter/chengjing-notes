@@ -91,3 +91,14 @@ test("hidden/minimized windows are not moved by background events and disposal c
   h.minimized(false); h.window.emit("focus"); h.window.emit("closed"); await settle(); assert.equal(h.writes.length, 1);
   assert.equal(h.app.listenerCount("did-become-active"), 0); assert.equal(h.screen.listenerCount("display-removed"), 0);
 });
+test("screen-only wake reaches full-screen recovery and unsubscribes when the window closes", async () => {
+  const h = fixture(); h.guard.dispose();
+  let wake, unsubscribed = false, checks = 0;
+  h.fullscreen(true);
+  const guard = createWindowPlacementGuard({ window: h.window, app: h.app, screen: h.screen, powerMonitor: h.powerMonitor, delay: 5,
+    fullscreenPresentation: { check: () => { checks++; return { changed: false }; }, capture() {}, clear() {} },
+    workspacePreferences: { subscribeWorkspaceNotification: (name, callback) => { assert.equal(name, "NSWorkspaceScreensDidWakeNotification"); wake = callback; return 7; }, unsubscribeWorkspaceNotification: id => { assert.equal(id, 7); unsubscribed = true; } },
+  });
+  wake(); await settle(); assert.equal(checks, 1); assert.equal(h.writes.length, 0);
+  h.window.emit("closed"); assert.equal(unsubscribed, true);
+});
