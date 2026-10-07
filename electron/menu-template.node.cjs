@@ -42,3 +42,15 @@ test("非 macOS 不建立應用程式選單，但保留檔案功能", () => {
   checkItem.click();
   assert.deepEqual(shortcuts, ["check-update"]);
 });
+
+test("window diagnostics can be toggled without replacing the native Window menu", () => {
+  const toggles = [];
+  const diagnostics = { toggleLabel: "Record window placement diagnostics", folder: "Open window diagnostics folder", enabled: false, toggle: value => toggles.push(value), openFolder() {} };
+  const template = buildApplicationMenuTemplate({ messages, windowDiagnostics: diagnostics });
+  const view = template.find(item => item.label === messages.view);
+  const toggle = view.submenu.find(item => item.type === "checkbox");
+  assert.equal(toggle.checked, false); toggle.click({ checked: true }); assert.deepEqual(toggles, [true]);
+  assert.equal(view.submenu.find(item => item.label === diagnostics.folder).enabled, false);
+  assert.deepEqual(template.find(item => item.role === "windowMenu"), { role: "windowMenu", label: messages.window });
+  assert.equal(buildApplicationMenuTemplate({ messages, isMac: false, windowDiagnostics: diagnostics }).some(item => item.submenu?.some(entry => entry.label === diagnostics.toggleLabel)), false);
+});

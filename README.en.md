@@ -1,4 +1,6 @@
-# ChengJing Notes v0.10.16
+# ChengJing Notes v0.10.17
+
+0.10.17 improves macOS window placement, correcting only inaccessible top edges and retaining ordinary window geometry, with optional placement diagnostics. [Investigation and release notes](docs/releases/v0.10.17.md)
 
 0.10.16 adds right-click hiding and restoration for desktop sidebar features, preserving your data, saved order and current workspace. [Release notes](docs/releases/v0.10.16.md)
 

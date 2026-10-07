@@ -140,6 +140,7 @@ jobs:
           CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET }}
         run: |
           npm run dist:mac
+          npm run qa:window-placement -- --skip-idle --skip-fullscreen
           hdiutil verify release/*.dmg
           python3 scripts/release-integrity.py --stage macos
       - uses: actions/upload-artifact@v4

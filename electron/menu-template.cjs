@@ -3,7 +3,7 @@ function shouldUseUpdateMenuIcon(platform, systemVersion) {
   return platform === "darwin" && major === 26;
 }
 
-function buildApplicationMenuTemplate({ messages, isMac = true, checkUpdatesIcon, sendShortcut = () => {} }) {
+function buildApplicationMenuTemplate({ messages, isMac = true, checkUpdatesIcon, windowDiagnostics, sendShortcut = () => {} }) {
   const m = messages;
   return [
     ...(isMac ? [{
@@ -54,6 +54,11 @@ function buildApplicationMenuTemplate({ messages, isMac = true, checkUpdatesIcon
         { role: "zoomIn", label: m.zoomIn },
         { role: "zoomOut", label: m.zoomOut },
         { role: "togglefullscreen", label: m.fullscreen },
+        ...(isMac && windowDiagnostics ? [
+          { type: "separator" },
+          { type: "checkbox", label: windowDiagnostics.toggleLabel, checked: windowDiagnostics.enabled, click: item => windowDiagnostics.toggle(item.checked) },
+          { label: windowDiagnostics.folder, enabled: windowDiagnostics.enabled, click: () => windowDiagnostics.openFolder() },
+        ] : []),
       ],
     },
     { role: "windowMenu", label: m.window },

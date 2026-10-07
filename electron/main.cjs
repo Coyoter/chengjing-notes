@@ -1,4 +1,4 @@
-const { app, BrowserWindow, clipboard, ClipboardItem, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, protocol, safeStorage, screen, shell, Tray } = require("electron");
+const { app, BrowserWindow, clipboard, ClipboardItem, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, powerMonitor, protocol, safeStorage, screen, shell, Tray } = require("electron");
 const { createHash, randomUUID } = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { createReadStream } = require("node:fs");
@@ -13,6 +13,8 @@ const { buildApplicationMenuTemplate, shouldUseUpdateMenuIcon } = require("./men
 const { parseMacHotkey } = require("./mac-hotkey.cjs");
 const { isUpdateCandidateStale, parseLatestRelease, parseLatestReleaseFeed } = require("./update-service.cjs");
 const { DEFAULT_SHORTCUT, readQuickCaptureSettings, writeQuickCaptureSettings } = require("./quick-capture-settings.cjs");
+const { initialWindowBounds, windowCorrection, geometrySnapshot, createWindowPlacementGuard } = require("./window-placement.cjs");
+const { createWindowDiagnostics } = require("./window-diagnostics.cjs");
 
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 const OPENROUTER_KEY_URL = "https://openrouter.ai/api/v1/key";
@@ -22,6 +24,8 @@ const CLOUDFLARE_UPDATE_INDEX_URL = "https://chengjing-update-index.coyoter.work
 const LEGACY_KEY_FILE = "openrouter-key.bin";
 const CLIPBOARD_MIME = "web application/x.chengjing-clipboard";
 let mainWindow = null;
+let mainWindowPlacement = null;
+let windowDiagnostics = null;
 let quickCaptureWindow = null;
 let quickCapturePresented = false;
 let nativeQuickCaptureReady = false;
@@ -686,12 +690,17 @@ function updateLoginItemSettings(openAtLogin) {
 }
 
 async function showMainWindow() {
-  if (process.platform === "darwin") {
+  if (process.platform === "darwin" && !app.dock?.isVisible()) {
     app.setActivationPolicy("regular");
     await app.dock?.show();
   }
   if (!mainWindow || mainWindow.isDestroyed()) await createWindow({ show: true });
-  else { mainWindow.show(); mainWindow.focus(); }
+  else {
+    mainWindowPlacement?.check("before-show", true);
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show(); mainWindow.focus();
+    mainWindowPlacement?.schedule("show-main");
+  }
 }
 
 function enterBackgroundAgentMode() {
@@ -943,11 +952,17 @@ function createTray() {
 
 async function createWindow({ show = !isSmoke } = {}) {
   if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
+  const initialDisplay = process.platform === "darwin" ? screen.getPrimaryDisplay() : null;
   mainWindow = new BrowserWindow({
     width: 1480,
     height: 940,
     minWidth: 1040,
     minHeight: 680,
+    ...(initialDisplay ? {
+      ...initialWindowBounds(initialDisplay),
+      minWidth: Math.min(1040, initialDisplay.workArea.width),
+      minHeight: Math.min(680, initialDisplay.workArea.height),
+    } : {}),
     title: "澄境",
     backgroundColor: "#141817",
     autoHideMenuBar: process.platform === "win32",
@@ -963,6 +978,22 @@ async function createWindow({ show = !isSmoke } = {}) {
       sandbox: true,
     },
   });
+  if (process.platform === "darwin") {
+    const window = mainWindow;
+    mainWindowPlacement = createWindowPlacementGuard({ window, screen, app, powerMonitor, diagnostics: {
+      record(event, geometry, detail) {
+        if (!windowDiagnostics?.isEnabled()) return;
+        windowDiagnostics.record(event, geometry, detail);
+        if (event !== "corrected" && !event.endsWith(":settled")) return;
+        void window.webContents.executeJavaScript(`(() => {
+          const rect = selector => { const r = document.querySelector(selector)?.getBoundingClientRect(); return r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null; };
+          return { width: innerWidth, height: innerHeight, devicePixelRatio, fontScale: getComputedStyle(document.documentElement).getPropertyValue('--font-scale').trim(), fullscreenCSS: document.documentElement.dataset.windowFullscreen, brand: rect('.brand-row'), topbar: rect('.topbar') };
+        })()`).then(renderer => {
+          if (!window.isDestroyed()) windowDiagnostics?.record(event + ":renderer", { ...geometrySnapshot(window, screen), renderer });
+        }).catch(() => {});
+      },
+    } });
+  }
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
@@ -1010,14 +1041,20 @@ async function createWindow({ show = !isSmoke } = {}) {
     if (process.platform === "darwin") enterBackgroundAgentMode();
   });
 
+  mainWindow.once("ready-to-show", () => {
+    if (show && !isSmoke) {
+      mainWindowPlacement?.check("ready-to-show", true);
+      mainWindow.show();
+    }
+  });
   if (isDev) {
     await mainWindow.loadURL("http://127.0.0.1:5173");
   } else {
     await mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
 
-  mainWindow.once("ready-to-show", () => { if (show && !isSmoke) mainWindow.show(); });
   mainWindow.on("closed", () => {
+    mainWindowPlacement = null;
     mcpRendererReady = false;
     for (const request of mcpWorkspaceRequests.values()) request.reject(new Error("mcp-renderer-closed"));
     mcpWorkspaceRequests.clear();
@@ -1056,6 +1093,13 @@ function installMenu(language = currentLanguage) {
   const template = buildApplicationMenuTemplate({
     messages: m,
     isMac: process.platform === "darwin",
+    windowDiagnostics: windowDiagnostics ? {
+      ...windowDiagnostics.copy(language), enabled: windowDiagnostics.isEnabled(),
+      toggle: (enabled) => { void windowDiagnostics.setEnabled(enabled).then(() => {
+        installMenu(); mainWindowPlacement?.schedule("diagnostics-toggle");
+      }).catch(() => {}); },
+      openFolder: () => { void shell.openPath(windowDiagnostics.directory); },
+    } : undefined,
     checkUpdatesIcon: (() => {
       const systemVersion = process.platform === "darwin" ? process.getSystemVersion() : "";
       if (!shouldUseUpdateMenuIcon(process.platform, systemVersion) || typeof nativeImage.createMenuSymbol !== "function") return undefined;
@@ -1175,10 +1219,13 @@ ipcMain.handle("quick-capture:set-open-at-login", async (_event, enabled) => {
   const preserveBounds = Boolean(previousBounds && !mainWindow.isFullScreen() && !mainWindow.isMaximized());
   updateLoginItemSettings(openAtLogin);
   await new Promise((resolve) => setImmediate(resolve));
-  if (preserveBounds && mainWindow && !mainWindow.isDestroyed()) {
+  if (preserveBounds && mainWindow && !mainWindow.isDestroyed() && !mainWindow.isFullScreen() && !mainWindow.isMaximized()) {
     const currentBounds = mainWindow.getBounds();
     if (currentBounds.x !== previousBounds.x || currentBounds.y !== previousBounds.y || currentBounds.width !== previousBounds.width || currentBounds.height !== previousBounds.height) {
-      mainWindow.setBounds(previousBounds, false);
+      const safeBounds = process.platform === "darwin"
+        ? (windowCorrection(previousBounds, screen.getAllDisplays())?.bounds || previousBounds) : previousBounds;
+      mainWindow.setBounds(safeBounds, false);
+      mainWindowPlacement?.schedule("login-item-settings");
     }
   }
   const result = currentLoginItemSettings();
@@ -1628,6 +1675,9 @@ app.whenReady().then(async () => {
     }
   });
   currentLanguage = languageFromPreferences(app.getPreferredSystemLanguages());
+  if (process.platform === "darwin") {
+    windowDiagnostics = await createWindowDiagnostics({ userData: app.getPath("userData"), appVersion: app.getVersion(), electronVersion: process.versions.electron });
+  }
   installMenu();
   await fs.rm(path.join(app.getPath("userData"), "models", "multilingual-e5-small"), { recursive: true, force: true }).catch(() => {});
   const backgroundLaunch = process.platform === "darwin"
