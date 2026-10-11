@@ -44,6 +44,7 @@ try {
   assert.ok(protectedState.layout.menuBars.length > 0, "Real visible top overlay must be measured");
   assert.deepEqual(protectedState.bounds, originalBounds); assert.equal(protectedState.fullscreen, true);
   const observed = await page.evaluate(() => ({ brandTop: document.querySelector(".brand-row").getBoundingClientRect().top,
+    dragTop: document.querySelector(".window-drag-region").getBoundingClientRect().top,
     toolbarTop: document.querySelector(".topbar").getBoundingClientRect().top, viewportOverflow: document.documentElement.scrollHeight - innerHeight,
     inset: getComputedStyle(document.documentElement).getPropertyValue("--mac-fullscreen-menu-inset").trim() }));
   const windowTop = protectedState.layout.windowBounds.y;
@@ -51,6 +52,7 @@ try {
   if (baseline) assert.ok(observed.brandTop < obstruction, "Old build should reproduce the uncovered layout gap");
   else {
     assert.ok(observed.brandTop >= obstruction && observed.toolbarTop >= obstruction, JSON.stringify({ observed, obstruction }));
+    assert.equal(observed.dragTop, observed.brandTop, "The drag region follows the shifted sidebar without a second offset");
     assert.ok(observed.viewportOverflow <= 1);
     await page.screenshot({ path: path.join(output, "protected-content.png") });
   }
