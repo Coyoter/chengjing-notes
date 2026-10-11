@@ -1,4 +1,5 @@
-function createFullscreenPresentation({ window, native }) {
+const { fullscreenTopInset } = require("./fullscreen-layout.cjs");
+function createFullscreenPresentation({ window, native, onLayout = () => {} }) {
   let baseline = null, preferencesChanged = false;
   const read = () => JSON.parse(native.read(window.getNativeWindowHandle()));
   function capture() {
@@ -8,7 +9,13 @@ function createFullscreenPresentation({ window, native }) {
       ? { options: state.options, preferenceToken: state.preferenceToken } : null;
     return state;
   }
-  function clear() { baseline = null; preferencesChanged = false; }
+  function clear() { baseline = null; preferencesChanged = false; onLayout(0); }
+  function updateLayout() {
+    const layout = native.readLayout ? JSON.parse(native.readLayout(window.getNativeWindowHandle())) : null;
+    const inset = fullscreenTopInset(layout);
+    onLayout(inset);
+    return { topInset: inset, layout };
+  }
   function check() {
     const state = read();
     if (!state.fullscreen) { clear(); return { changed: false, reason: "not-fullscreen", state }; }
@@ -24,6 +31,6 @@ function createFullscreenPresentation({ window, native }) {
     }
     return JSON.parse(native.repair(window.getNativeWindowHandle(), baseline.options, baseline.preferenceToken));
   }
-  return { capture, check, clear };
+  return { capture, check, clear, updateLayout };
 }
 module.exports = { createFullscreenPresentation };

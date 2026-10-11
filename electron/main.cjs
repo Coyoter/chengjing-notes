@@ -25,6 +25,8 @@ const CLOUDFLARE_UPDATE_INDEX_URL = "https://chengjing-update-index.coyoter.work
 const LEGACY_KEY_FILE = "openrouter-key.bin";
 const CLIPBOARD_MIME = "web application/x.chengjing-clipboard";
 let mainWindow = null;
+let mainWindowTopInset = 0;
+let mainWindowLayoutZoom = 1;
 let mainWindowPlacement = null;
 let windowDiagnostics = null;
 let quickCaptureWindow = null;
@@ -982,7 +984,14 @@ async function createWindow({ show = !isSmoke } = {}) {
   if (process.platform === "darwin") {
     const window = mainWindow;
     const native = require(app.isPackaged ? path.join(process.resourcesPath, "native", "mac-window-presentation.node") : path.join(__dirname, "..", "build", "mac-window-presentation.node"));
-    const fullscreenPresentation = createFullscreenPresentation({ window, native });
+    const fullscreenPresentation = createFullscreenPresentation({ window, native, onLayout: inset => {
+      if (window !== mainWindow) return;
+      const zoom = window.webContents.getZoomFactor();
+      if (mainWindowTopInset === inset && mainWindowLayoutZoom === zoom) return;
+      mainWindowTopInset = inset;
+      mainWindowLayoutZoom = zoom;
+      publishWindowState();
+    } });
     mainWindowPlacement = createWindowPlacementGuard({ window, screen, app, powerMonitor, workspacePreferences: systemPreferences, fullscreenPresentation, diagnostics: {
       record(event, geometry, detail) {
         if (!windowDiagnostics?.isEnabled()) return;
@@ -1032,7 +1041,7 @@ async function createWindow({ show = !isSmoke } = {}) {
     Menu.buildFromTemplate(template).popup({ window: mainWindow });
   });
 
-  const sendWindowState = () => mainWindow?.webContents.send("app:window-state", { fullscreen: Boolean(mainWindow?.isFullScreen()), maximized: Boolean(mainWindow?.isMaximized()) });
+  const sendWindowState = publishWindowState;
   mainWindow.on("enter-full-screen", sendWindowState);
   mainWindow.on("leave-full-screen", sendWindowState);
   mainWindow.on("maximize", sendWindowState);
@@ -1058,6 +1067,8 @@ async function createWindow({ show = !isSmoke } = {}) {
 
   mainWindow.on("closed", () => {
     mainWindowPlacement = null;
+    mainWindowTopInset = 0;
+    mainWindowLayoutZoom = 1;
     mcpRendererReady = false;
     for (const request of mcpWorkspaceRequests.values()) request.reject(new Error("mcp-renderer-closed"));
     mcpWorkspaceRequests.clear();
@@ -1136,13 +1147,22 @@ ipcMain.handle("app:get-preferred-language", async () => {
 });
 
 ipcMain.handle("app:get-system-version", async () => ({ platform: process.platform, arch: process.arch, version: process.getSystemVersion() }));
-ipcMain.handle("app:get-window-state", async () => ({
+function currentWindowState() { return {
   exists: Boolean(mainWindow && !mainWindow.isDestroyed()),
   visible: Boolean(mainWindow?.isVisible()),
   fullscreen: Boolean(mainWindow?.isFullScreen()),
   maximized: Boolean(mainWindow?.isMaximized()),
   bounds: mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null,
-}));
+  topSafeInset: mainWindow?.isFullScreen() ? mainWindowTopInset : 0,
+  zoomFactor: mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents.getZoomFactor() : 1,
+}; }
+function publishWindowState() {
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) mainWindow.webContents.send("app:window-state", currentWindowState());
+}
+ipcMain.handle("app:get-window-state", async () => currentWindowState());
+ipcMain.on("app:refresh-window-layout", event => {
+  if (event.sender === mainWindow?.webContents) mainWindowPlacement?.schedule("content-pointer-return");
+});
 
 ipcMain.handle("app:quit", async () => {
   setImmediate(() => app.quit());

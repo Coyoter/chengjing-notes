@@ -39,6 +39,31 @@ static napi_value readState(napi_env env, napi_callback_info info) {
   if (!window || !NSThread.isMainThread) return json(env, @{ @"available": @NO });
   return json(env, snapshot(window));
 }
+static napi_value readLayout(napi_env env, napi_callback_info info) {
+  size_t argc = 1; napi_value args[1]; napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+  NSWindow *window = argc == 1 ? windowFromHandle(env, args[0]) : nil;
+  if (!window || !NSThread.isMainThread) return json(env, @{ @"available": @NO });
+  BOOL fullscreen = (window.styleMask & NSWindowStyleMaskFullScreen) != 0;
+  // CGWindow bounds and Electron bounds use top-left DIP coordinates. AppKit
+  // frames use bottom-left coordinates relative to the primary display.
+  CGFloat primaryTop = NSMaxY(NSScreen.screens.firstObject.frame);
+  NSRect frame = window.frame;
+  NSDictionary *bounds = @{ @"x": @(frame.origin.x), @"y": @(primaryTop - NSMaxY(frame)), @"width": @(frame.size.width), @"height": @(frame.size.height) };
+  NSMutableArray *bars = [NSMutableArray array];
+  if (fullscreen) {
+    NSArray *windows = CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID));
+    const NSInteger menuLevel = CGWindowLevelForKey(kCGMainMenuWindowLevelKey);
+    const CGFloat menuHeight = MAX(NSStatusBar.systemStatusBar.thickness, NSMaxY(window.screen.frame) - NSMaxY(window.screen.visibleFrame));
+    for (NSDictionary *item in windows) {
+      if ([item[(__bridge NSString *)kCGWindowLayer] integerValue] != menuLevel || [item[(__bridge NSString *)kCGWindowAlpha] doubleValue] <= 0) continue;
+      CGRect r;
+      if (!CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)item[(__bridge NSString *)kCGWindowBounds], &r) || r.size.height > menuHeight + 1) continue;
+      [bars addObject:@{ @"x": @(r.origin.x), @"y": @(r.origin.y), @"width": @(r.size.width), @"height": @(r.size.height) }];
+    }
+  }
+  // Only geometry is returned: no window titles, owners, note text or images.
+  return json(env, @{ @"available": @YES, @"fullscreen": @(fullscreen), @"windowBounds": bounds, @"menuBars": bars });
+}
 static napi_value repairState(napi_env env, napi_callback_info info) {
   size_t argc = 3; napi_value args[3]; napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
   NSWindow *window = argc == 3 ? windowFromHandle(env, args[0]) : nil;
@@ -71,6 +96,23 @@ static napi_value repairState(napi_env env, napi_callback_info info) {
   return json(env, @{ @"changed": @NO, @"reason": reason, @"state": before });
 }
 #ifdef CHENGJING_FULLSCREEN_TEST_FIXTURE
+static NSPanel *testOverlay;
+static napi_value showTestOverlay(napi_env env, napi_callback_info info) {
+  NSWindow *window = NSApp.keyWindow;
+  if (!window || !(window.styleMask & NSWindowStyleMaskFullScreen)) return json(env, @{ @"shown": @NO });
+  NSRect frame = window.screen.frame;
+  CGFloat height = NSStatusBar.systemStatusBar.thickness;
+  frame.origin.y = NSMaxY(frame) - height; frame.size.height = height;
+  testOverlay = [[NSPanel alloc] initWithContentRect:frame styleMask:NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel backing:NSBackingStoreBuffered defer:NO];
+  testOverlay.level = CGWindowLevelForKey(kCGMainMenuWindowLevelKey);
+  testOverlay.backgroundColor = NSColor.darkGrayColor;
+  testOverlay.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary;
+  [testOverlay orderFrontRegardless];
+  return json(env, @{ @"shown": @YES, @"height": @(height) });
+}
+static napi_value hideTestOverlay(napi_env env, napi_callback_info info) {
+  [testOverlay orderOut:nil]; testOverlay = nil; return json(env, @{ @"hidden": @YES });
+}
 static napi_value injectMissingState(napi_env env, napi_callback_info info) {
   if (!NSApp.active || !(NSApp.keyWindow.styleMask & NSWindowStyleMaskFullScreen)) return json(env, @{ @"injected": @NO });
   NSApp.presentationOptions = NSApplicationPresentationDefault;
@@ -80,9 +122,12 @@ static napi_value injectMissingState(napi_env env, napi_callback_info info) {
 static napi_value init(napi_env env, napi_value exports) {
   napi_value fn;
   napi_create_function(env, "read", NAPI_AUTO_LENGTH, readState, nullptr, &fn); napi_set_named_property(env, exports, "read", fn);
+  napi_create_function(env, "readLayout", NAPI_AUTO_LENGTH, readLayout, nullptr, &fn); napi_set_named_property(env, exports, "readLayout", fn);
   napi_create_function(env, "repair", NAPI_AUTO_LENGTH, repairState, nullptr, &fn); napi_set_named_property(env, exports, "repair", fn);
 #ifdef CHENGJING_FULLSCREEN_TEST_FIXTURE
   napi_create_function(env, "injectMissingState", NAPI_AUTO_LENGTH, injectMissingState, nullptr, &fn); napi_set_named_property(env, exports, "injectMissingState", fn);
+  napi_create_function(env, "showOverlay", NAPI_AUTO_LENGTH, showTestOverlay, nullptr, &fn); napi_set_named_property(env, exports, "showOverlay", fn);
+  napi_create_function(env, "hideOverlay", NAPI_AUTO_LENGTH, hideTestOverlay, nullptr, &fn); napi_set_named_property(env, exports, "hideOverlay", fn);
 #endif
   return exports;
 }

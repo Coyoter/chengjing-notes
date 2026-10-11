@@ -154,10 +154,37 @@ export function App() {
   }, [language]);
 
   useEffect(() => {
-    const apply = (value: { fullscreen: boolean }) => { document.documentElement.dataset.windowFullscreen = String(Boolean(value.fullscreen)); };
+    const apply = (value: { fullscreen: boolean; topSafeInset?: number; zoomFactor?: number }) => {
+      document.documentElement.dataset.windowFullscreen = String(Boolean(value.fullscreen));
+      const zoom = value.zoomFactor && value.zoomFactor > 0 ? value.zoomFactor : 1;
+      const inset = value.fullscreen ? Math.max(0, value.topSafeInset || 0) / zoom : 0;
+      document.documentElement.dataset.fullscreenMenuOccluded = String(inset > 0);
+      document.documentElement.style.setProperty("--mac-fullscreen-menu-inset", `${inset}px`);
+    };
     void window.chengjing?.app?.getWindowState?.().then(apply).catch(() => apply({ fullscreen: false }));
     const dispose = window.chengjing?.app?.onWindowState?.(apply);
     return () => dispose?.();
+  }, []);
+
+  useEffect(() => {
+    let lastProtectedProbe = 0;
+    const refresh = () => {
+      if (window.chengjing?.platform === "darwin" && document.documentElement.dataset.windowFullscreen === "true") window.chengjing.app.refreshWindowLayout?.();
+    };
+    const pointer = (event: PointerEvent) => { if (event.relatedTarget === null) refresh(); };
+    const protectedPointer = () => {
+      if (document.documentElement.dataset.fullscreenMenuOccluded !== "true" || performance.now() - lastProtectedProbe < 500) return;
+      lastProtectedProbe = performance.now(); refresh();
+    };
+    const visibility = () => { if (!document.hidden) refresh(); };
+    window.addEventListener("pointerover", pointer);
+    window.addEventListener("pointermove", protectedPointer);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("resize", refresh);
+    document.addEventListener("visibilitychange", visibility);
+    return () => {
+      window.removeEventListener("pointerover", pointer); window.removeEventListener("pointermove", protectedPointer); window.removeEventListener("focus", refresh); window.removeEventListener("resize", refresh); document.removeEventListener("visibilitychange", visibility);
+    };
   }, []);
 
   useEffect(() => {

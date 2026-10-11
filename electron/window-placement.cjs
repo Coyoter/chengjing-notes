@@ -62,7 +62,7 @@ function geometrySnapshot(window, screen) {
 }
 
 function createWindowPlacementGuard({ window, screen, app, powerMonitor, diagnostics, fullscreenPresentation, workspacePreferences, delay = 300 }) {
-  let timer = null, applying = false, disposed = false, suspended = false, locked = false;
+  let timer = null, followup = null, applying = false, disposed = false, suspended = false, locked = false;
   const listeners = [];
   const listen = (emitter, event, callback) => { emitter.on(event, callback); listeners.push(() => emitter.removeListener(event, callback)); };
   function record(event, snapshot, extra) { diagnostics?.record(event, snapshot, extra); }
@@ -74,6 +74,7 @@ function createWindowPlacementGuard({ window, screen, app, powerMonitor, diagnos
     if (applying || suspended || (!before.visible && !allowHidden)) return;
     if (before.fullscreen && fullscreenPresentation) {
       const result = fullscreenPresentation.check();
+      result.layout = fullscreenPresentation.updateLayout?.();
       record(result.changed ? "fullscreen-presentation-repaired" : `${event}:fullscreen`, before, result);
       return;
     }
@@ -94,7 +95,11 @@ function createWindowPlacementGuard({ window, screen, app, powerMonitor, diagnos
     if (disposed || applying || window.isDestroyed()) return;
     record(event, snapshot());
     clearTimeout(timer);
+    clearTimeout(followup);
     timer = setTimeout(() => { timer = null; check(`${event}:settled`); }, delay);
+    // A bounded second measurement catches the menu's hide/reveal animation.
+    // There is no idle polling and no periodic window reset.
+    followup = setTimeout(() => { followup = null; if (window.isFullScreen()) check(`${event}:layout-settled`); }, delay + 650);
   }
   for (const event of ["show", "focus", "restore", "leave-full-screen", "maximize", "unmaximize"]) listen(window, event, () => schedule(event));
   // Observe user moves/resizes without imposing placement during a drag.
@@ -112,7 +117,7 @@ function createWindowPlacementGuard({ window, screen, app, powerMonitor, diagnos
   listen(screen, "display-metrics-changed", (_event, _display, metrics) => {
     if (metrics.some(metric => ["bounds", "workArea", "scaleFactor", "rotation"].includes(metric))) schedule(`display-metrics:${metrics.join(",")}`);
   });
-  listen(powerMonitor, "suspend", () => { suspended = true; clearTimeout(timer); timer = null; record("suspend", snapshot()); });
+  listen(powerMonitor, "suspend", () => { suspended = true; clearTimeout(timer); clearTimeout(followup); timer = null; followup = null; record("suspend", snapshot()); });
   listen(powerMonitor, "resume", () => { suspended = false; schedule("resume"); });
   listen(powerMonitor, "lock-screen", () => { locked = true; record("lock-screen", snapshot()); });
   listen(powerMonitor, "unlock-screen", () => { locked = false; schedule("unlock-screen"); });
@@ -120,8 +125,14 @@ function createWindowPlacementGuard({ window, screen, app, powerMonitor, diagnos
     // Display wake is different from system resume or authentication unlock.
     const id = workspacePreferences.subscribeWorkspaceNotification("NSWorkspaceScreensDidWakeNotification", () => schedule("screens-wake"));
     listeners.push(() => workspacePreferences.unsubscribeWorkspaceNotification(id));
+    if (workspacePreferences.subscribeLocalNotification) {
+      for (const event of ["NSMenuDidBeginTrackingNotification", "NSMenuDidEndTrackingNotification"]) {
+        const menuId = workspacePreferences.subscribeLocalNotification(event, () => schedule(event));
+        listeners.push(() => workspacePreferences.unsubscribeLocalNotification(menuId));
+      }
+    }
   }
-  function dispose() { disposed = true; clearTimeout(timer); timer = null; for (const remove of listeners) remove(); }
+  function dispose() { disposed = true; clearTimeout(timer); clearTimeout(followup); timer = null; followup = null; for (const remove of listeners) remove(); }
   listen(window, "closed", dispose);
   return { check, schedule, dispose };
 }

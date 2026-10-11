@@ -18,9 +18,10 @@ interface Window {
       setLanguage: (language: import("./types").AppLanguage) => Promise<{ language: import("./types").AppLanguage }>;
       getMenuSnapshot: () => Promise<Array<{ label: string; role: string; submenu: Array<{ label: string; role: string; type: string; hasIcon: boolean }> }>>;
       getSystemVersion: () => Promise<{ platform: string; arch: string; version: string }>;
-      getWindowState?: () => Promise<{ exists?: boolean; visible?: boolean; fullscreen: boolean; maximized: boolean; bounds?: { x: number; y: number; width: number; height: number } | null }>;
+      getWindowState?: () => Promise<{ exists?: boolean; visible?: boolean; fullscreen: boolean; maximized: boolean; topSafeInset?: number; zoomFactor?: number; bounds?: { x: number; y: number; width: number; height: number } | null }>;
+      refreshWindowLayout?: () => void;
       closeMain?: () => Promise<{ closed: boolean }>;
-      onWindowState?: (callback: (value: { fullscreen: boolean; maximized: boolean }) => void) => () => void;
+      onWindowState?: (callback: (value: { fullscreen: boolean; maximized: boolean; topSafeInset?: number; zoomFactor?: number }) => void) => () => void;
       quit: () => Promise<{ quitting: boolean }>;
     };
     updates?: {

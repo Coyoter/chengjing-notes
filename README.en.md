@@ -1,4 +1,6 @@
-# ChengJing Notes v0.10.18
+# ChengJing Notes v0.10.19
+
+0.10.19 protects full-screen content from actual menu-bar obstruction, keeping the brand, search and actions usable even if macOS does not hide the bar. [Release and verification notes](docs/releases/v0.10.19.md)
 
 0.10.18 adds native macOS full-screen menu presentation recovery and direct display-wake handling, preserving window geometry. [Investigation and release notes](docs/releases/v0.10.18.md)
 

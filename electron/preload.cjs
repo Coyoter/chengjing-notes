@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("chengjing", {
     getMenuSnapshot: () => ipcRenderer.invoke("app:get-menu-snapshot"),
     getSystemVersion: () => ipcRenderer.invoke("app:get-system-version"),
     getWindowState: () => ipcRenderer.invoke("app:get-window-state"),
+    refreshWindowLayout: () => ipcRenderer.send("app:refresh-window-layout"),
     closeMain: () => ipcRenderer.invoke("app:close-main"),
     onWindowState: (callback) => {
       const listener = (_event, value) => callback(value);
