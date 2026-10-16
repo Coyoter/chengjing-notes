@@ -308,7 +308,7 @@ export function GlobalContextMenu() {
       {card && <>
         <header><span>{t("context.cardActions")}</span><b>{card.title}</b></header>
         <button type="button" role="menuitem" data-menu-action="edit" onClick={() => run(() => useAppStore.getState().openCard(card.id, { allowInactive: card.state === "archived" || card.state === "trash" }))}><Pencil size={15} />{editCopy.edit}</button>
-        {card.sourceUrl && <button type="button" role="menuitem" onClick={() => run(() => window.open(card.sourceUrl, "_blank", "noopener,noreferrer"))}><ArrowUpRight size={15} />{t("context.openOriginal")}</button>}
+        {card.sourceUrl && <button type="button" role="menuitem" disabled={localOnly} onClick={() => run(() => window.open(card.sourceUrl, "_blank", "noopener,noreferrer"))}><ArrowUpRight size={15} />{t("context.openOriginal")}</button>}
         {card.state !== "trash" && <button type="button" role="menuitem" disabled={localOnly} data-menu-action="convert-board" onClick={() => run(() => { useAppStore.getState().openCard(card.id, { allowInactive: card.state === "archived" || card.state === "trash" }); useAppStore.getState().openAIWithAction(t("card.convertToBoardPrompt")); })}><PanelsTopLeft size={15} />{t("card.convertToBoard")}</button>}
         {card.state !== "trash" && <button type="button" role="menuitem" data-menu-action="to-task" onClick={() => run(addCardAsTask)}><ListTodo size={15} />{contentTaskCopy.menuLabel}</button>}
         {card.state !== "trash" && card.state !== "archived" && <>

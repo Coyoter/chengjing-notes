@@ -175,7 +175,7 @@ export function LibraryView() {
     return <button type="button" key={id} className={`${selectedGroup === id ? "is-active" : ""} ${dragTarget === id ? "is-drop-target" : ""} knowledge-${depth}`} onClick={() => setSelectedGroup(id)} onContextMenu={(event) => { event.preventDefault(); setGroupMenu({ id, x: event.clientX, y: event.clientY }); }} onDragOver={(event) => { event.preventDefault(); if (depth === "topic") setDragTarget(id); }} onDragLeave={() => setDragTarget(null)} onDrop={(event) => { if (depth === "topic") void dropCard(event, id); }}>{depth === "area" ? <FolderOpen size={15} /> : <Folder size={14} />}<span>{name}</span><b>{count}</b></button>;
   }
 
-  function activateCard(card: (typeof cards)[number]) { if (selectionMode) { toggleCard(card.id); return; } if (card.state !== "trash" && card.kind === "web" && card.sourceUrl) window.open(card.sourceUrl, "_blank", "noopener,noreferrer"); else openCard(card.id); }
+  function activateCard(card: (typeof cards)[number]) { if (selectionMode) { toggleCard(card.id); return; } if (!localOnly && card.state !== "trash" && card.kind === "web" && card.sourceUrl) window.open(card.sourceUrl, "_blank", "noopener,noreferrer"); else openCard(card.id); }
 
   const selectedForCreate = selectedGroup !== "all" && selectedGroup !== "pinned" && selectedGroup !== "unassigned" && groupById.get(selectedGroup)?.kind === "topic" ? selectedGroup : null;
   const currentGroup = scope === "tasks" ? taskCopy.tasksOnly : scope === "all" && selectedGroup === "all" ? taskCopy.allContent : selectedGroup === "all" ? copy.allCards : selectedGroup === "pinned" ? t("library.pinned") : selectedGroup === "unassigned" ? copy.unassigned : groupById.get(selectedGroup)?.name || copy.allCards;
