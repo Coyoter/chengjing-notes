@@ -134,7 +134,7 @@ try {
   assert.equal((await nativeFetch(`${base}/blocked-after-restart`)).ok, false);
   results.startupPolicyLoadedBeforeRenderer = true;
   assert.equal(await page.evaluate(() => localStorage.getItem("chengjing-sync-enabled")), "true");
-  await page.getByRole("button", { name: "設定", exact: true }).click();
+  await page.locator(".sidebar-footer > button").nth(2).click();
   await page.locator("#privacy-settings").waitFor();
   results.saveHandshakeWithoutCloudSync = true;
   assert.equal(await page.locator('[data-nav-id="brain"]').isDisabled(), true);
@@ -159,8 +159,8 @@ try {
   const backup = await page.evaluate(() => window.chengjing.backups.write({ reason: "manual", data: JSON.stringify({ format: "chengjing-backup", version: 1, exportedAt: new Date().toISOString(), data: {} }) }));
   assert.ok(backup.filePath); results.localBackupWritten = true;
   // The normal UI backup exports the real isolated database, not just a fixture.
-  await page.getByRole("button", { name: "今日", exact: true }).click();
-  await page.getByRole("button", { name: "設定", exact: true }).click();
+  await page.locator('[data-nav-id="today"]').click();
+  await page.locator(".sidebar-footer > button").nth(2).click();
   await page.locator(".local-method .backup-now-button, .local-method .primary-button").last().click();
   await page.waitForTimeout(500);
   const backupFiles = (await fs.readdir(backupDirectory)).filter(name => name.endsWith(".json"));
@@ -175,6 +175,17 @@ try {
   results.disableRestoresNormalNetworking = true;
   await fs.writeFile(path.join(output, "report.json"), JSON.stringify({ passed: true, results, serverHits: hits }, null, 2));
   console.log(JSON.stringify({ passed: true, results, output }, null, 2));
+} catch (error) {
+  if (page && !page.isClosed()) {
+    const state = await page.evaluate(() => ({
+      url: location.href, language: document.documentElement.lang,
+      footer: [...document.querySelectorAll(".sidebar-footer button")].map(button => ({ text: button.textContent, title: button.getAttribute("title"), visible: Boolean(button.getClientRects().length) })),
+      body: document.body.innerText.slice(0, 1600),
+    })).catch(() => null);
+    console.error("QA failure state:", JSON.stringify(state));
+    await page.screenshot({ path: path.join(output, "failure.png") }).catch(() => {});
+  }
+  throw error;
 } finally {
   await client?.close().catch(() => {});
   for (const socket of sockets) socket.destroy();

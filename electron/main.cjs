@@ -123,6 +123,7 @@ handle("privacy:set-local-only", async (event, enabled) => {
     // A failed save rolls the change back; a cancelled quit never schedules a
     // surprising relaunch later. Relaunch ends all old workers and live sockets.
     if (!isSmoke || process.env.CHENGJING_PRIVACY_QA_SAVE === "1") await backupBeforeQuit({ reason: "privacy-restart" });
+    session.defaultSession.flushStorageData();
     if (!isSmoke) { backupQuitAllowed = true; app.relaunch(); setTimeout(() => app.quit(), 100); }
     else privacySwitchBusy = false;
     return state;
