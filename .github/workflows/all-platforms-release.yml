@@ -182,6 +182,7 @@ jobs:
           node scripts/prepare-google-oauth.mjs --required
           npm run icons
           npm run build
+          npm run qa:local-only
           npx electron-builder --win --dir --x64 --publish never
           node scripts/build-windows-installer.mjs x64
           npx electron-builder --win --dir --arm64 --publish never
