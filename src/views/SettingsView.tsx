@@ -42,6 +42,7 @@ import { McpSettingsPanel } from "../components/McpSettings";
 import { AndroidUpdateSettings } from "../components/AndroidUpdateSettings";
 import { SettingsJumpNav } from "../components/SettingsJumpNav";
 import { getSettingsDisclosureCopy } from "../lib/settingsAnchorCopy";
+import { CloudFeature, LocalOnlySettings } from "../components/LocalOnlySettings";
 
 const FEATURED_MODELS = [
   { id: "openai/gpt-5.6-luna", label: "GPT-5.6 Luna", note: "settings.modelDefault" as MessageKey },
@@ -171,13 +172,14 @@ export function SettingsView() {
     <div className="page-scroll settings-page">
       {notice && <div className="settings-notice" role="status"><Check size={15} /><span>{notice}</span><button type="button" onClick={() => setNotice("")}>{t("common.close")}</button></div>}
       <SettingsJumpNav />
+      <LocalOnlySettings />
 
       <section className="settings-section language-settings" id="language-settings">
         <header><span><Languages size={14} /> {t("language.eyebrow")}</span><h2>{t("language.title")}</h2><p>{t("language.description")}</p></header>
         <div className="language-grid">{languageOptions.map((option) => <button type="button" key={option.value} className={language === option.value ? "is-active" : ""} onClick={() => setLanguage(option.value as AppLanguage)}><span>{option.label}</span><small>{option.short}</small>{language === option.value && <Check size={15} />}</button>)}</div>
       </section>
 
-      <section className="settings-section" id="ai-settings">
+      <CloudFeature><section className="settings-section" id="ai-settings">
         <header><span>{t("settings.aiEyebrow")}</span><h2>{t("settings.aiTitle")}</h2><p>{providerCopy.aiDescription}</p></header>
         <div className="engine-choice-grid">
           <button type="button" className={engine === "openrouter" ? "is-active" : ""} onClick={() => setEngine("openrouter")}>
@@ -237,7 +239,7 @@ export function SettingsView() {
         </div>
       </details>
 
-      {window.chengjing?.platform !== "android" && <McpSettingsPanel />}
+      {window.chengjing?.platform !== "android" && <McpSettingsPanel />}</CloudFeature>
 
       {window.chengjing?.platform==="android"?<AndroidUpdateSettings />:<UpdateSettingsSection />}
 
@@ -256,14 +258,14 @@ export function SettingsView() {
         <AutoBackupSettingsPanel />
       </section>
 
-      <section className="settings-section support-author" id="support-author">
+      <CloudFeature><section className="settings-section support-author" id="support-author">
         <header><span><HeartHandshake size={14} /> {supportCopy.eyebrow}</span><h2>{supportCopy.title}</h2><p>{supportCopy.description}</p></header>
         <div className="support-actions">
           <a href="https://payment.ecpay.com.tw/Broadcaster/Donate/D599936B2C3A0AF2342FA6448088C9C6" target="_blank" rel="noreferrer"><span><b>{supportCopy.ecpay}</b><small>{supportCopy.ecpayHint}</small></span><ExternalLink size={15} /></a>
           <a href="https://paypal.me/techtarian" target="_blank" rel="noreferrer"><span><b>{supportCopy.paypal}</b><small>{supportCopy.paypalHint}</small></span><ExternalLink size={15} /></a>
         </div>
         <footer>{supportCopy.promise}</footer>
-      </section>
+      </section></CloudFeature>
     </div>
   );
 }

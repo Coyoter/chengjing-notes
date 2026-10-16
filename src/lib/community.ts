@@ -1,3 +1,4 @@
+import { assertCloudAvailable } from "./localOnly";
 import type { BrainContentType } from "../types";
 
 export const COMMUNITY_ENDPOINT = "https://chengjing-wish-pool.coyoter.workers.dev";
@@ -149,6 +150,7 @@ interface RequestOptions {
 }
 
 async function requestJson<T>(path: string, init: RequestInit = {}, options: RequestOptions = {}): Promise<T> {
+  assertCloudAvailable();
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), options.timeoutMs || 12_000);
   try {

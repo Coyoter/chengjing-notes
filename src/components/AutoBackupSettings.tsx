@@ -27,6 +27,7 @@ import { inspectLocalModel } from "../lib/localGemma";
 import { db } from "../db";
 import { useI18n } from "../hooks/useI18n";
 import { SyncSettings } from "./SyncSettings";
+import { CloudFeature } from "./LocalOnlySettings";
 
 type BusyAction = "local" | "";
 
@@ -150,7 +151,7 @@ export function AutoBackupSettingsPanel() {
       </header>
 
       <div className="backup-method-grid">
-        {window.chengjing?.sync && <SyncSettings />}
+        {window.chengjing?.sync && <CloudFeature><SyncSettings /></CloudFeature>}
 
       <article className="backup-method-card local-method">
           <header>

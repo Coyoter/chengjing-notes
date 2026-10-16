@@ -1,6 +1,6 @@
 {
   "name": "chengjing",
-  "version": "0.10.19",
+  "version": "0.10.20",
   "private": true,
   "author": "Techtarian",
   "description": "澄境 ChengJing — 本機優先的繁體中文視覺筆記與 AI 研究桌面應用",
@@ -40,6 +40,7 @@
     "qa:window-placement": "node scripts/qa-window-placement.mjs",
     "qa:fullscreen-presentation": "node scripts/qa-fullscreen-presentation.mjs",
     "qa:fullscreen-layout": "node scripts/qa-fullscreen-layout.mjs",
+    "qa:local-only": "node scripts/qa-local-only.mjs",
     "qa:database-share": "node scripts/qa-database-share.mjs",
     "qa:pinned-cards": "node scripts/qa-pinned-cards.mjs",
     "qa:journal-polish": "node scripts/qa-journal-polish.mjs",

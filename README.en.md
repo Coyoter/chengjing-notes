@@ -1,6 +1,6 @@
-# ChengJing Notes v0.10.19
+# ChengJing Notes v0.10.20
 
-0.10.19 protects full-screen content from actual menu-bar obstruction, keeping the brand, search and actions usable even if macOS does not hide the bar. [Release and verification notes](docs/releases/v0.10.19.md)
+0.10.20 adds opt-in local-only mode for macOS and Windows: only software updates can connect, cloud features are disabled, and local notes and backups remain available. [Release and verification notes](docs/releases/v0.10.20.md)
 
 0.10.18 adds native macOS full-screen menu presentation recovery and direct display-wake handling, preserving window geometry. [Investigation and release notes](docs/releases/v0.10.18.md)
 

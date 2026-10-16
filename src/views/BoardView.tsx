@@ -1,3 +1,4 @@
+import { useLocalOnly } from "../lib/localOnly";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -216,6 +217,7 @@ function ToolButton({ label, shortcut, active = false, disabled = false, onClick
 }
 
 function BoardCanvas({ boardId, focusNodeId, onFocusConsumed }: { boardId: string; focusNodeId: string | null; onFocusConsumed: () => void }) {
+  const localOnly = useLocalOnly();
   const { language, t } = useI18n();
   const historyCopy = getBoardPolishCopy(language);
   const editCopy = getContentEditCopy(language);
@@ -838,7 +840,7 @@ function BoardCanvas({ boardId, focusNodeId, onFocusConsumed }: { boardId: strin
         <ToolButton label={t("board.showAll")} onClick={() => flow?.fitView({ padding: 0.14, duration: 450 })}><Maximize2 size={18} /></ToolButton>
         <ToolButton label={showMiniMap ? t("board.hideMinimap") : t("board.showMinimap")} active={showMiniMap} onClick={() => setShowMiniMap(!showMiniMap)}><MapIcon size={18} /></ToolButton>
       </div>
-      <div className="board-ai-hint"><button type="button" onClick={() => openAIWithPrompt(t("ai.organizeBoardPrompt"))}><Sparkles size={15} /><span>{t("board.askAI")}</span></button></div>
+      <div className="board-ai-hint"><button type="button" disabled={localOnly} onClick={() => openAIWithPrompt(t("ai.organizeBoardPrompt"))}><Sparkles size={15} /><span>{t("board.askAI")}</span></button></div>
       {status && <div className={`board-status is-${status.tone}`} role="status">{status.tone === "success" ? <Check size={15} /> : status.tone === "error" ? <X size={15} /> : <CircleDot size={15} />}<span>{status.message}</span></div>}
       {activeTool === "connect" && !status && <div className="board-connect-guide"><Link2 size={14} /><span>{pendingConnectionNodeId ? t("board.chooseTarget") : t("board.connectGuide")}</span></div>}
 

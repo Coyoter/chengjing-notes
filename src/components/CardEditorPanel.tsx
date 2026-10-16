@@ -1,3 +1,4 @@
+import { useLocalOnly } from "../lib/localOnly";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -57,6 +58,7 @@ function AttachmentPreview({ attachment, downloadLabel, onRemove }: { attachment
 }
 
 export function CardEditorPanel() {
+  const localOnly = useLocalOnly();
   const cardId = useAppStore((state) => state.selectedCardId);
   const inactiveAccess = useAppStore((state) => state.inactiveCardAccessId);
   const view = useAppStore((state) => state.view);
@@ -230,8 +232,8 @@ export function CardEditorPanel() {
       <footer className="card-panel-footer">
         {card.state === "inbox" ? <button type="button" className="secondary-button" onClick={() => update({ state: "active" })}><Check size={15} />{t("card.organized")}</button> : <span>{t("card.savedLocal")}</span>}
         <div className="ai-actions">
-          <button type="button" className="secondary-button card-convert-board" onClick={() => openAIWithAction(t("card.convertToBoardPrompt"))}><PanelsTopLeft size={15} />{t("card.convertToBoard")}</button>
-          <button type="button" className="ai-button" onClick={openAI}><Sparkles size={15} />{t("card.aiAction")}<ChevronDown size={13} /></button>
+          <button type="button" disabled={localOnly} className="secondary-button card-convert-board" onClick={() => openAIWithAction(t("card.convertToBoardPrompt"))}><PanelsTopLeft size={15} />{t("card.convertToBoard")}</button>
+          <button type="button" className="ai-button" disabled={localOnly} onClick={openAI}><Sparkles size={15} />{t("card.aiAction")}<ChevronDown size={13} /></button>
         </div>
       </footer>
     </div>

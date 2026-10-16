@@ -1,3 +1,4 @@
+import { useLocalOnly } from "../lib/localOnly";
 import { getHiddenTaskIds } from "../lib/activeContent";
 import { captureInboxCount } from "../lib/captureCards";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -11,6 +12,7 @@ import { isVisibleCard } from "../lib/cardVisibility";
 import { setTaskDone } from "../lib/taskSync";
 
 export function TodayView() {
+  const localOnly = useLocalOnly();
   const recentCards = useLiveQuery(() => db.cards.orderBy("updatedAt").reverse().filter((card) => isVisibleCard(card)).limit(4).toArray(), [], []);
   const tasks = useLiveQuery(async () => {
     const hidden = await getHiddenTaskIds();
@@ -40,7 +42,7 @@ export function TodayView() {
         </div>
         <div className="hero-actions">
           <button type="button" className="primary-button" onClick={() => setCreateCardOpen(true)}><FilePlus2 size={16} />{t("today.newCard")}</button>
-          <button type="button" className="secondary-button" onClick={openAI}><Sparkles size={16} />{t("today.discussAI")}</button>
+          <button type="button" className="secondary-button" disabled={localOnly} onClick={openAI}><Sparkles size={16} />{t("today.discussAI")}</button>
         </div>
       </section>
 

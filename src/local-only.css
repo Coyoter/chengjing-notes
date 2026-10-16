@@ -1,0 +1,14 @@
+.cloud-feature { min-width: 0; }
+.cloud-feature > fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.cloud-feature.is-blocked > fieldset { opacity: .42; user-select: none; }
+.local-only-feature-note { display: flex; align-items: center; gap: 7px; color: var(--text-muted); font-size: 12px; margin: 0 0 10px; }
+.backup-method-grid > .cloud-feature { display: flex; flex-direction: column; }
+.backup-method-grid > .cloud-feature .local-only-feature-note { order: 2; margin: 10px 0 0; }
+.local-only-settings .switch-row { gap: 20px; }
+.local-only-settings .switch-row small { max-width: 660px; line-height: 1.7; }
+.local-only-explanation { color: var(--text-muted); font-size: 12px; line-height: 1.7; margin: 14px 0 0; }
+#privacy-settings { scroll-margin-top: 12px; }
+:root[data-local-only="true"] button:disabled { cursor: not-allowed; opacity: .42; }
+.cloud-feature.is-blocked > fieldset button:disabled { opacity: 1; }
+:root[data-local-only="true"] .engine-status:disabled { opacity: 1; color: var(--accent); cursor: default; }
+:root[data-local-only="true"] a:is([href^="http:"], [href^="https:"]) { opacity: .42; pointer-events: none; cursor: not-allowed; }

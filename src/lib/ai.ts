@@ -1,3 +1,4 @@
+import { assertCloudAvailable } from "./localOnly";
 import { db } from "../db";
 import { useAppStore } from "../store";
 import { intlLocale, translate } from "../i18n";
@@ -85,6 +86,7 @@ export async function runAI(options: {
   onToken?: (text: string) => void;
   onProgress?: (progress: number, file: string) => void;
 }): Promise<AIResponse> {
+  assertCloudAvailable();
   const language = currentLanguage();
   const messages: AIMessage[] = [
     { role: "system", content: translate(language, "ai.system") },

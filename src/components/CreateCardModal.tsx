@@ -1,3 +1,4 @@
+import { useLocalOnly } from "../lib/localOnly";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Feather, FileStack, FileText, Globe2, Image, LayoutDashboard, Link2, LoaderCircle, Music2, Paperclip, Plus, Upload, Video, X } from "lucide-react";
@@ -12,6 +13,7 @@ import { dataUrlToBlob } from "../lib/utils";
 type CreateMode = "note" | "web" | "file";
 
 export function CreateCardModal() {
+  const localOnly = useLocalOnly();
   const { t } = useI18n();
   const open = useAppStore((state) => state.createCardOpen);
   const parentView = useAppStore((state) => state.view);
@@ -100,7 +102,7 @@ export function CreateCardModal() {
 
   return <AnimatePresence>{open && <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={() => setOpen(false)}><motion.form className="modal create-card-modal unified-create-modal" initial={{ opacity: 0, y: 12, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.99 }} onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
     <header className="modal-header"><div><span>{t("create.eyebrow")}</span><h2>{t("create.title")}</h2></div><button type="button" className="icon-button" onClick={() => setOpen(false)} aria-label={t("common.close")}><X size={18} /></button></header>
-    <div className="create-source-tabs"><button type="button" className={mode === "note" ? "is-active" : ""} onClick={() => { setMode("note"); setDestination(defaultDestination); }}><FileText size={17} /><span><b>{t("kind.note")}</b><small>{t("create.bodyPlaceholder")}</small></span></button><button type="button" className={mode === "web" ? "is-active" : ""} onClick={() => { setMode("web"); setDestination("library"); }}><Globe2 size={17} /><span><b>{t("kind.web")}</b><small>{t("import.webTitle")}</small></span></button><button type="button" className={mode === "file" ? "is-active" : ""} onClick={() => { setMode("file"); setDestination("library"); }}><Paperclip size={17} /><span><b>{t("import.file")}</b><small>PDF · Word · Markdown · Media</small></span></button></div>
+    <div className="create-source-tabs"><button type="button" className={mode === "note" ? "is-active" : ""} onClick={() => { setMode("note"); setDestination(defaultDestination); }}><FileText size={17} /><span><b>{t("kind.note")}</b><small>{t("create.bodyPlaceholder")}</small></span></button><button type="button" disabled={localOnly} className={mode === "web" ? "is-active" : ""} onClick={() => { setMode("web"); setDestination("library"); }}><Globe2 size={17} /><span><b>{t("kind.web")}</b><small>{t("import.webTitle")}</small></span></button><button type="button" className={mode === "file" ? "is-active" : ""} onClick={() => { setMode("file"); setDestination("library"); }}><Paperclip size={17} /><span><b>{t("import.file")}</b><small>PDF · Word · Markdown · Media</small></span></button></div>
     <div className="create-card-fields">
       {mode === "note" && <><input className="create-card-title" autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder={t("create.titlePlaceholder")} /><textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder={t("create.bodyPlaceholder")} /></>}
       {mode === "web" && <div className="create-web-source"><Globe2 size={24} /><h3>{t("import.webTitle")}</h3><p>{t("import.webDescription")}</p><label><Link2 size={16} /><input autoFocus type="url" required value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://…" /></label></div>}

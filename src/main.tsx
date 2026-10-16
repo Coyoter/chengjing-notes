@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/zh-tw";
 import "@xyflow/react/dist/style.css";
 import "./styles.css";
+import "./local-only.css";
 import { App } from "./App";
 import { QuickCaptureWindow } from "./components/QuickCaptureWindow";
 import { initializeAndroid } from "./platform/android";

@@ -1,3 +1,4 @@
+import { isLocalOnly } from "./lib/localOnly";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import dayjs from "dayjs";
@@ -128,16 +129,16 @@ export const useAppStore = create<AppState>()(
       language: initialLanguage(),
       aiDraft: "",
       aiActionRequest: null,
-      setView: (view) => set({ view: view === "database" ? "library" : view, selectedCardId: null, inactiveCardAccessId: null, rightPanel: "none" }),
+      setView: (view) => { if (isLocalOnly() && view === "brain") return; set({ view: view === "database" ? "library" : view, selectedCardId: null, inactiveCardAccessId: null, rightPanel: "none" }); },
       openBoard: (selectedBoardId) => set({ view: "boards", selectedBoardId, selectedCardId: null, rightPanel: "none" }),
       openKanbanBoard: (selectedKanbanBoardId) => set({ view: "kanban", selectedKanbanBoardId, selectedCardId: null, rightPanel: "none" }),
       openCard: (selectedCardId, options) => set((state) => ({ selectedCardId, inactiveCardAccessId: options?.allowInactive ? selectedCardId : null, rightPanel: state.rightPanel === "ai" ? "ai" : "none" })),
       closeCard: () => set({ selectedCardId: null, inactiveCardAccessId: null }),
       closeRightPanel: () => set({ rightPanel: "none" }),
-      openAI: () => set({ rightPanel: "ai", aiDraft: "" }),
-      openWishPool: () => set({ rightPanel: "wish" }),
-      openAIWithPrompt: (aiDraft) => set({ rightPanel: "ai", aiDraft }),
-      openAIWithAction: (prompt) => set({ rightPanel: "ai", aiDraft: "", aiActionRequest: { id: crypto.randomUUID(), prompt } }),
+      openAI: () => !isLocalOnly() && set({ rightPanel: "ai", aiDraft: "" }),
+      openWishPool: () => !isLocalOnly() && set({ rightPanel: "wish" }),
+      openAIWithPrompt: (aiDraft) => !isLocalOnly() && set({ rightPanel: "ai", aiDraft }),
+      openAIWithAction: (prompt) => !isLocalOnly() && set({ rightPanel: "ai", aiDraft: "", aiActionRequest: { id: crypto.randomUUID(), prompt } }),
       consumeAIActionRequest: (id) => set((state) => ({ aiActionRequest: state.aiActionRequest?.id === id ? null : state.aiActionRequest })),
       setAIDraft: (aiDraft) => set({ aiDraft }),
       setJournalDate: (journalDate) => set({ journalDate }),

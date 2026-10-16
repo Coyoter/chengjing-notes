@@ -1,4 +1,4 @@
-const { app, BrowserWindow, clipboard, ClipboardItem, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, powerMonitor, protocol, safeStorage, screen, shell, systemPreferences, Tray } = require("electron");
+const { app, BrowserWindow, clipboard, ClipboardItem, dialog, globalShortcut, ipcMain, Menu, nativeImage, net: electronNet, session, powerMonitor, protocol, safeStorage, screen, shell, systemPreferences, Tray } = require("electron");
 const { createHash, randomUUID } = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { createReadStream } = require("node:fs");
@@ -75,6 +75,63 @@ function languageFromPreferences(preferredLanguages = []) {
   return "en";
 }
 if (process.env.CHENGJING_SMOKE_USER_DATA) app.setPath("userData", path.resolve(process.env.CHENGJING_SMOKE_USER_DATA));
+const networkPolicy = require("./network-policy.cjs").createNetworkPolicy(app.getPath("userData"));
+if (networkPolicy.snapshot().enabled) {
+  for (const flag of ["disable-background-networking", "disable-component-update", "disable-domain-reliability", "disable-quic"]) app.commandLine.appendSwitch(flag);
+  app.commandLine.appendSwitch("force-webrtc-ip-handling-policy", "disable_non_proxied_udp");
+}
+const net = networkPolicy.transport(electronNet);
+let updateSession;
+function updateFetch(url, options) {
+  if (!require("./network-policy.cjs").isUpdateResource(url, options?.method || "GET")) throw new Error("update-url-not-allowed");
+  return updateSession.fetch(url, options);
+}
+// Check at execution time too: queued cloud operations may start after the switch.
+function handle(channel, callback) {
+  ipcMain.handle(channel, (...args) => {
+    if (/^(?:ai:|sync:|sync-recovery:|cloud-backup:|web:|mcp:(?:update-settings|regenerate-token|copy-setup))/.test(channel)
+      && !["ai:key-status", "ai:provider-settings", "cloud-backup:get-local-status"].includes(channel)
+      && !(channel === "sync-recovery:set-enabled" && args[1] === false)) networkPolicy.assertOnline();
+    return callback(...args);
+  });
+}
+ipcMain.on("privacy:get-initial", (event) => { event.returnValue = networkPolicy.snapshot(); });
+let privacySwitchBusy = false;
+handle("privacy:set-local-only", async (event, enabled) => {
+  if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) throw new Error("privacy-untrusted-sender");
+  const trustedUrl = isDev ? "http://127.0.0.1:5173/" : pathToFileURL(path.join(__dirname, "../dist/index.html")).href;
+  if (event.senderFrame.url.split(/[?#]/)[0] !== trustedUrl) throw new Error("privacy-untrusted-page");
+  if (typeof enabled !== "boolean") throw new Error("invalid-local-only-setting");
+  if (privacySwitchBusy) throw new Error("privacy-change-in-progress");
+  privacySwitchBusy = true;
+  const previous = networkPolicy.snapshot();
+  const publish = (state) => {
+    session.defaultSession.enableNetworkEmulation({ offline: state.enabled });
+    for (const window of BrowserWindow.getAllWindows()) window.webContents.send("privacy:changed", state);
+  };
+  try {
+    // Turning OFF is staged for the next launch: queued notes must not upload
+    // during saving. Turning ON locks immediately, before the renderer is notified.
+    const state = networkPolicy.setEnabled(enabled, { activate: enabled });
+    publish(state);
+    if (enabled) {
+      googleDriveBackupService?.syncRecovery?.setEnabled(false);
+      await stopMcpServer();
+      await session.defaultSession.closeAllConnections();
+    }
+    // Save editors without requiring an attached backup drive or cloud service.
+    // A failed save rolls the change back; a cancelled quit never schedules a
+    // surprising relaunch later. Relaunch ends all old workers and live sockets.
+    if (!isSmoke || process.env.CHENGJING_PRIVACY_QA_SAVE === "1") await backupBeforeQuit({ reason: "privacy-restart" });
+    if (!isSmoke) { backupQuitAllowed = true; app.relaunch(); setTimeout(() => app.quit(), 100); }
+    else privacySwitchBusy = false;
+    return state;
+  } catch (error) {
+    try { publish(networkPolicy.setEnabled(previous.enabled)); }
+    finally { privacySwitchBusy = false; backupQuitRenderer?.send("cloud-backup:quit-cancelled"); }
+    throw error;
+  }
+});
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   isQuitting = true;
@@ -96,7 +153,7 @@ function cloudBackupService() {
     googleDriveBackupService = createGoogleDriveBackupService({
       net,
       safeStorage,
-      shell,
+      shell: { openExternal: (url) => { networkPolicy.assertOnline(); return shell.openExternal(url); } },
       userDataDirectory: app.getPath("userData"),
       attachmentsDirectory: attachmentsDirectory(),
       clientId: googleOAuthClientId,
@@ -168,6 +225,7 @@ function markMcpRendererReady() {
 }
 
 async function sendMcpWorkspaceRequest(tool, args) {
+  networkPolicy.assertOnline();
   if (!mainWindow || mainWindow.isDestroyed()) await createWindow({ show: false });
   await waitForMcpRenderer();
   const requestId = randomUUID();
@@ -190,6 +248,7 @@ const MCP_CONFIRM_MESSAGES = {
 };
 
 async function executeMcpToolNow(tool, args, meta = {}) {
+  networkPolicy.assertOnline();
   const { appendMcpAudit, readMcpSettings } = mcpSettingsApi();
   const userDataDirectory = app.getPath("userData");
   const settings = await readMcpSettings(userDataDirectory);
@@ -228,7 +287,7 @@ async function reconcileMcpServer() {
   const userDataDirectory = app.getPath("userData");
   const settings = await readMcpSettings(userDataDirectory);
   await stopMcpServer();
-  if (!settings.enabled) return mcpPublicStatus(settings);
+  if (!settings.enabled || networkPolicy.snapshot().enabled) return mcpPublicStatus(settings);
   const { createChengJingMcpServer } = require("./mcp-server.cjs");
   const token = await readOrCreateMcpToken(userDataDirectory);
   const next = createChengJingMcpServer({ port: settings.port, token, version: currentAppVersion(), execute: executeMcpTool, onError: (error) => console.error(`[mcp] ${error instanceof Error ? error.message : String(error)}`) });
@@ -391,7 +450,8 @@ function serializeAutoBackup(operation) {
 }
 
 function serializeCloudBackup(operation) {
-  const pending = cloudBackupOperation.then(operation, operation);
+  const guarded = () => { networkPolicy.assertOnline(); return operation(); };
+  const pending = cloudBackupOperation.then(guarded, guarded);
   cloudBackupOperation = pending.catch(() => {});
   return pending;
 }
@@ -494,7 +554,7 @@ async function parseUpdateResponse(response) {
 }
 
 async function updateFromCloudflare(signal) {
-  const response = await net.fetch(CLOUDFLARE_UPDATE_INDEX_URL, {
+  const response = await updateFetch(CLOUDFLARE_UPDATE_INDEX_URL, {
     headers: updateRequestHeaders("application/json"),
     signal,
   });
@@ -505,14 +565,14 @@ async function enrichFeedUpdate(update, signal) {
   if (!update.asset) return update;
   let size = 0;
   try {
-    const assetResponse = await net.fetch(update.asset.url, { method: "HEAD", headers: updateRequestHeaders("application/octet-stream"), signal });
+    const assetResponse = await updateFetch(update.asset.url, { method: "HEAD", headers: updateRequestHeaders("application/octet-stream"), signal });
     if (assetResponse.ok) size = Number(assetResponse.headers.get("content-length") || 0) || 0;
   } catch {}
   return { ...update, asset: { ...update.asset, digest: null, size } };
 }
 
 async function updateFromGitHubFeed(signal) {
-  const response = await net.fetch(GITHUB_RELEASE_FEED_URL, {
+  const response = await updateFetch(GITHUB_RELEASE_FEED_URL, {
     headers: updateRequestHeaders("application/atom+xml"),
     signal,
   });
@@ -533,7 +593,7 @@ async function checkForUpdate(options = {}) {
     const forceFallback = isSmoke && process.env.CHENGJING_SMOKE_UPDATE_FORCE_FALLBACK === "1";
     if (!forceFallback && Date.now() >= githubApiBlockedUntil) {
       try {
-        const response = await net.fetch(GITHUB_RELEASE_URL, {
+        const response = await updateFetch(GITHUB_RELEASE_URL, {
           headers: updateRequestHeaders("application/vnd.github+json"),
           signal: controller.signal,
         });
@@ -605,7 +665,7 @@ async function downloadLatestUpdate() {
     const timeout = setTimeout(() => controller.abort(), 15 * 60_000);
     let fileHandle = null;
     try {
-      const response = await net.fetch(update.asset.url, {
+      const response = await updateFetch(update.asset.url, {
         headers: { "User-Agent": `ChengJing/${currentAppVersion()}` },
         redirect: "follow",
         signal: controller.signal,
@@ -1008,7 +1068,7 @@ async function createWindow({ show = !isSmoke } = {}) {
   }
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    if (/^https?:\/\//i.test(url) && !networkPolicy.snapshot().enabled) shell.openExternal(url);
     return { action: "deny" };
   });
   mainWindow.webContents.on("did-start-loading", () => { mcpRendererReady = false; });
@@ -1018,7 +1078,7 @@ async function createWindow({ show = !isSmoke } = {}) {
     const allowedFile = !isDev && url.startsWith("file:");
     if (!allowedDev && !allowedFile) {
       event.preventDefault();
-      if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+      if (/^https?:\/\//i.test(url) && !networkPolicy.snapshot().enabled) shell.openExternal(url);
     }
   });
 
@@ -1299,18 +1359,18 @@ ipcMain.handle("mcp:get-settings", async () => serializeMcp(async () => {
   if (settings.enabled && !mcpServerStatus.running && !mcpServerStatus.error) return reconcileMcpServer();
   return mcpPublicStatus(settings);
 }));
-ipcMain.handle("mcp:update-settings", async (_event, patch = {}) => serializeMcp(async () => {
+handle("mcp:update-settings", async (_event, patch = {}) => serializeMcp(async () => {
   const { readMcpSettings, writeMcpSettings } = mcpSettingsApi();
   const current = await readMcpSettings(app.getPath("userData"));
   await writeMcpSettings(app.getPath("userData"), { ...current, ...patch });
   return reconcileMcpServer();
 }));
-ipcMain.handle("mcp:regenerate-token", async () => serializeMcp(async () => {
+handle("mcp:regenerate-token", async () => serializeMcp(async () => {
   const { regenerateMcpToken } = mcpSettingsApi();
   await regenerateMcpToken(app.getPath("userData"));
   return reconcileMcpServer();
 }));
-ipcMain.handle("mcp:copy-setup", async (_event, target) => serializeMcp(async () => {
+handle("mcp:copy-setup", async (_event, target) => serializeMcp(async () => {
   const { readMcpSettings, readOrCreateMcpToken } = mcpSettingsApi();
   const settings = await readMcpSettings(app.getPath("userData"));
   const token = await readOrCreateMcpToken(app.getPath("userData"));
@@ -1394,72 +1454,72 @@ ipcMain.handle("backup:write-safety", async (_event, request = {}) => serializeA
   }
 }));
 
-ipcMain.handle("cloud-backup:get-local-status", async () => {
+handle("cloud-backup:get-local-status", async () => {
   try { return await cloudBackupService().getLocalStatus(); }
   catch (error) { throw new Error(friendlyCloudBackupError(error)); }
 });
-ipcMain.handle("sync:list", () => serializeCloudBackup(() => cloudBackupService().syncList()));
-ipcMain.handle("sync:get", (_event, id) => serializeCloudBackup(() => cloudBackupService().syncGet(id)));
-ipcMain.handle("sync:put", (_event, { id, data }) => serializeCloudBackup(() => cloudBackupService().syncPut(id, data)));
-ipcMain.handle("sync:upload-asset", (_event, asset) => serializeCloudBackup(() => cloudBackupService().syncUploadAsset(asset)));
-ipcMain.handle("sync:download-asset", (_event, asset) => serializeCloudBackup(() => cloudBackupService().syncDownloadAsset(asset)));
+handle("sync:list", () => serializeCloudBackup(() => cloudBackupService().syncList()));
+handle("sync:get", (_event, id) => serializeCloudBackup(() => cloudBackupService().syncGet(id)));
+handle("sync:put", (_event, { id, data }) => serializeCloudBackup(() => cloudBackupService().syncPut(id, data)));
+handle("sync:upload-asset", (_event, asset) => serializeCloudBackup(() => cloudBackupService().syncUploadAsset(asset)));
+handle("sync:download-asset", (_event, asset) => serializeCloudBackup(() => cloudBackupService().syncDownloadAsset(asset)));
 
 require("./sync-recovery-ipc.cjs").registerSyncRecoveryIpc({
-  ipcMain,
+  ipcMain: { handle },
   getMainWindow: () => mainWindow,
   getService: () => cloudBackupService().syncRecovery,
 });
 
 
-ipcMain.handle("cloud-backup:get-status", async () => serializeCloudBackup(async () => {
+handle("cloud-backup:get-status", async () => serializeCloudBackup(async () => {
   try { return await cloudBackupService().getStatus(); }
   catch (error) { throw new Error(friendlyCloudBackupError(error)); }
 }));
 
-ipcMain.handle("cloud-backup:connect", async () => serializeCloudBackup(async () => {
+handle("cloud-backup:connect", async () => serializeCloudBackup(async () => {
   try { return await cloudBackupService().connect(); }
   catch (error) { throw new Error(friendlyCloudBackupError(error)); }
 }));
 
-ipcMain.handle("cloud-backup:disconnect", async () => serializeCloudBackup(async () => {
+handle("cloud-backup:disconnect", async () => serializeCloudBackup(async () => {
   try { return await cloudBackupService().disconnect(); }
   catch (error) { throw new Error(friendlyCloudBackupError(error)); }
 }));
 
-ipcMain.handle("cloud-backup:update-settings", async (_event, patch = {}) => serializeCloudBackup(async () => {
+handle("cloud-backup:update-settings", async (_event, patch = {}) => serializeCloudBackup(async () => {
   try { return await cloudBackupService().updateSettings(patch); }
   catch (error) { throw new Error(friendlyCloudBackupError(error)); }
 }));
 
-ipcMain.handle("cloud-backup:write", async (_event, request = {}) => serializeCloudBackup(async () => {
+handle("cloud-backup:write", async (_event, request = {}) => serializeCloudBackup(async () => {
   try { return await cloudBackupService().write(request); }
   catch (error) { throw new Error(friendlyCloudBackupError(error, "write")); }
 }));
 
-ipcMain.handle("cloud-backup:download", async (_event, slot) => serializeCloudBackup(async () => {
+handle("cloud-backup:download", async (_event, slot) => serializeCloudBackup(async () => {
   try { return await cloudBackupService().downloadBackup(slot); }
   catch (error) { throw new Error(friendlyCloudBackupError(error, "restore")); }
 }));
 
-ipcMain.handle("cloud-backup:complete-restore", async (_event, request = {}) => serializeCloudBackup(async () => {
+handle("cloud-backup:complete-restore", async (_event, request = {}) => serializeCloudBackup(async () => {
   try { return await cloudBackupService().completeRestore(request); }
   catch (error) { throw new Error(friendlyCloudBackupError(error, "restore")); }
 }));
 
-ipcMain.handle("cloud-backup:cancel-restore", async () => serializeCloudBackup(() => cloudBackupService().cancelRestore()));
+handle("cloud-backup:cancel-restore", async () => serializeCloudBackup(() => cloudBackupService().cancelRestore()));
 
-ipcMain.handle("cloud-backup:adopt-current-for-overwrite", async () => serializeCloudBackup(async () => {
+handle("cloud-backup:adopt-current-for-overwrite", async () => serializeCloudBackup(async () => {
   try { return await cloudBackupService().adoptCurrentForOverwrite(); }
   catch (error) { throw new Error(friendlyCloudBackupError(error)); }
 }));
 
 if (isSmoke) {
-  ipcMain.handle("cloud-backup:qa-cleanup", async () => serializeCloudBackup(async () => cloudBackupService().removeThisDeviceTestData()));
+  handle("cloud-backup:qa-cleanup", async () => serializeCloudBackup(async () => cloudBackupService().removeThisDeviceTestData()));
 }
 
-ipcMain.handle("ai:key-status", async () => secretStatus(app.getPath("userData")));
+handle("ai:key-status", async () => secretStatus(app.getPath("userData")));
 
-ipcMain.handle("ai:set-key", async (_event, rawKey) => {
+handle("ai:set-key", async (_event, rawKey) => {
   const value = String(rawKey || "").trim();
   if (value.length < 12) throw new Error(message("completeKey"));
   await writeSecret(app.getPath("userData"), value);
@@ -1467,13 +1527,13 @@ ipcMain.handle("ai:set-key", async (_event, rawKey) => {
   return { configured: true, encrypted: true, storage: "app-local-aes-256-gcm" };
 });
 
-ipcMain.handle("ai:clear-key", async () => {
+handle("ai:clear-key", async () => {
   await clearSecret(app.getPath("userData"));
   await fs.rm(path.join(app.getPath("userData"), LEGACY_KEY_FILE), { force: true });
   return { configured: false, encrypted: true, storage: "app-local-aes-256-gcm" };
 });
 
-ipcMain.handle("ai:test-openrouter", async () => {
+handle("ai:test-openrouter", async () => {
   const apiKey = await readApiKey();
   if (!apiKey) throw new Error(message("noKey"));
   const controller = new AbortController();
@@ -1499,7 +1559,7 @@ ipcMain.handle("ai:test-openrouter", async () => {
   }
 });
 
-ipcMain.handle("ai:list-models", async () => {
+handle("ai:list-models", async () => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20_000);
   try {
@@ -1525,7 +1585,7 @@ ipcMain.handle("ai:list-models", async () => {
   }
 });
 
-ipcMain.handle("ai:openrouter-chat", async (_event, request) => {
+handle("ai:openrouter-chat", async (_event, request) => {
   const smokeMessages = Array.isArray(request?.messages) ? request.messages : [];
   if (process.env.CHENGJING_SMOKE_AI_MARKDOWN === "1" && smokeMessages.some((item) => String(item?.content || "").includes("__CHENGJING_MARKDOWN_SMOKE__"))) {
     return { text: "### 封裝 AI 回答\n\n1. **核心重點**\n   - 第一項\n   - 第二項\n\n---\n\n> 仍需回到來源確認。\n\n`KPI`<script>window.bad=true</script><img src=\"https://tracker.example/pixel\">", model: "smoke/markdown", usage: null, finishReason: "stop" };
@@ -1550,51 +1610,51 @@ ipcMain.handle("ai:openrouter-chat", async (_event, request) => {
   }
 });
 
-ipcMain.handle("ai:provider-settings", async () => providerSettingsApi().readProviderSettings(app.getPath("userData")));
+handle("ai:provider-settings", async () => providerSettingsApi().readProviderSettings(app.getPath("userData")));
 
-ipcMain.handle("ai:provider-upsert", async (_event, input = {}) => {
+handle("ai:provider-upsert", async (_event, input = {}) => {
   try { return await providerSettingsApi().upsertProviderProfile(app.getPath("userData"), input); }
   catch (error) { throw new Error(friendlyProviderError(error)); }
 });
 
-ipcMain.handle("ai:provider-select", async (_event, id) => {
+handle("ai:provider-select", async (_event, id) => {
   try { return await providerSettingsApi().selectProviderProfile(app.getPath("userData"), String(id || "")); }
   catch (error) { throw new Error(friendlyProviderError(error)); }
 });
 
-ipcMain.handle("ai:provider-remove", async (_event, id) => {
+handle("ai:provider-remove", async (_event, id) => {
   try { return await providerSettingsApi().removeProviderProfile(app.getPath("userData"), String(id || "")); }
   catch (error) { throw new Error(friendlyProviderError(error)); }
 });
 
-ipcMain.handle("ai:provider-test", async (_event, id) => {
+handle("ai:provider-test", async (_event, id) => {
   try {
     const profile = await providerSettingsApi().providerProfileWithSecret(app.getPath("userData"), String(id || ""));
     return await providerClientApi().testProvider((url, options) => net.fetch(url, options), profile);
   } catch (error) { throw new Error(friendlyProviderError(error)); }
 });
 
-ipcMain.handle("ai:provider-models", async (_event, id) => {
+handle("ai:provider-models", async (_event, id) => {
   try {
     const profile = await providerSettingsApi().providerProfileWithSecret(app.getPath("userData"), String(id || ""));
     return await providerClientApi().listProviderModels((url, options) => net.fetch(url, options), profile);
   } catch (error) { throw new Error(friendlyProviderError(error)); }
 });
 
-ipcMain.handle("ai:provider-chat", async (_event, request = {}) => {
+handle("ai:provider-chat", async (_event, request = {}) => {
   try {
     const profile = await providerSettingsApi().providerProfileWithSecret(app.getPath("userData"), String(request.profileId || ""));
     return await providerClientApi().providerChat((url, options) => net.fetch(url, options), profile, request);
   } catch (error) { throw new Error(friendlyProviderError(error)); }
 });
 
-ipcMain.handle("web:read", async (_event, rawUrl) => {
+handle("web:read", async (_event, rawUrl) => {
   const target = new URL(String(rawUrl || "").trim());
   if (!/^https?:$/.test(target.protocol)) throw new Error(message("webProtocol"));
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 25_000);
   try {
-    const response = await fetch(target, {
+    const response = await net.fetch(target.href, {
       headers: { "User-Agent": "Mozilla/5.0 ChengJing/0.1" },
       redirect: "follow",
       signal: controller.signal,
@@ -1680,6 +1740,14 @@ ipcMain.handle("attachment:restore-from-backup", async (_event, request = {}) =>
 
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return;
+  networkPolicy.installSession(session.defaultSession);
+  if (networkPolicy.snapshot().enabled) {
+    session.defaultSession.setSpellCheckerEnabled(false);
+    // A non-resolving loopback proxy is a second barrier against speculative DNS.
+    await session.defaultSession.setProxy({ mode: "fixed_servers", proxyRules: "127.0.0.1:9", proxyBypassRules: "<-loopback>" });
+  }
+  updateSession = session.fromPartition("chengjing-updater", { cache: false });
+  networkPolicy.installSession(updateSession, true);
   if (process.platform === "win32") app.setAppUserModelId("tw.techtarian.chengjing");
   protocol.handle("chengjing-attachment", async (request) => {
     try {
@@ -1747,7 +1815,7 @@ ipcMain.on("cloud-backup:quit-result", (event, result) => {
     result.error ? pending.reject(new Error(result.error)) : pending.resolve();
   }
 });
-async function backupBeforeQuit() {
+async function backupBeforeQuit(context) {
   // The renderer owns pending editor saves and the enabled Google sync state.
   // Always ask it to flush, even when no local backup folder is configured.
   if (!mainWindow || mainWindow.isDestroyed()) await createWindow({ show: false });
@@ -1764,13 +1832,13 @@ async function backupBeforeQuit() {
       reject(new Error("Saving, synchronization or local backup did not finish within 30 seconds."));
     }, 30_000);
     pendingBackupQuit = { id, sender, timer, resolve, reject };
-    sender.send("cloud-backup:before-quit", id);
+    sender.send("cloud-backup:before-quit", id, context);
   });
 }
 app.on("before-quit", (event) => {
   if (backupQuitAllowed || isSmoke) { isQuitting = true; return; }
   event.preventDefault();
-  if (backupQuitRunning) return;
+  if (backupQuitRunning || privacySwitchBusy) return;
   backupQuitRunning = true;
   void (async () => {
     try {

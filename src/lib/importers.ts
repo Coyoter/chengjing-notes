@@ -1,3 +1,4 @@
+import { assertCloudAvailable } from "./localOnly";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { createCard } from "../db";
@@ -137,6 +138,7 @@ export async function importFile(name: string, blob: Blob, sourcePath?: string):
 }
 
 export async function importWebUrl(rawUrl: string): Promise<CardRecord> {
+  assertCloudAvailable();
   const currentLanguage = language();
   const target = new URL(rawUrl.trim());
   const isYouTube = /(^|\.)youtube\.com$|(^|\.)youtu\.be$/i.test(target.hostname);

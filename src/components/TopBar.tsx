@@ -1,3 +1,4 @@
+import { localOnlyCopy, useLocalOnly } from "../lib/localOnly";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Cloud, Command, Download, PanelRightOpen, Redo2, Search, ShieldCheck, Sparkles, Undo2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -25,6 +26,7 @@ const titles: Record<AppView, { eyebrow: MessageKey; title: MessageKey }> = {
 };
 
 export function TopBar() {
+  const localOnly = useLocalOnly();
   const view = useAppStore((state) => state.view);
   const selectedBoardId = useAppStore((state) => state.selectedBoardId);
   const selectedKanbanBoardId = useAppStore((state) => state.selectedKanbanBoardId);
@@ -83,12 +85,12 @@ export function TopBar() {
         <kbd>{windows ? "Ctrl K" : <><Command size={12} />K</>}</kbd>
       </button>
       <div className="topbar-actions">
-        <button className="engine-status" type="button" onClick={openAISettings} aria-label={aiEngine === "local-gemma" ? t("top.gemmaSettings") : aiEngine === "custom-provider" ? `${customProviderName} AI Provider` : t("top.openRouterSettings")} title={aiEngine === "local-gemma" ? "Gemma 4 E2B" : modelName}>
-          {aiEngine === "local-gemma" ? <ShieldCheck size={14} /> : <Cloud size={14} />}
-          <span>{engineName}</span>
+        <button className="engine-status" type="button" disabled={localOnly} onClick={openAISettings} aria-label={aiEngine === "local-gemma" ? t("top.gemmaSettings") : aiEngine === "custom-provider" ? `${customProviderName} AI Provider` : t("top.openRouterSettings")} title={aiEngine === "local-gemma" ? "Gemma 4 E2B" : modelName}>
+          {localOnly || aiEngine === "local-gemma" ? <ShieldCheck size={14} /> : <Cloud size={14} />}
+          <span>{localOnly ? localOnlyCopy(useAppStore.getState().language).title : engineName}</span>
         </button>
         <button className="icon-button" type="button" onClick={() => setImportOpen(true)} aria-label={t("top.importBackup")}><Download size={17} /></button>
-        <button className="ai-button" type="button" onClick={openAI}>
+        <button className="ai-button" type="button" disabled={localOnly} onClick={openAI}>
           <Sparkles size={16} />
           <span>{t("top.askAI")}</span>
           <PanelRightOpen size={14} />

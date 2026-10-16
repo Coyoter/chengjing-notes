@@ -5,6 +5,11 @@ type AIReasoning = { effort?: "low" | "medium" | "high"; max_tokens?: number; ex
 
 interface Window {
   chengjing?: {
+    privacy?: {
+      initial: { enabled: boolean; revision: number };
+      setLocalOnly: (enabled: boolean) => Promise<{ enabled: boolean; revision: number }>;
+      onChanged: (callback: (state: { enabled: boolean; revision: number }) => void) => () => void;
+    };
     sync?: {
       stage?: (packet: import("./lib/syncProtocol").SyncPacket) => Promise<unknown>;
       uploadAsset: (asset: Record<string, unknown>) => Promise<unknown>;
@@ -38,7 +43,7 @@ interface Window {
     };
     syncRecovery?: import("./types").SyncRecoveryBridge;
     cloudBackups?: {
-      onBeforeQuit?: (callback: () => Promise<void>) => () => void;
+      onBeforeQuit?: (callback: (context?: { reason?: "privacy-restart" }) => Promise<void>) => () => void;
       getLocalStatus: () => Promise<import("./types").CloudBackupStatus>;
       getStatus: () => Promise<import("./types").CloudBackupStatus>;
       connect: () => Promise<import("./types").CloudBackupStatus>;

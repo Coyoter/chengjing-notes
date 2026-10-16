@@ -3,11 +3,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AutoBackupManager } from "./AutoBackupManager";
 
-const { isAutoBackupDue, announceAutoBackup, flushPendingSync, reportSyncActivity } = vi.hoisted(() => ({
+const { isAutoBackupDue, announceAutoBackup, flushPendingSync, reportSyncActivity, drainWrites } = vi.hoisted(() => ({
   isAutoBackupDue: vi.fn(() => true),
   announceAutoBackup: vi.fn(),
   flushPendingSync: vi.fn(async () => {}),
   reportSyncActivity: vi.fn(),
+  drainWrites: vi.fn(async () => {}),
 }));
 
 vi.mock("../lib/autoBackup", () => ({
@@ -17,9 +18,10 @@ vi.mock("../lib/autoBackup", () => ({
 }));
 vi.mock("../lib/syncEngine", () => ({ flushPendingSync }));
 vi.mock("../lib/syncActivity", () => ({ reportSyncActivity }));
+vi.mock("../db", () => ({ db: { tables: [], transaction: drainWrites } }));
 
 let root: Root;
-let exit: () => Promise<void>;
+let exit: (context?: { reason?: "privacy-restart" }) => Promise<void>;
 let localWrite: ReturnType<typeof vi.fn>;
 let cloudWrite: ReturnType<typeof vi.fn>;
 
@@ -30,6 +32,7 @@ beforeEach(async () => {
   announceAutoBackup.mockClear();
   flushPendingSync.mockReset().mockResolvedValue(undefined);
   reportSyncActivity.mockClear();
+  drainWrites.mockClear();
 
   const settings = {
     enabled: true,
@@ -49,7 +52,7 @@ beforeEach(async () => {
     },
     cloudBackups: {
       write: cloudWrite,
-      onBeforeQuit: (callback: () => Promise<void>) => {
+      onBeforeQuit: (callback: typeof exit) => {
         exit = callback;
         return () => {};
       },
@@ -172,6 +175,16 @@ it("本機備份失敗仍完成 Google 同步，兩者都停用時只儲存編�
   await act(async () => { await vi.advanceTimersByTimeAsync(750); await quitting; });
   expect(flushPendingSync).toHaveBeenCalledOnce();
   expect(localWrite).toHaveBeenCalledOnce();
+});
+
+it("切換安全模式只完成本機儲存，不依賴雲端或可用的備份磁碟", async () => {
+  localStorage.setItem("chengjing-sync-enabled", "true");
+  localWrite.mockRejectedValueOnce(new Error("backup disk unavailable"));
+  const restart = exit({ reason: "privacy-restart" });
+  await act(async () => { await vi.advanceTimersByTimeAsync(750); await restart; });
+  expect(drainWrites).toHaveBeenCalledOnce();
+  expect(localWrite).not.toHaveBeenCalled();
+  expect(flushPendingSync).not.toHaveBeenCalled();
 });
 
 it("尚在等待退出時的重試共用同一流程，返回後可再次退出", async () => {

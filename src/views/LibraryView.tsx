@@ -1,3 +1,4 @@
+import { useLocalOnly } from "../lib/localOnly";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyTrashButton } from "../components/EmptyTrashButton";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -25,6 +26,7 @@ type SelectedGroup = "all" | "pinned" | "unassigned" | string;
 type GroupForm = { mode: "create" | "rename"; kind: KnowledgeGroupKind; parentId?: string; id?: string; value: string };
 
 export function LibraryView() {
+  const localOnly = useLocalOnly();
   const [organizerOpen,setOrganizerOpen]=useState(false);
   useMobileBack(organizerOpen,()=>setOrganizerOpen(false));
   const [query, setQuery] = useState("");
@@ -200,7 +202,7 @@ export function LibraryView() {
 
     <div className="page-scroll standard-page library-content">
       <header className="page-intro compact-intro"><div><span>{selectedForCreate ? breadcrumb(selectedForCreate) : copy.organizer}</span><h2>{currentGroup}{selectedTag ? ` / ${selectedTag.name}` : ""} · {collection === "trash" ? t("library.deletedCount", { count: filteredTotal }) : collection === "archive" ? t("library.archivedCount", { count: filteredTotal }) : scope === "cards" ? t("library.count", { count: filteredTotal }) : taskCopyFormat(taskCopy.matching, { count: filteredTotal })}</h2><p>{collection === "trash" ? t("library.trashDescription") : t("library.description")}</p></div><button type="button" className="primary-button" onClick={() => setCreateCardOpen(true, selectedForCreate)}><Plus size={16} />{t("today.newCard")}</button></header>
-      <form className="url-capture-bar" onSubmit={captureUrl}><ArrowUpRight size={17} /><input type="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder={t("library.urlPlaceholder")} /><button type="submit" disabled={urlBusy || !url.trim()}>{urlBusy ? <LoaderCircle size={15} className="spin" /> : <ArrowUpRight size={15} />}{urlBusy ? t("library.capture") : t("library.saveUrl")}</button></form>
+      <form className="url-capture-bar" onSubmit={captureUrl}><ArrowUpRight size={17} /><input disabled={localOnly} type="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder={t("library.urlPlaceholder")} /><button type="submit" disabled={localOnly || urlBusy || !url.trim()}>{urlBusy ? <LoaderCircle size={15} className="spin" /> : <ArrowUpRight size={15} />}{urlBusy ? t("library.capture") : t("library.saveUrl")}</button></form>
       {urlStatus && <div className="url-capture-status" role="status">{urlStatus}</div>}
       <div className="collection-tabs" aria-label={t("library.categories")}><button type="button" className={collection === "library" ? "is-active" : ""} onClick={() => chooseCollection("library")}><FileStack size={15} />{t("nav.library")}</button><button type="button" className={collection === "archive" ? "is-active" : ""} onClick={() => chooseCollection("archive")}><Archive size={15} />{t("library.archive")}</button><button type="button" className={collection === "trash" ? "is-active" : ""} onClick={() => chooseCollection("trash")}><Trash2 size={15} />{t("library.trash")}</button>{collection === "trash" && <EmptyTrashButton/>}</div>
       <div className="library-unified-tools">

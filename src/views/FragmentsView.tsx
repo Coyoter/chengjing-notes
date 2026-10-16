@@ -1,3 +1,4 @@
+import { useLocalOnly } from "../lib/localOnly";
 import { useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { BrainCircuit, Feather, MoreHorizontal, Pin, Sparkles } from "lucide-react";
@@ -11,6 +12,7 @@ import { isWindows } from "../lib/platform";
 import { TagPicker } from "../components/TagPicker";
 
 export function FragmentsView() {
+  const localOnly = useLocalOnly();
   const [visibleLimit, setVisibleLimit] = useState(160);
   const cards = useLiveQuery(() => captureInboxCards(visibleLimit), [visibleLimit], []);
   const totalCount = useLiveQuery(captureInboxCount, [], 0);
@@ -39,7 +41,7 @@ export function FragmentsView() {
   return <div className="page-scroll fragments-page">
     <header className="fragments-heading">
       <div><span>{t("fragments.eyebrow")}</span><h2>{t("nav.fragments")}</h2><p>{t("fragments.description")}</p></div>
-      <button type="button" className="secondary-button" onClick={() => setView("brain")}><BrainCircuit size={16} />{t("fragments.openBrain")}</button>
+      <button type="button" className="secondary-button" disabled={localOnly} onClick={() => setView("brain")}><BrainCircuit size={16} />{t("fragments.openBrain")}</button>
     </header>
     <section className="fragment-capture">
       <Feather size={21} />

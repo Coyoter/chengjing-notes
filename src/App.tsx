@@ -30,6 +30,7 @@ import { MobileChrome } from "./components/MobileChrome";
 import { migrateLegacyFragments } from "./lib/captureCards";
 import { CaptureMigrationManager } from "./components/CaptureMigrationManager";
 import { SyncManager } from "./components/SyncSettings";
+import { useLocalOnly } from "./lib/localOnly";
 
 let workspaceBootstrap: Promise<void> | null = null;
 const CardEditorPanel = lazy(() => import("./components/CardEditorPanel").then((module) => ({ default: module.CardEditorPanel })));
@@ -75,6 +76,7 @@ function applyTheme(theme: ThemeMode) {
 }
 
 export function App() {
+  const localOnly = useLocalOnly();
   const android=window.chengjing?.platform==="android";
   const reducedMotion=useReducedMotion();
   const [ready, setReady] = useState(false);
@@ -270,7 +272,7 @@ export function App() {
         </AnimatePresence>
       </div>
       <AnimatePresence>
-        {rightPanel !== "none" && (
+        {!localOnly && rightPanel !== "none" && (
           <motion.aside
             className="right-panel"
             initial={android && reducedMotion ? false : { x: android ? 36 : 24, opacity: 0 }}
@@ -288,9 +290,8 @@ export function App() {
       <GlobalContextMenu />
       <UpdateManager />
       <AutoBackupManager />
-      <CaptureMigrationManager /><SyncManager />
-      <CommunityNotificationManager />
-      <SharedBrainSyncManager />
+      <CaptureMigrationManager />
+      {!localOnly && <><SyncManager /><CommunityNotificationManager /><SharedBrainSyncManager /></>}
     </div>
   );
 }

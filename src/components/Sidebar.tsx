@@ -1,3 +1,4 @@
+import { useLocalOnly } from "../lib/localOnly";
 import { getHiddenTaskIds } from "../lib/activeContent";
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type KeyboardEvent } from "react";
 import { motion, useReducedMotion } from "framer-motion";
@@ -47,6 +48,7 @@ const nav: Array<{ view: AppView; label: MessageKey; icon: typeof FileStack; bad
 ];
 
 export function Sidebar() {
+  const localOnly = useLocalOnly();
   const boards = useLiveQuery(() => db.boards.orderBy("updatedAt").reverse().limit(5).toArray(), [], []);
   const taskCount = useLiveQuery(async () => {
     const hidden = await getHiddenTaskIds();
@@ -164,6 +166,7 @@ export function Sidebar() {
               transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 450, damping: 35 }}
               key={item.view}
               type="button"
+              disabled={localOnly && item.view === "brain"}
               className={`${view === item.view ? "is-active" : ""}${dropTarget === item.view ? " is-reorder-target" : ""}`}
               draggable={desktop}
               data-nav-id={item.view}
@@ -226,11 +229,11 @@ export function Sidebar() {
       )}
 
       <div className="sidebar-footer">
-        <button type="button" onClick={() => useAppStore.getState().openAI()} title={collapsed ? t("nav.ai") : undefined}>
+        <button type="button" disabled={localOnly} onClick={() => useAppStore.getState().openAI()} title={collapsed ? t("nav.ai") : undefined}>
           <Sparkles size={17} />
           {!collapsed && <span>{t("nav.ai")}</span>}
         </button>
-        <button type="button" className={rightPanel === "wish" ? "is-active" : ""} onClick={() => useAppStore.getState().openWishPool()} title={collapsed ? wishCopy.nav : undefined}>
+        <button type="button" disabled={localOnly} className={rightPanel === "wish" ? "is-active" : ""} onClick={() => useAppStore.getState().openWishPool()} title={collapsed ? wishCopy.nav : undefined}>
           <Droplets size={17} />
           {!collapsed && <span>{wishCopy.nav}</span>}
         </button>

@@ -211,6 +211,7 @@ function createChengJingMcpServer({ port, token, execute, version = "0.0.0", onE
     },
     async stop() {
       const current = httpServer; httpServer = null;
+      current?.closeAllConnections?.();
       if (handler) { await handler.close().catch(() => {}); handler = null; }
       if (current) await new Promise((resolve) => current.close(() => resolve()));
     },

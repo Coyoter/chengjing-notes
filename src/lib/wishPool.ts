@@ -1,3 +1,4 @@
+import { assertCloudAvailable } from "./localOnly";
 import { COMMUNITY_ENDPOINT, type CommunityIdentity } from "./community";
 
 export const WISH_POOL_ENDPOINT = COMMUNITY_ENDPOINT;
@@ -56,6 +57,7 @@ export function setWishAdminSession(token: string, storage: Storage = sessionSto
 }
 
 async function requestJson<T>(path: string, init: RequestInit = {}, token = "", identity: CommunityIdentity | null = null): Promise<T> {
+  assertCloudAvailable();
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 12_000);
   try {

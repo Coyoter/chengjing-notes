@@ -1,3 +1,4 @@
+import { assertCloudAvailable, isLocalOnly } from "./localOnly";
 import type { AIMessage } from "./modelTypes";
 import { translate } from "../i18n";
 import { useAppStore } from "../store";
@@ -64,6 +65,7 @@ function sanitize(text: string) {
 }
 
 export async function inspectLocalModel() {
+  if (isLocalOnly()) return { state: "paused", cached: false, progress: 0, size: LOCAL_MODEL.approximateBytes, message: "Local-only mode" };
   if (window.chengjing?.platform === "android") return androidCall<{ state: "ready" | "unsupported" | "not-downloaded"; cached: boolean; progress: number; size: number; message: string }>("local.status");
   if (!hasWebGPU()) {
     return { state: "unsupported" as const, cached: false, progress: 0, size: LOCAL_MODEL.approximateBytes, message: t("local.unsupported") };
@@ -92,6 +94,7 @@ export async function inspectLocalModel() {
 }
 
 export async function prepareLocalModel(onProgress?: (progress: number, file: string) => void) {
+  assertCloudAvailable();
   if (window.chengjing?.platform === "android") {
     const listener = (event: Event) => onProgress?.((event as CustomEvent).detail.progress, "Gemma 4");
     window.addEventListener("chengjing:android-model-progress", listener);

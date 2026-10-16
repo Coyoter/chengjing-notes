@@ -7,6 +7,7 @@ export function SettingsJumpNav() {
   const { language } = useI18n();
   const copy = getSettingsAnchorCopy(language);
   const destinations = [
+    ...(window.chengjing?.privacy ? [["privacy-settings", language.startsWith("zh") ? "連線隱私" : "Privacy"]] : []),
     ["language-settings", copy.language],
     ["ai-settings", copy.ai],
     ["mcp-settings", copy.integrations],

@@ -1,3 +1,4 @@
+import { useLocalOnly } from "../lib/localOnly";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -11,6 +12,7 @@ import { includesQuery, searchRecords } from "../lib/searchRecords";
 import { isVisibleCard } from "../lib/cardVisibility";
 
 export function CommandPalette() {
+  const localOnly = useLocalOnly();
   const { language, t } = useI18n();
   const open = useAppStore((state) => state.commandOpen);
   const setOpen = useAppStore((state) => state.setCommandOpen);
@@ -55,7 +57,7 @@ export function CommandPalette() {
         <motion.div className="command-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={() => setOpen(false)}>
           <motion.section className="command-palette" initial={{ opacity: 0, y: -10, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.99 }} onMouseDown={(event) => event.stopPropagation()}>
             <label className="command-input"><Search size={18} /><input autoFocus value={query} onChange={(event) => { setQuery(event.target.value); setActive(0); }} placeholder={t("command.placeholder")} onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); if (event.key === "ArrowDown") { event.preventDefault(); setActive((value) => Math.min(results.length - 1, value + 1)); } if (event.key === "ArrowUp") { event.preventDefault(); setActive((value) => Math.max(0, value - 1)); } if (event.key === "Enter") { event.preventDefault(); choose(active); } }} />{window.chengjing?.platform==="android"?<button type="button" className="mobile-command-close" aria-label={t("common.close")} onClick={()=>setOpen(false)}><X size={19}/></button>:<kbd>ESC</kbd>}</label>
-            {!query && <div className="quick-command-row"><button type="button" onClick={() => { setOpen(false); setCreateCardOpen(true); }}><FilePlus2 size={16} /><span>{t("command.newCard")}</span></button><button type="button" onClick={() => { setOpen(false); setImportOpen(true); }}><Import size={16} /><span>{t("command.import")}</span></button><button type="button" onClick={() => { setOpen(false); openAI(); }}><Sparkles size={16} /><span>{t("command.askAI")}</span></button></div>}
+            {!query && <div className="quick-command-row"><button type="button" onClick={() => { setOpen(false); setCreateCardOpen(true); }}><FilePlus2 size={16} /><span>{t("command.newCard")}</span></button><button type="button" onClick={() => { setOpen(false); setImportOpen(true); }}><Import size={16} /><span>{t("command.import")}</span></button><button type="button" disabled={localOnly} onClick={() => { setOpen(false); openAI(); }}><Sparkles size={16} /><span>{t("command.askAI")}</span></button></div>}
             <div className="command-results">
               <header><span>{query ? t("command.results") : t("command.recent")}</span><b>{results.length}</b></header>
               {results.map((item, index) => (

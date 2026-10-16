@@ -1,11 +1,13 @@
 import type Dexie from "dexie";
 import { type DBCoreTransaction } from "dexie";
 import { SYNC_TABLES, joinedClock, mergeSyncRecord, operationTime, type SyncOperation, type SyncRecord, type SyncTable } from "./syncProtocol";
+import { isLocalOnly } from "./localOnly";
 
 export const remoteSyncTransactions = new WeakSet<object>();
 export const baselineSyncTransactions = new WeakSet<object>();
-export function syncEnabled() { return typeof localStorage !== "undefined" && localStorage.getItem("chengjing-sync-enabled") === "true"; }
-function tracking() { return syncEnabled() || (typeof localStorage !== "undefined" && localStorage.getItem("chengjing-sync-tracking") === "true"); }
+export function syncEnabled() { return !isLocalOnly() && typeof localStorage !== "undefined" && localStorage.getItem("chengjing-sync-enabled") === "true"; }
+// Keep recording offline edits without transmitting them or losing the user's sync preference.
+function tracking() { return typeof localStorage !== "undefined" && (localStorage.getItem("chengjing-sync-enabled") === "true" || localStorage.getItem("chengjing-sync-tracking") === "true"); }
 export function syncDeviceId() {
   let value = localStorage.getItem("chengjing-sync-device");
   if (!value) { value = crypto.randomUUID(); localStorage.setItem("chengjing-sync-device", value); }

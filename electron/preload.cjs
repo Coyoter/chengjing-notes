@@ -1,6 +1,15 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("chengjing", {
+  privacy: {
+    initial: ipcRenderer.sendSync("privacy:get-initial"),
+    setLocalOnly: (enabled) => ipcRenderer.invoke("privacy:set-local-only", enabled),
+    onChanged: (callback) => {
+      const listener = (_event, state) => callback(state);
+      ipcRenderer.on("privacy:changed", listener);
+      return () => ipcRenderer.removeListener("privacy:changed", listener);
+    },
+  },
   app: {
     getPreferredLanguage: () => ipcRenderer.invoke("app:get-preferred-language"),
     setLanguage: (language) => ipcRenderer.invoke("app:set-language", language),
@@ -48,8 +57,8 @@ contextBridge.exposeInMainWorld("chengjing", {
   },
   cloudBackups: {
     onBeforeQuit: (callback) => {
-      const listener = async (_event, id) => {
-        try { await callback(); ipcRenderer.send("cloud-backup:quit-result", { id }); }
+      const listener = async (_event, id, context) => {
+        try { await callback(context); ipcRenderer.send("cloud-backup:quit-result", { id }); }
         catch (error) { ipcRenderer.send("cloud-backup:quit-result", { id, error: String(error?.message || error) }); }
       };
       ipcRenderer.on("cloud-backup:before-quit", listener);

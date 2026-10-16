@@ -1,3 +1,4 @@
+import { useLocalOnly } from "../lib/localOnly";
 import { isActiveCard } from "../lib/cardVisibility";
 import { getHiddenTaskIds } from "../lib/activeContent";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -14,6 +15,7 @@ import { useI18n } from "../hooks/useI18n";
 import { setTaskDone } from "../lib/taskSync";
 
 export function JournalView() {
+  const localOnly = useLocalOnly();
   const journalDate = useAppStore((state) => state.journalDate);
   const setJournalDate = useAppStore((state) => state.setJournalDate);
   const openAI = useAppStore((state) => state.openAI);
@@ -85,7 +87,7 @@ export function JournalView() {
               <h2>{new Intl.DateTimeFormat(intlLocale, { year: "numeric", month: "long", day: "numeric" }).format(dayjs(journalDate).toDate())}</h2>
             </div>
             <div className="journal-header-actions">
-              <button type="button" className="secondary-button" onClick={openAI}><Sparkles size={15} />{t("journal.review")}</button>
+              <button type="button" className="secondary-button" disabled={localOnly} onClick={openAI}><Sparkles size={15} />{t("journal.review")}</button>
             </div>
           </header>
           <div className="journal-tags"><TagPicker selectedIds={journal.tagIds} onChange={(tagIds) => db.cards.update(journal.id, { tagIds, updatedAt: Date.now() })} /></div>

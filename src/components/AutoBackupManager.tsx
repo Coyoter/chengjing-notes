@@ -80,7 +80,7 @@ export function AutoBackupManager() {
       setQuitting(false);
     };
 
-    const disposeExit = lifecycle?.onBeforeQuit?.(() => {
+    const disposeExit = lifecycle?.onBeforeQuit?.((context) => {
       if (quitOperation) return quitOperation;
       quitOperation = (async () => {
         exiting = true;
@@ -90,6 +90,13 @@ export function AutoBackupManager() {
 
         try {
           await new Promise((resolve) => setTimeout(resolve, 750));
+          if (context?.reason === "privacy-restart") {
+            // A security switch must not depend on an online/mounted backup disk.
+            // Drain local database writes, keeping normal scheduled/manual backups.
+            const { db } = await import("../db");
+            await db.transaction("rw", db.tables, async () => {});
+            return;
+          }
           const sync = async () => {
             if (!syncEnabled()) return;
             const bridge = window.chengjing?.sync;
