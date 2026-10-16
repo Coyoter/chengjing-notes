@@ -201,6 +201,9 @@ jobs:
     needs: [prepare, test]
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      # Android uses the browser/Android runtimes, not Node's extra GPU providers.
+      ONNXRUNTIME_NODE_INSTALL: skip
     steps:
       - uses: actions/checkout@v4
         with:
@@ -285,6 +288,8 @@ jobs:
     needs: [prepare, test]
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    env:
+      ONNXRUNTIME_NODE_INSTALL: skip
     steps:
       - uses: actions/checkout@v4
         with:

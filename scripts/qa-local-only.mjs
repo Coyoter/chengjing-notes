@@ -24,6 +24,7 @@ const server = http.createServer((request, response) => {
 });
 server.on("connection", socket => { connectionCount++; sockets.add(socket); socket.on("close", () => sockets.delete(socket)); });
 server.on("upgrade", (request, socket) => {
+  socket.on("error", () => {}); // Process shutdown may reset an upgraded test socket.
   hits.push(request.url);
   const accept = createHash("sha1").update(`${request.headers["sec-websocket-key"]}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest("base64");
   socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
@@ -39,12 +40,15 @@ async function launch() {
   client = await electron.launch({ executablePath: packaged || electronPath, args: packaged ? [] : ["."], env: { ...process.env, CHENGJING_SMOKE: "1", CHENGJING_PRIVACY_QA_SAVE: "1", CHENGJING_UPDATE_CURRENT_VERSION: "0.0.1", CHENGJING_SMOKE_USER_DATA: profile } });
   page = await client.firstWindow();
   await page.locator(".app-shell").waitFor();
-  const languageChanged = await page.evaluate(() => {
+  await page.evaluate(() => {
     const saved = JSON.parse(localStorage.getItem("chengjing-ui") || '{"state":{},"version":0}');
-    if (saved.state.language === "zh-TW") return false;
-    saved.state.language = "zh-TW"; localStorage.setItem("chengjing-ui", JSON.stringify(saved)); return true;
+    saved.state.language = "zh-TW"; localStorage.setItem("chengjing-ui", JSON.stringify(saved));
+    // The synthetic old version is for explicit updater checks below. Do not let
+    // its automatic daily dialog race our note-creation test on fast CI networks.
+    const now = new Date();
+    localStorage.setItem("chengjing-last-successful-update-check-day", `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`);
   });
-  if (languageChanged) { await page.reload(); await page.locator(".app-shell").waitFor(); }
+  await page.reload(); await page.locator(".app-shell").waitFor();
 }
 async function nativeFetch(url) {
   return client.evaluate(async ({ net }, url) => { try { return { ok: true, body: await (await net.fetch(url)).text() }; } catch (error) { return { ok: false, error: error.message }; } }, url);
