@@ -33,11 +33,11 @@ describe("recurring task calendar rules", () => {
     expect(root.done).toBe(false);
     expect(nextRecurringTask(december!, day("2026-12-21"))?.id).toBe("recurrence:expense:2027-01-20");
   });
-  it("supports existing root tasks from notes while excluding child tasks", () => {
+  it("supports existing tasks from notes and keeps subtasks in their hierarchy", () => {
     const task = { id: "note:task", title: "Pay rent", done: false, cardId: "card-a", sourceTaskId: "item-a",
       recurrence: { frequency: "monthly" as const, day: 20 }, dueAt: day("2026-11-20"), createdAt: 1, updatedAt: 1 };
     expect(nextRecurringTask(task)?.cardId).toBeUndefined();
-    expect(nextRecurringTask({ ...task, parentTaskId: "parent" })).toBeNull();
+    expect(nextRecurringTask({ ...task, parentTaskId: "parent" })?.parentTaskId).toBe("parent");
   });
   it("rejects invalid dates", () => {
     expect(() => nextRecurringDate({frequency:"monthly",day:32},Date.now())).toThrow();
