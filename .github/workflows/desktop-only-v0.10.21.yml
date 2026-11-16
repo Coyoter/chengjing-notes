@@ -1,0 +1,138 @@
+name: ChengJing 0.10.21 desktop-only release
+on:
+  push:
+    branches: [release/desktop-only-v0.10.21]
+permissions:
+  contents: read
+concurrency:
+  group: chengjing-desktop-v0.10.21
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: b8427eeddac3bf30fb9db972aadc07c5510c5fcb
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+  macos:
+    needs: test
+    runs-on: macos-14
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: b8427eeddac3bf30fb9db972aadc07c5510c5fcb
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium
+      - name: Build and verify macOS package
+        env:
+          CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET }}
+        run: |
+          npm run dist:mac
+          hdiutil verify release/*.dmg
+          python3 scripts/release-integrity.py --stage macos
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos-0.10.21
+          path: |
+            release/*.dmg
+            release/build-macos.json
+          if-no-files-found: error
+  windows:
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: b8427eeddac3bf30fb9db972aadc07c5510c5fcb
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/windows-installer/go.mod
+          cache: false
+      - run: npm ci
+      - run: npx playwright install chromium
+      - name: Build and verify Windows packages
+        env:
+          CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.CHENGJING_GOOGLE_OAUTH_CLIENT_SECRET }}
+        run: |
+          node scripts/prepare-google-oauth.mjs --required
+          npm run icons
+          npm run build
+          npx electron-builder --win --dir --x64 --publish never
+          node scripts/build-windows-installer.mjs x64
+          npx electron-builder --win --dir --arm64 --publish never
+          node scripts/build-windows-installer.mjs arm64
+          npm run qa:windows-package
+          python scripts/release-integrity.py --stage windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-0.10.21
+          path: |
+            release/*-Installer.exe
+            release/build-windows.json
+          if-no-files-found: error
+  publish:
+    needs: [test, macos, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: b8427eeddac3bf30fb9db972aadc07c5510c5fcb
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*-0.10.21
+          path: release
+          merge-multiple: true
+      - name: Validate package metadata and publish desktop-only release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,pathlib,hashlib
+          root=pathlib.Path('release')
+          version='0.10.21'
+          for platform in ('macos','windows'):
+              record=json.loads((root/f'build-{platform}.json').read_text())
+              print(platform,record)
+          packages=sorted([*root.glob('*.dmg'),*root.glob('*-Installer.exe')])
+          assert len(packages)==3, [str(p) for p in packages]
+          (root/'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in packages))
+          PY
+          if gh release view v0.10.21 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::v0.10.21 release already exists; refusing to replace."
+            exit 1
+          fi
+          gh release create v0.10.21 release/*.dmg release/*-Installer.exe release/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --target b8427eeddac3bf30fb9db972aadc07c5510c5fcb \
+            --title "澄境筆記 0.10.21（桌面版）" \
+            --notes-file docs/releases/v0.10.21.md \
+            --latest
+          gh release view v0.10.21 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets,url
