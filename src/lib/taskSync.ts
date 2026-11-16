@@ -1,5 +1,6 @@
 import { db } from "../db";
 import type { TaskRecord } from "../types";
+import { nextRecurringTask } from "./taskRecurrence";
 import { ignoreTransactionHistory } from "./historyTransactions";
 
 export interface EditorTaskSnapshot {
@@ -266,7 +267,19 @@ export async function setTaskDone(taskId: string, done: boolean) {
       if (!descendant.done) await setTaskDoneDirect(descendant.id, true);
     }
   }
-  if (task.done !== done) await setTaskDoneDirect(task.id, done);
+  if (task.done !== done) {
+    if (done && task.recurrence && !task.parentTaskId && !task.cardId && !task.sourceTaskId) {
+      // Complete and enqueue the next occurrence atomically to avoid duplicate
+      // instances after retries or concurrent completion on this device.
+      await db.transaction("rw", db.tasks, async () => {
+        const current = await db.tasks.get(task.id);
+        if (!current || current.done) return;
+        const next = nextRecurringTask(current);
+        await setTaskDoneDirect(current.id, true);
+        if (next) await db.tasks.add(next);
+      });
+    } else await setTaskDoneDirect(task.id, done);
+  }
   await reconcileTaskChain(task.parentTaskId);
 }
 
