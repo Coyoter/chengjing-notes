@@ -35,8 +35,9 @@ export function firstRecurringDate(rule: TaskRecurrence, now = Date.now()): numb
 }
 
 export function nextRecurringTask(task: TaskRecord, now = Date.now()): TaskRecord | null {
-  if (!task.recurrence || !task.dueAt || task.parentTaskId || task.cardId || task.sourceTaskId) return null;
+  if (!task.recurrence || !task.dueAt || task.parentTaskId) return null;
   const dueAt = nextRecurringDate(task.recurrence, task.dueAt);
-  return { id: crypto.randomUUID(), title: task.title, done: false, recurrence: task.recurrence,
-    recurrenceSeriesId: task.recurrenceSeriesId || task.id, dueAt, createdAt: now, updatedAt: now };
+  const seriesId = task.recurrenceSeriesId || task.id;
+  return { id: `recurrence:${seriesId}:${localDateKey(dueAt)}`, title: task.title, done: false, recurrence: task.recurrence,
+    recurrenceSeriesId: seriesId, dueAt, createdAt: now, updatedAt: now };
 }
