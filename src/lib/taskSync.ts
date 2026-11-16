@@ -348,6 +348,7 @@ export async function setTaskRecurrence(taskId: string, recurrence: TaskRecurren
       });
     }
   });
+  await reconcileTaskChain((await db.tasks.get(taskId))?.parentTaskId);
 }
 
 export async function setTaskDueAt(taskId: string, dueAt: number | undefined) {
