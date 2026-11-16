@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firstRecurringDate, nextRecurringDate } from "./taskRecurrence";
+import { firstRecurringDate, nextRecurringDate, nextRecurringTask } from "./taskRecurrence";
 import { localDateKey, timestampForLocalDateKey } from "./taskTimeline";
 
 const day = (key: string) => timestampForLocalDateKey(key);
@@ -22,6 +22,22 @@ describe("recurring task calendar rules", () => {
     expect(next({frequency:"monthly",day:31}, "2027-01-31")).toBe("2027-02-28");
     expect(next({frequency:"monthly",day:31}, "2027-02-28")).toBe("2027-03-31");
     expect(next({frequency:"monthly",day:29}, "2028-01-29")).toBe("2028-02-29");
+  });
+  it("gives stable identities to each scheduled occurrence and leaves overdue tasks untouched", () => {
+    const root = { id: "expense", title: "Monthly bills", done: false,
+      recurrence: { frequency: "monthly" as const, day: 20 }, dueAt: day("2026-11-20"), createdAt: 1, updatedAt: 1 };
+    const december = nextRecurringTask(root, day("2026-11-21"));
+    expect(december?.id).toBe("recurrence:expense:2026-12-20");
+    expect(localDateKey(december!.dueAt!)).toBe("2026-12-20");
+    expect(nextRecurringTask(root, day("2026-12-01"))?.id).toBe(december?.id);
+    expect(root.done).toBe(false);
+    expect(nextRecurringTask(december!, day("2026-12-21"))?.id).toBe("recurrence:expense:2027-01-20");
+  });
+  it("supports existing root tasks from notes while excluding child tasks", () => {
+    const task = { id: "note:task", title: "Pay rent", done: false, cardId: "card-a", sourceTaskId: "item-a",
+      recurrence: { frequency: "monthly" as const, day: 20 }, dueAt: day("2026-11-20"), createdAt: 1, updatedAt: 1 };
+    expect(nextRecurringTask(task)?.cardId).toBeUndefined();
+    expect(nextRecurringTask({ ...task, parentTaskId: "parent" })).toBeNull();
   });
   it("rejects invalid dates", () => {
     expect(() => nextRecurringDate({frequency:"monthly",day:32},Date.now())).toThrow();
