@@ -90,7 +90,7 @@ export function TasksView() {
     return () => window.clearInterval(timer);
   }, []);
   useEffect(() => { if (isAndroid()) { localStorage.setItem("chengjing-task-draft",value); localStorage.setItem("chengjing-task-draft-date",dueDate); } }, [value,dueDate]);
-  useEffect(() => { void materializeRecurringTasks().catch((error) => console.error("Unable to advance recurring tasks", error)); }, [todayKey]);
+  useEffect(() => { if (tasks) void materializeRecurringTasks().catch((error) => console.error("Unable to advance recurring tasks", error)); }, [todayKey, tasks]);
 
   const recurrence = ruleFromDraft(recurrenceDraft);
   const recurrenceStart = Math.max(dueDateInputToTimestamp(dueDate) || Date.now(), Date.now());
