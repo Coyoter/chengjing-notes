@@ -1736,3 +1736,50 @@ html[data-quick-capture="true"], html[data-quick-capture="true"] body, html[data
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+
+/* Recurring tasks share the calm date-picker vocabulary in creation and editing. */
+.task-recurrence-picker { position: relative; width: max-content; }
+.task-recurrence-trigger.has-value { background: var(--accent-soft); color: var(--accent-strong); }
+.task-recurrence-trigger.has-value > svg:first-child { color: var(--accent-strong); }
+.task-recurrence-popover { position: absolute; z-index: 130; top: calc(100% + 8px); right: 0; width: 326px; max-width: calc(100vw - 36px); padding: 16px; border-radius: 12px; background: var(--surface-1); color: var(--text-1); box-shadow: 0 24px 70px rgb(0 0 0 / 0.28), 0 4px 14px rgb(0 0 0 / 0.13); }
+.task-recurrence-popover > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 15px; }
+.task-recurrence-popover > header b { font-size: calc(14px * var(--font-scale)); font-weight: 650; }
+.task-recurrence-popover > header span { color: var(--text-muted); font-size: calc(11px * var(--font-scale)); }
+.task-recurrence-frequency { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 4px; border-radius: 9px; background: var(--surface-2); }
+.task-recurrence-frequency button { min-width: 0; min-height: 34px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); font-size: calc(12px * var(--font-scale)); white-space: nowrap; }
+.task-recurrence-frequency button.is-selected { background: var(--surface-1); color: var(--accent-strong); font-weight: 650; box-shadow: 0 1px 4px rgb(0 0 0 / 0.1); }
+.task-recurrence-rule { margin-top: 17px; }
+.task-recurrence-rule-heading { display: flex; align-items: center; justify-content: space-between; gap: 9px; color: var(--text-muted); font-size: calc(12px * var(--font-scale)); }
+.task-recurrence-rule-heading b { color: var(--text-1); font-weight: 590; }
+.task-recurrence-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; margin-top: 11px; }
+.task-recurrence-weekdays button { min-height: 34px; border: 0; border-radius: 8px; background: var(--surface-2); color: var(--text-2); font-size: calc(12px * var(--font-scale)); }
+.task-recurrence-weekdays button.is-selected { background: var(--accent-soft); color: var(--accent-strong); font-weight: 680; }
+.task-recurrence-stepper { display: flex; min-height: 47px; align-items: center; justify-content: space-between; margin-top: 10px; padding: 5px 7px; border: 1px solid var(--border); border-radius: 9px; }
+.task-recurrence-stepper button { display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: 7px; background: var(--surface-2); color: var(--text-2); font-size: calc(18px * var(--font-scale)); }
+.task-recurrence-stepper b { color: var(--text-1); font-size: calc(14px * var(--font-scale)); font-weight: 650; }
+.task-recurrence-note { display: flex; align-items: flex-start; gap: 7px; margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: calc(11px * var(--font-scale)); line-height: 1.5; }
+.task-recurrence-note svg { flex: 0 0 auto; margin-top: 1px; color: var(--accent-strong); }
+.task-recurrence-popover > footer { display: flex; justify-content: flex-end; margin-top: 15px; }
+.task-recurrence-popover > footer button { min-height: 34px; padding: 0 17px; border: 0; border-radius: 7px; background: var(--accent-button); color: var(--accent-button-text); font-size: calc(12px * var(--font-scale)); font-weight: 650; }
+.task-recurrence-label { color: var(--accent-strong); }
+.content-edit-fields > .task-edit-recurrence-field { display: grid; gap: 7px; }
+.task-edit-recurrence-field > span { color: var(--text-muted); font-size: calc(12px * var(--font-scale)); font-weight: 620; }
+.task-edit-recurrence-field > .task-recurrence-options { padding: 13px; border-radius: 10px; background: var(--surface-2); }
+.task-edit-recurrence-field .task-recurrence-frequency { background: var(--surface-3); }
+.task-edit-recurrence-field .task-recurrence-frequency button.is-selected { background: var(--surface-1); }
+.task-edit-recurrence-field .task-recurrence-stepper { background: var(--surface-1); }
+.task-edit-recurrence-field .task-recurrence-stepper button, .task-edit-recurrence-field .task-recurrence-weekdays button { background: var(--surface-2); }
+.task-edit-recurrence-field .task-recurrence-weekdays button.is-selected { background: var(--accent-soft); }
+.task-edit-date-field .task-date-picker { width: 100%; }
+.task-edit-date-field .task-date-trigger { width: 100%; justify-content: flex-start; min-height: 42px; padding-inline: 12px; }
+.task-edit-date-field .task-date-trigger > svg:last-child { margin-left: auto; }
+.task-edit-date-field .task-calendar-popover { left: 0; right: auto; }
+@media (max-width: 900px) {
+  .task-recurrence-popover { right: -14px; }
+}
+html[data-platform="android"] .task-add-actions { flex-wrap: wrap; }
+html[data-platform="android"] .task-recurrence-trigger { min-height: 48px; background: transparent; }
+html[data-platform="android"] .task-recurrence-trigger.has-value { color: var(--accent-strong); }
+html[data-platform="android"] .task-recurrence-popover { right: -10px; max-width: calc(100vw - 40px); }
+html[data-platform="android"] .task-recurrence-frequency button, html[data-platform="android"] .task-recurrence-weekdays button { min-height: 42px; }
