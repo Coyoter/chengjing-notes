@@ -156,6 +156,8 @@ export interface TaskRecord {
   completedAt?: number;
   cardId?: string;
   sourceTaskId?: string;
+  recurrence?: { frequency: "daily" } | { frequency: "weekly"; weekday: number } | { frequency: "monthly"; day: number };
+  recurrenceSeriesId?: string;
   conversionKey?: string;
   parentTaskId?: string;
   dueAt?: number;
