@@ -272,7 +272,7 @@ export async function setTaskDone(taskId: string, done: boolean) {
     if (done && task.recurrence && !task.parentTaskId) {
       // Complete and enqueue the next occurrence atomically to avoid duplicate
       // instances after retries or concurrent completion on this device.
-      await db.transaction("rw", db.tasks, async () => {
+      await db.transaction("rw", [db.cards, db.tasks], async () => {
         const current = await db.tasks.get(task.id);
         if (!current || current.done) return;
         const next = nextRecurringTask(current);
