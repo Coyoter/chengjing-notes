@@ -274,9 +274,12 @@ export function GlobalContextMenu() {
         const rule = ruleFromDraft(editDialog.recurrenceDraft);
         const recurrenceChanged = JSON.stringify(rule || null) !== JSON.stringify(editDialog.originalRecurrence || null);
         const dateChanged = editDialog.dueDraft !== timestampToDueDateInput(editDialog.originalDueAt);
-        const dueAt = (recurrenceChanged || dateChanged)
+        const existingDue = editDialog.originalDueAt;
+        const isOverdue = Boolean(existingDue && existingDue < Date.now() - 86_400_000);
+        const changesSchedule = recurrenceChanged && Boolean(rule) && !isOverdue;
+        const dueAt = (dateChanged || changesSchedule)
           ? rule ? firstRecurringDate(rule, Math.max(dueDateInputToTimestamp(editDialog.dueDraft) || Date.now(), Date.now())) : dueDateInputToTimestamp(editDialog.dueDraft)
-          : editDialog.originalDueAt;
+          : existingDue || (rule ? firstRecurringDate(rule, Date.now()) : undefined);
         await updateTaskEverywhere(editDialog.id, { title: value,
           ...(recurrenceChanged || dateChanged ? { dueAt } : {}),
           ...(recurrenceChanged ? { recurrence: rule } : {}) });
