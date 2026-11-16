@@ -269,7 +269,7 @@ export async function setTaskDone(taskId: string, done: boolean) {
     }
   }
   if (task.done !== done) {
-    if (done && task.recurrence && !task.parentTaskId) {
+    if (done && task.recurrence) {
       // Complete and enqueue the next occurrence atomically to avoid duplicate
       // instances after retries or concurrent completion on this device.
       await db.transaction("rw", [db.cards, db.tasks], async () => {
@@ -296,7 +296,7 @@ export async function materializeRecurringTasks(now = Date.now()) {
   if (!today) return 0;
   return db.transaction("rw", db.tasks, async () => {
     const active = await db.tasks.where("doneKey").equals("active")
-      .filter((task) => Boolean(task.recurrence && task.dueAt) && !task.parentTaskId)
+      .filter((task) => Boolean(task.recurrence && task.dueAt))
       .toArray();
     const latest = new Map<string, TaskRecord>();
     for (const task of active) {
@@ -338,6 +338,15 @@ export async function setTaskRecurrence(taskId: string, recurrence: TaskRecurren
     await db.tasks.update(taskId, { recurrence, recurrenceSeriesId: recurrence ? seriesId : undefined,
       dueAt: recurrence && !current.dueAt ? firstRecurringDate(recurrence, timestamp) : current.dueAt,
       updatedAt: timestamp });
+    if (current.done && recurrence) {
+      const nextDueAt = firstRecurringDate(recurrence, timestamp);
+      const id = `recurrence:${seriesId}:${localDateKey(nextDueAt)}`;
+      if (!await db.tasks.get(id)) await db.tasks.add({
+        id, title: current.title, done: false, recurrence, recurrenceSeriesId: seriesId,
+        parentTaskId: current.parentTaskId, cardId: current.parentTaskId ? current.cardId : undefined,
+        dueAt: nextDueAt, createdAt: timestamp, updatedAt: timestamp,
+      });
+    }
   });
 }
 
