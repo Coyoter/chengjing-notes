@@ -13,14 +13,15 @@ import { getTaskEnhancementCopy } from "../lib/taskEnhancementCopy";
 import { groupTasksByTimeline, localDateKey, timestampForLocalDateKey, type TaskDateGroup } from "../lib/taskTimeline";
 import type { TaskRecord } from "../types";
 import { getTaskHierarchyCopy } from "../lib/taskHierarchyCopy";
-import { firstRecurringDate, type TaskRecurrence } from "../lib/taskRecurrence";
+import { firstRecurringDate } from "../lib/taskRecurrence";
+import { draftFromRecurrence, draftWithSelectedDate, ruleFromDraft, TaskRecurrencePicker } from "../components/TaskRecurrencePicker";
+import { materializeRecurringTasks } from "../lib/taskSync";
+import { Repeat2 } from "lucide-react";
 
 export function TasksView() {
   const [value, setValue] = useState(() => isAndroid() ? localStorage.getItem("chengjing-task-draft") || "" : "");
   const [dueDate, setDueDate] = useState(() => isAndroid() ? localStorage.getItem("chengjing-task-draft-date") || "" : "");
-  const [recurrenceMode, setRecurrenceMode] = useState<"none" | "daily" | "weekly" | "monthly">("none");
-  const [recurrenceWeekday, setRecurrenceWeekday] = useState(new Date().getDay());
-  const [recurrenceMonthDay, setRecurrenceMonthDay] = useState(new Date().getDate());
+  const [recurrenceDraft, setRecurrenceDraft] = useState(() => draftFromRecurrence());
   const [adding, setAdding] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [todayKey, setTodayKey] = useState(() => localDateKey(Date.now()));
@@ -89,6 +90,11 @@ export function TasksView() {
     return () => window.clearInterval(timer);
   }, []);
   useEffect(() => { if (isAndroid()) { localStorage.setItem("chengjing-task-draft",value); localStorage.setItem("chengjing-task-draft-date",dueDate); } }, [value,dueDate]);
+  useEffect(() => { void materializeRecurringTasks().catch((error) => console.error("Unable to advance recurring tasks", error)); }, [todayKey]);
+
+  const recurrence = ruleFromDraft(recurrenceDraft);
+  const recurrenceStart = Math.max(dueDateInputToTimestamp(dueDate) || Date.now(), Date.now());
+  const displayedDueDate = recurrence ? localDateKey(firstRecurringDate(recurrence, recurrenceStart)) : dueDate;
 
   async function addTask(event: React.FormEvent) {
     event.preventDefault();
@@ -97,11 +103,12 @@ export function TasksView() {
     setAdding(true);setSaveError("");
     const timestamp = Date.now();
     try {
-    const recurrence: TaskRecurrence | undefined = recurrenceMode === "daily" ? { frequency: "daily" } : recurrenceMode === "weekly" ? { frequency: "weekly", weekday: recurrenceWeekday } : recurrenceMode === "monthly" ? { frequency: "monthly", day: recurrenceMonthDay } : undefined;
-    await db.tasks.add({ id: crypto.randomUUID(), title, done: false, recurrence, dueAt: recurrence ? firstRecurringDate(recurrence) : dueDateInputToTimestamp(dueDate), createdAt: timestamp, updatedAt: timestamp });
+    const id = crypto.randomUUID();
+    const dueAt = recurrence ? firstRecurringDate(recurrence, Math.max(dueDateInputToTimestamp(dueDate) || timestamp, timestamp)) : dueDateInputToTimestamp(dueDate);
+    await db.tasks.add({ id, title, done: false, recurrence, recurrenceSeriesId: recurrence ? id : undefined, dueAt, createdAt: timestamp, updatedAt: timestamp });
     setValue("");
     setDueDate("");
-    setRecurrenceMode("none");
+    setRecurrenceDraft(draftFromRecurrence());
     } catch(error) { setSaveError(error instanceof Error ? error.message : String(error)); }
     finally { setAdding(false); }
   }
@@ -132,7 +139,7 @@ export function TasksView() {
     const progress = descendantProgress(task.id);
     return <article key={task.id} data-task-id={task.id} data-task-depth={depth} style={{ "--task-depth": Math.min(depth, 4) } as CSSProperties} className={`${task.done ? "is-done" : ""} ${depth ? "is-subtask" : ""} ${extraClass}`.trim()} onContextMenu={(event) => showContextMenuFromPointer(event, { kind: "task", id: task.id })}>
       <button type="button" className="task-check" aria-label={task.done ? t("tasks.reopen") : t("tasks.markDone")} onClick={() => setTaskDone(task.id, !task.done)}>{task.done ? <CheckCircle2 size={19} /> : <Circle size={19} />}</button>
-      <span><b>{task.title}</b><small>{depth > 0 && <em className="task-subtask-label"><ListTree size={11} />{hierarchyCopy.subtask}</em>}{task.dueAt && <><CalendarDays size={12} />{meta}</>}{!task.dueAt && <><Clock3 size={12} />{meta}</>}{task.recurrence && <em aria-label={language.startsWith("zh") ? "循環任務" : "Recurring task"}>↻ {task.recurrence.frequency === "daily" ? (language.startsWith("zh") ? "每天" : "Daily") : task.recurrence.frequency === "weekly" ? (language.startsWith("zh") ? "每週" : "Weekly") : (language.startsWith("zh") ? "每月" : "Monthly")}</em>}{task.cardId && <em><FileText size={11} />{taskCopy.fromNote}</em>}{progress.total > 0 && <em className="task-subtask-progress"><ListTree size={11} />{hierarchyCopy.progress(progress.done, progress.total)}</em>}</small></span>
+      <span><b>{task.title}</b><small>{depth > 0 && <em className="task-subtask-label"><ListTree size={11} />{hierarchyCopy.subtask}</em>}{task.dueAt && <><CalendarDays size={12} />{meta}</>}{!task.dueAt && <><Clock3 size={12} />{meta}</>}{task.recurrence && <em className="task-recurrence-label" aria-label={language.startsWith("zh") ? "循環任務" : "Recurring task"}><Repeat2 size={11} />{task.recurrence.frequency === "daily" ? (language.startsWith("zh") ? "每天" : "Daily") : task.recurrence.frequency === "weekly" ? (language.startsWith("zh") ? "每週" : "Weekly") : (language.startsWith("zh") ? `每月 ${task.recurrence.day} 日` : `Monthly · ${task.recurrence.day}`)}</em>}{task.cardId && <em><FileText size={11} />{taskCopy.fromNote}</em>}{progress.total > 0 && <em className="task-subtask-progress"><ListTree size={11} />{hierarchyCopy.progress(progress.done, progress.total)}</em>}</small></span>
       {isAndroid() && <button className="task-more" type="button" aria-label={`${task.title} · ${t("nav.primary")}`} onClick={event=>{const rect=event.currentTarget.getBoundingClientRect();showContextMenu({kind:"task",id:task.id},rect.right,rect.bottom)}}><MoreHorizontal size={19}/></button>}
     </article>;
   }
@@ -166,7 +173,7 @@ export function TasksView() {
 
       <form className="task-add" onSubmit={addTask}>
         <label className="task-add-main"><Plus size={17} /><input value={value} onChange={(event) => setValue(event.target.value)} placeholder={t("tasks.placeholder")} /></label>
-        <div className="task-add-actions"><label className="task-repeat-control"><span>{language.startsWith("zh") ? "重複" : "Repeat"}</span><select aria-label={language.startsWith("zh") ? "重複頻率" : "Repeat frequency"} value={recurrenceMode} onChange={event => setRecurrenceMode(event.target.value as typeof recurrenceMode)}><option value="none">{language.startsWith("zh") ? "不重複" : "Never"}</option><option value="daily">{language.startsWith("zh") ? "每天" : "Daily"}</option><option value="weekly">{language.startsWith("zh") ? "每週" : "Weekly"}</option><option value="monthly">{language.startsWith("zh") ? "每月" : "Monthly"}</option></select></label>{recurrenceMode === "weekly" && <select aria-label={language.startsWith("zh") ? "每週星期幾" : "Day of week"} value={recurrenceWeekday} onChange={event => setRecurrenceWeekday(Number(event.target.value))}>{Array.from({length:7},(_,i)=><option key={i} value={i}>{new Intl.DateTimeFormat(intlLocale,{weekday:"long"}).format(new Date(2026,10,15+i))}</option>)}</select>}{recurrenceMode === "monthly" && <select aria-label={language.startsWith("zh") ? "每月第幾天" : "Day of month"} value={recurrenceMonthDay} onChange={event => setRecurrenceMonthDay(Number(event.target.value))}>{Array.from({length:31},(_,i)=><option key={i+1} value={i+1}>{i+1}</option>)}</select>}{recurrenceMode === "none" && <TaskDatePicker value={dueDate} onChange={setDueDate} label={taskCopy.dueOptional} />}<button type="submit" disabled={!value.trim()||adding}>{t("tasks.add")}</button></div>
+        <div className="task-add-actions"><TaskDatePicker value={displayedDueDate} onChange={(date) => { setDueDate(date); setRecurrenceDraft((draft) => draftWithSelectedDate(draft, date)); }} label={taskCopy.dueOptional} /><TaskRecurrencePicker value={recurrenceDraft} onChange={setRecurrenceDraft} /><button type="submit" disabled={!value.trim()||adding}>{t("tasks.add")}</button></div>
       </form>
       {saveError && <p role="alert">{saveError}</p>}
 
