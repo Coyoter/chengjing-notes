@@ -173,7 +173,7 @@ export function TasksView() {
 
       <form className="task-add" onSubmit={addTask}>
         <label className="task-add-main"><Plus size={17} /><input value={value} onChange={(event) => setValue(event.target.value)} placeholder={t("tasks.placeholder")} /></label>
-        <div className="task-add-actions"><TaskDatePicker value={displayedDueDate} onChange={(date) => { setDueDate(date); setRecurrenceDraft((draft) => draftWithSelectedDate(draft, date)); }} label={taskCopy.dueOptional} /><TaskRecurrencePicker value={recurrenceDraft} onChange={setRecurrenceDraft} /><button type="submit" disabled={!value.trim()||adding}>{t("tasks.add")}</button></div>
+        <div className="task-add-actions"><TaskDatePicker value={displayedDueDate} clearable={!recurrence} onChange={(date) => { setDueDate(date); setRecurrenceDraft((draft) => draftWithSelectedDate(draft, date)); }} label={taskCopy.dueOptional} /><TaskRecurrencePicker value={recurrenceDraft} onChange={setRecurrenceDraft} /><button type="submit" disabled={!value.trim()||adding}>{t("tasks.add")}</button></div>
       </form>
       {saveError && <p role="alert">{saveError}</p>}
 
