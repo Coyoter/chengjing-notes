@@ -1,6 +1,7 @@
 import { db } from "../db";
 import type { TaskRecord } from "../types";
-import { nextRecurringTask } from "./taskRecurrence";
+import { firstRecurringDate, nextRecurringTask, type TaskRecurrence } from "./taskRecurrence";
+import { localDateKey, timestampForLocalDateKey } from "./taskTimeline";
 import { ignoreTransactionHistory } from "./historyTransactions";
 
 export interface EditorTaskSnapshot {
@@ -268,7 +269,7 @@ export async function setTaskDone(taskId: string, done: boolean) {
     }
   }
   if (task.done !== done) {
-    if (done && task.recurrence && !task.parentTaskId && !task.cardId && !task.sourceTaskId) {
+    if (done && task.recurrence && !task.parentTaskId) {
       // Complete and enqueue the next occurrence atomically to avoid duplicate
       // instances after retries or concurrent completion on this device.
       await db.transaction("rw", db.tasks, async () => {
@@ -276,11 +277,68 @@ export async function setTaskDone(taskId: string, done: boolean) {
         if (!current || current.done) return;
         const next = nextRecurringTask(current);
         await setTaskDoneDirect(current.id, true);
-        if (next) await db.tasks.add(next);
+        if (next) {
+          const seriesId = current.recurrenceSeriesId || current.id;
+          const existing = await db.tasks.where("doneKey").equals("active").filter((candidate) =>
+            candidate.id !== current.id && (candidate.recurrenceSeriesId || candidate.id) === seriesId && Boolean(candidate.dueAt) && candidate.dueAt! >= next.dueAt!
+          ).first();
+          if (!existing && !await db.tasks.get(next.id)) await db.tasks.add(next);
+        }
       });
     } else await setTaskDoneDirect(task.id, done);
   }
   await reconcileTaskChain(task.parentTaskId);
+}
+
+/** Create due occurrences independently of completion, without removing overdue work. */
+export async function materializeRecurringTasks(now = Date.now()) {
+  const today = timestampForLocalDateKey(localDateKey(now));
+  if (!today) return 0;
+  return db.transaction("rw", db.tasks, async () => {
+    const active = await db.tasks.where("doneKey").equals("active")
+      .filter((task) => Boolean(task.recurrence && task.dueAt) && !task.parentTaskId)
+      .toArray();
+    const latest = new Map<string, TaskRecord>();
+    for (const task of active) {
+      const seriesId = task.recurrenceSeriesId || task.id;
+      const previous = latest.get(seriesId);
+      if (!previous || (task.dueAt || 0) > (previous.dueAt || 0)) latest.set(seriesId, task);
+    }
+    let created = 0;
+    for (const original of latest.values()) {
+      let cursor = original;
+      // Bound the catch-up of very old daily schedules per visit.
+      for (let count = 0; count < 400; count += 1) {
+        const next = nextRecurringTask(cursor, now);
+        if (!next?.dueAt || next.dueAt > today) break;
+        const existing = await db.tasks.get(next.id);
+        if (existing) { cursor = existing; continue; }
+        await db.tasks.add(next);
+        cursor = next;
+        created += 1;
+      }
+    }
+    return created;
+  });
+}
+
+/** Attach, modify or stop repetition on an existing task; preserve unfinished instances. */
+export async function setTaskRecurrence(taskId: string, recurrence: TaskRecurrence | undefined) {
+  await db.transaction("rw", db.tasks, async () => {
+    const current = await db.tasks.get(taskId);
+    if (!current) return;
+    const seriesId = current.recurrenceSeriesId || current.id;
+    const active = await db.tasks.where("doneKey").equals("active")
+      .filter((task) => (task.recurrenceSeriesId || task.id) === seriesId && task.id !== taskId && Boolean(task.recurrence))
+      .toArray();
+    const timestamp = Date.now();
+    for (const task of active) {
+      await db.tasks.update(task.id, { recurrence: undefined, updatedAt: timestamp });
+    }
+    await db.tasks.update(taskId, { recurrence, recurrenceSeriesId: recurrence ? seriesId : undefined,
+      dueAt: recurrence && !current.dueAt ? firstRecurringDate(recurrence, timestamp) : current.dueAt,
+      updatedAt: timestamp });
+  });
 }
 
 export async function setTaskDueAt(taskId: string, dueAt: number | undefined) {
@@ -321,8 +379,12 @@ async function updateTaskDetailsEverywhere(taskId: string, patch: { title?: stri
   });
 }
 
-export async function updateTaskEverywhere(taskId: string, patch: { title?: string; done?: boolean; dueAt?: number | undefined }) {
+export async function updateTaskEverywhere(taskId: string, patch: { title?: string; done?: boolean; dueAt?: number | undefined; recurrence?: TaskRecurrence | undefined }) {
   await updateTaskDetailsEverywhere(taskId, { title: patch.title, ...(Object.prototype.hasOwnProperty.call(patch, "dueAt") ? { dueAt: patch.dueAt } : {}) });
+  if (Object.prototype.hasOwnProperty.call(patch, "recurrence")) {
+    const task = await db.tasks.get(taskId);
+    if (JSON.stringify(task?.recurrence || null) !== JSON.stringify(patch.recurrence || null)) await setTaskRecurrence(taskId, patch.recurrence);
+  }
   if (patch.done !== undefined) await setTaskDone(taskId, patch.done);
 }
 
