@@ -39,6 +39,8 @@ import { useI18n } from "../hooks/useI18n";
 import { createTaskChild, deleteTaskEverywhere, setTaskDone, setTaskDueAt, taskDescendants, timestampToDueDateInput, dueDateInputToTimestamp, updateTaskEverywhere } from "../lib/taskSync";
 import { getTaskEnhancementCopy } from "../lib/taskEnhancementCopy";
 import { TaskDatePicker } from "./TaskDatePicker";
+import { draftFromRecurrence, draftWithSelectedDate, ruleFromDraft, TaskRecurrenceOptions, type RecurrenceDraft } from "./TaskRecurrencePicker";
+import { firstRecurringDate, type TaskRecurrence } from "../lib/taskRecurrence";
 import { duplicateCardFromId, readAppClipboard, writeAppClipboard } from "../lib/appClipboard";
 import { CardPlacementDialog, type CardPlacementMode } from "./CardPlacementDialog";
 import { captureCopy } from "../lib/captureCopy";
@@ -51,7 +53,7 @@ import { getTaskHierarchyCopy } from "../lib/taskHierarchyCopy";
 import { useMobileBack } from "../lib/mobileBack";
 
 type ContentEditDialog =
-  | { kind: "task"; id: string; draft: string }
+  | { kind: "task"; id: string; draft: string; dueDraft: string; originalDueAt?: number; originalRecurrence?: TaskRecurrence; recurrenceDraft: RecurrenceDraft }
   | { kind: "fragment"; id: string; draft: string }
   | { kind: "highlight"; id: string; draft: string; noteDraft: string };
 
@@ -268,7 +270,17 @@ export function GlobalContextMenu() {
     const value = editDialog.draft.trim();
     if (!value) return;
     try {
-      if (editDialog.kind === "task") await updateTaskEverywhere(editDialog.id, { title: value });
+      if (editDialog.kind === "task") {
+        const rule = ruleFromDraft(editDialog.recurrenceDraft);
+        const recurrenceChanged = JSON.stringify(rule || null) !== JSON.stringify(editDialog.originalRecurrence || null);
+        const dateChanged = editDialog.dueDraft !== timestampToDueDateInput(editDialog.originalDueAt);
+        const dueAt = (recurrenceChanged || dateChanged)
+          ? rule ? firstRecurringDate(rule, Math.max(dueDateInputToTimestamp(editDialog.dueDraft) || Date.now(), Date.now())) : dueDateInputToTimestamp(editDialog.dueDraft)
+          : editDialog.originalDueAt;
+        await updateTaskEverywhere(editDialog.id, { title: value,
+          ...(recurrenceChanged || dateChanged ? { dueAt } : {}),
+          ...(recurrenceChanged ? { recurrence: rule } : {}) });
+      }
       if (editDialog.kind === "fragment") await updateCaptureFragment(editDialog.id, { text: value });
       if (editDialog.kind === "highlight") await db.highlights.update(editDialog.id, { text: value, note: editDialog.noteDraft.trim() });
       setEditDialog(null);
@@ -333,7 +345,9 @@ export function GlobalContextMenu() {
 
       {task && <>
         <header><span>{t("context.taskActions")}</span><b>{task.title}</b></header>
-        <button type="button" role="menuitem" data-menu-action="edit" onClick={() => { setRequest(null); setEditDialog({ kind: "task", id: task.id, draft: task.title }); }}><Pencil size={15} />{editCopy.edit}</button>
+        <button type="button" role="menuitem" data-menu-action="edit" onClick={() => { setRequest(null); setEditDialog({ kind: "task", id: task.id, draft: task.title, dueDraft: timestampToDueDateInput(task.dueAt),
+          originalDueAt: task.dueAt, originalRecurrence: task.recurrence,
+          recurrenceDraft: draftFromRecurrence(task.recurrence, task.dueAt || Date.now()) }); }}><Pencil size={15} />{editCopy.edit}</button>
         <button type="button" role="menuitem" data-menu-action="add-child" onClick={() => { setRequest(null); setChildDialog({ parentId: task.id, parentTitle: task.title, draft: "", inheritsDue: Boolean(task.dueAt) }); }}><ListTree size={15} />{hierarchyCopy.addChild}</button>
         <button type="button" role="menuitem" onClick={() => run(() => setTaskDone(task.id, !task.done))}><CheckCircle2 size={15} />{task.done ? t("context.reopen") : t("context.markDone")}</button>
         <button type="button" role="menuitem" onClick={() => { setRequest(null); setDueDialog({ id: task.id, title: task.title, hadDue: Boolean(task.dueAt) }); setDueDraft(timestampToDueDateInput(task.dueAt)); }}><Calendar size={15} />{task.dueAt ? taskCopy.changeDue : taskCopy.setDue}</button>
@@ -395,6 +409,17 @@ export function GlobalContextMenu() {
               ? <input autoFocus maxLength={240} value={editDialog.draft} onChange={(event) => setEditDialog({ ...editDialog, draft: event.target.value })} onCompositionStart={() => { editComposing.current = true; }} onCompositionEnd={(event) => { editComposing.current = false; setEditDialog({ ...editDialog, draft: event.currentTarget.value }); }} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setEditDialog(null); } if (event.key === "Enter" && ((event.nativeEvent as KeyboardEvent).isComposing || editComposing.current)) event.preventDefault(); }} />
               : <textarea autoFocus rows={editDialog.kind === "highlight" ? 4 : 6} maxLength={editDialog.kind === "fragment" ? 500 : 2000} value={editDialog.draft} onChange={(event) => setEditDialog({ ...editDialog, draft: event.target.value })} onCompositionStart={() => { editComposing.current = true; }} onCompositionEnd={(event) => { editComposing.current = false; setEditDialog({ ...editDialog, draft: event.currentTarget.value }); }} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setEditDialog(null); } if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && !editComposing.current && !(event.nativeEvent as KeyboardEvent).isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />}
           </label>
+          {editDialog.kind === "task" && <>
+            <label className="task-edit-date-field"><span>{taskCopy.dueDate}</span>
+              <TaskDatePicker value={editDialog.dueDraft} onChange={(date) => setEditDialog({
+                ...editDialog, dueDraft: date, recurrenceDraft: draftWithSelectedDate(editDialog.recurrenceDraft, date),
+              })} label={taskCopy.dueDate} className="task-dialog-date-picker" />
+            </label>
+            <div className="task-edit-recurrence-field">
+              <span>{language === "zh-TW" ? "重複設定" : language === "zh-CN" ? "重复设置" : language === "ja" ? "繰り返し" : language === "ko" ? "반복 설정" : "Repeat"}</span>
+              <TaskRecurrenceOptions value={editDialog.recurrenceDraft} onChange={(draft) => setEditDialog({ ...editDialog, recurrenceDraft: draft })} />
+            </div>
+          </>}
           {editDialog.kind === "highlight" && <label>
             <span>{editCopy.highlightNoteLabel}</span>
             <textarea rows={3} maxLength={1000} value={editDialog.noteDraft} placeholder={editCopy.highlightNotePlaceholder} onChange={(event) => setEditDialog({ ...editDialog, noteDraft: event.target.value })} onCompositionStart={() => { editComposing.current = true; }} onCompositionEnd={(event) => { editComposing.current = false; setEditDialog({ ...editDialog, noteDraft: event.currentTarget.value }); }} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setEditDialog(null); } if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && !editComposing.current && !(event.nativeEvent as KeyboardEvent).isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
