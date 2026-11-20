@@ -295,6 +295,12 @@ html[data-platform="android"] .window-drag-region { display: none; }
   html[data-platform="android"] .task-more { width:48px; height:48px; flex:none; display:grid; place-items:center; border:0; background:none; color:var(--text-muted); }
   html[data-platform="android"] .task-groups article.is-subtask { margin-left:calc(var(--task-depth,1) * 12px); width:calc(100% - var(--task-depth,1) * 12px); }
   html[data-platform="android"] .task-calendar-popover { position:fixed; left:16px; right:16px; top:25%; bottom:auto; width:auto; max-height:65dvh; overflow:auto; }
+  html[data-platform="android"] .task-recurrence-picker { max-width:100%; }
+  html[data-platform="android"] .task-recurrence-trigger { max-width:100%; }
+  html[data-platform="android"] .task-recurrence-trigger span { overflow:hidden; text-overflow:ellipsis; }
+  html[data-platform="android"] .task-recurrence-popover { position:fixed; left:16px; right:16px; top:22%; bottom:auto; width:auto; max-width:none; max-height:70dvh; overflow:auto; }
+  html[data-platform="android"] .task-recurrence-frequency button { padding:0 4px; }
+  html[data-platform="android"] .task-recurrence-weekdays { gap:4px; }
 }
 @media(prefers-reduced-motion:reduce) {
   html[data-platform="android"] .brain-mobile-tool-sheet { animation:none!important; }

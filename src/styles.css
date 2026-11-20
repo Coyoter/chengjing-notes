@@ -1781,5 +1781,4 @@ html[data-quick-capture="true"], html[data-quick-capture="true"] body, html[data
 html[data-platform="android"] .task-add-actions { flex-wrap: wrap; }
 html[data-platform="android"] .task-recurrence-trigger { min-height: 48px; background: transparent; }
 html[data-platform="android"] .task-recurrence-trigger.has-value { color: var(--accent-strong); }
-html[data-platform="android"] .task-recurrence-popover { right: -10px; max-width: calc(100vw - 40px); }
 html[data-platform="android"] .task-recurrence-frequency button, html[data-platform="android"] .task-recurrence-weekdays button { min-height: 42px; }
